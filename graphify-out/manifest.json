@@ -1,0 +1,68 @@
+{
+  "00-product-concept.md": {
+    "mtime": 1787664004.0953848,
+    "seen": 1787664559.381469,
+    "ast_hash": "008f52e145150b21188b4394075455b3",
+    "semantic_hash": "008f52e145150b21188b4394075455b3"
+  },
+  "01-company-flow.md": {
+    "mtime": 1787664011.1754606,
+    "seen": 1787664559.381472,
+    "ast_hash": "d7a7513c80aeaf689331f38d23b9dff2",
+    "semantic_hash": "d7a7513c80aeaf689331f38d23b9dff2"
+  },
+  "02-student-flow.md": {
+    "mtime": 1787664017.102483,
+    "seen": 1787664559.381473,
+    "ast_hash": "dfb80031600f2dba419ba6079ef6b637",
+    "semantic_hash": "dfb80031600f2dba419ba6079ef6b637"
+  },
+  "03-candidate-evidence-and-comparison.md": {
+    "mtime": 1787664021.9936316,
+    "seen": 1787664559.381473,
+    "ast_hash": "dbe5b061ef68cf25cfb84d86e8823678",
+    "semantic_hash": "dbe5b061ef68cf25cfb84d86e8823678"
+  },
+  "04-internship-program-builder.md": {
+    "mtime": 1787664028.5272777,
+    "seen": 1787664559.381474,
+    "ast_hash": "47a850170c77f44c458c853b5119bd3c",
+    "semantic_hash": "47a850170c77f44c458c853b5119bd3c"
+  },
+  "05-anti-exploitation-rule.md": {
+    "mtime": 1787664031.2556007,
+    "seen": 1787664559.381474,
+    "ast_hash": "74239046226f4315fd4fddee232e3181",
+    "semantic_hash": "74239046226f4315fd4fddee232e3181"
+  },
+  "06-monetization.md": {
+    "mtime": 1787664708.0395799,
+    "seen": 1787664938.253834,
+    "ast_hash": "dddcaa0ada6aa992e52be95667c8dbb5",
+    "semantic_hash": "dddcaa0ada6aa992e52be95667c8dbb5"
+  },
+  "07-landing-page.md": {
+    "mtime": 1787664049.2776635,
+    "seen": 1787664559.381475,
+    "ast_hash": "42a9251029374476df9090aee785f6ff",
+    "semantic_hash": "42a9251029374476df9090aee785f6ff"
+  },
+  "08-page-list-and-data-model.md": {
+    "mtime": 1787664703.8358579,
+    "seen": 1787664938.253835,
+    "ast_hash": "6bb7cf901622117c28ed3a55d1b65b8f",
+    "semantic_hash": "6bb7cf901622117c28ed3a55d1b65b8f"
+  },
+  "09-ai-architecture-and-model-choice.md": {
+    "mtime": 1787664063.0374599,
+    "seen": 1787664559.3814762,
+    "ast_hash": "3b191e4807b974f90c3a38136cd54c79",
+    "semantic_hash": "3b191e4807b974f90c3a38136cd54c79"
+  },
+  "10-brand-identity.md": {
+    "mtime": 1787664069.9518945,
+    "seen": 1787664559.3814762,
+    "ast_hash": "68bb81432c687447579ef622740d519d",
+    "semantic_hash": "68bb81432c687447579ef622740d519d"
+  }
+}

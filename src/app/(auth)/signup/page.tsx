@@ -1,0 +1,87 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { signUp } from "../actions";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+
+export default function SignUpPage() {
+  const [role, setRole] = useState<"student" | "company">("student");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(formData: FormData) {
+    setError(null);
+    setPending(true);
+    try {
+      await signUp(formData);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-cool/60 bg-white p-7">
+      <h1 className="text-xl font-bold text-navy">Create your account</h1>
+
+      <div className="mt-5 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setRole("student")}
+          className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+            role === "student" ? "border-teal bg-teal/5 text-teal" : "border-gray-cool/60 text-navy/60"
+          }`}
+        >
+          I&apos;m a student
+        </button>
+        <button
+          type="button"
+          onClick={() => setRole("company")}
+          className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+            role === "company" ? "border-teal bg-teal/5 text-teal" : "border-gray-cool/60 text-navy/60"
+          }`}
+        >
+          I&apos;m a company
+        </button>
+      </div>
+
+      <form action={handleSubmit} className="mt-5 space-y-4">
+        <input type="hidden" name="role" value={role} />
+        <div>
+          <Label htmlFor="fullName">Full name</Label>
+          <Input id="fullName" name="fullName" required className="mt-1.5" />
+        </div>
+        {role === "company" && (
+          <div>
+            <Label htmlFor="companyName">Company name</Label>
+            <Input id="companyName" name="companyName" required className="mt-1.5" />
+          </div>
+        )}
+        <div>
+          <Label htmlFor="email">Email</Label>
+          <Input id="email" name="email" type="email" required className="mt-1.5" />
+        </div>
+        <div>
+          <Label htmlFor="password">Password</Label>
+          <Input id="password" name="password" type="password" required minLength={8} className="mt-1.5" />
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <Button type="submit" disabled={pending} className="w-full bg-teal text-white hover:bg-teal/90">
+          {pending ? "Creating account..." : "Create account"}
+        </Button>
+      </form>
+
+      <p className="mt-5 text-center text-sm text-navy/60">
+        Already have an account?{" "}
+        <Link href="/signin" className="font-medium text-teal hover:underline">
+          Sign in
+        </Link>
+      </p>
+    </div>
+  );
+}

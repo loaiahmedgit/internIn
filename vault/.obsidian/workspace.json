@@ -1,0 +1,213 @@
+{
+  "main": {
+    "id": "08c9e45f4f940407",
+    "type": "split",
+    "children": [
+      {
+        "id": "f07dffd1fadf54bd",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "63abba2836d27a6a",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "029c110cc7a1574f",
+    "type": "split",
+    "children": [
+      {
+        "id": "da99b6b9946c9c3d",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "0e9dcf36c793c63c",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "8b39b7db44a6b22e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "2bd3ea2da8b1e06e",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "692fd026e621350d",
+    "type": "split",
+    "children": [
+      {
+        "id": "763bca35da854ed5",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "34a99c4c30e12300",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "18c58873c82dde6a",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "a704b0bce5875676",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "d25e26203dd0f974",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "6c816ce8f3fa3f47",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "63abba2836d27a6a",
+  "lastOpenFiles": [
+    "MVP Scope (Explicit Cut List).md",
+    "Free to Start, Pay When You Hire (v1 Model).md",
+    "Data Model (Core Entities).md",
+    "_COMMUNITY_Pricing Section (Landing Page).md",
+    "_COMMUNITY_Internship Workspace.md",
+    "_COMMUNITY_Smart Matching.md",
+    "_COMMUNITY_Practice  Training Layer.md",
+    "_COMMUNITY_Student Challenge Workspace.md",
+    "_COMMUNITY_Candidate Evidence Page.md",
+    "_COMMUNITY_Pricing, MVP Scope & Verified Experience.md",
+    "_COMMUNITY_Data Model & CompanyPublic Routes.md",
+    "MVP Payment Stub Decision.md",
+    "VerifiedExperience.md",
+    "InternshipProgram.md",
+    "InternshipOffer.md",
+    "Challenge.md",
+    "Application.md",
+    "Placement Fee QAR 499 per Successful Intern.md",
+    "Later Pricing Tiers (Starter, Pro, Enterprise, Universities).md",
+    "Admin Pages.md",
+    "User.md",
+    "SupervisorFeedback.md",
+    "SubmissionArtifact.md",
+    "Submission.md",
+    "Opportunity.md",
+    "Interview.md"
+  ]
+}
