@@ -24,12 +24,20 @@ const STAGE_FIELD_LABELS: Record<EducationStage, { institution: string; program:
   other: { institution: "", program: "Current education / career stage", year: "" },
 };
 
-// Curated, not scraped — this list is small and stable enough (~15 institutions)
-// that a live API/scraper would be slower and more fragile than just maintaining
-// this by hand. "Other" covers anything not listed.
+// Curated from Qatar's official/current institution listings (Ministry of
+// Education and Higher Education, cross-checked against Wikipedia's Qatar
+// universities page), not a live scrape — this list changes rarely enough
+// that a runtime scraper would be slower and more fragile than maintaining
+// a static list. "Other" covers anything not listed or since renamed/closed.
 const QATAR_UNIVERSITIES = [
   "Qatar University",
   "Hamad Bin Khalifa University",
+  "University of Doha for Science and Technology",
+  "Community College of Qatar",
+  "Doha Institute for Graduate Studies",
+  "Lusail University",
+  "Qatar Aeronautical College",
+  "University Foundation College",
   "Carnegie Mellon University in Qatar",
   "Georgetown University in Qatar",
   "Northwestern University in Qatar",
@@ -37,12 +45,13 @@ const QATAR_UNIVERSITIES = [
   "Virginia Commonwealth University School of the Arts in Qatar",
   "Weill Cornell Medicine - Qatar",
   "HEC Paris in Qatar",
-  "University of Calgary in Qatar",
-  "University of Doha for Science and Technology",
-  "College of the North Atlantic - Qatar",
-  "Community College of Qatar",
   "Stenden University Qatar",
-  "Ahmed bin Mohammed Military College",
+  "National University of Malaysia (UKM Qatar)",
+  "AFG College (University of Aberdeen partnership)",
+  "ARIU (University of Derby partnership)",
+  "City University Qatar",
+  "Arkansas State University (Qatar)",
+  "Northumbria University (Qatar)",
 ];
 
 // Representative, not exhaustive — Qatar has 100+ K-12 schools across curricula.
