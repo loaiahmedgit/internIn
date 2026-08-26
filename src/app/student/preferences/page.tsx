@@ -17,7 +17,7 @@ export default async function StudentPreferencesPage() {
   if (!profile?.educationStage) redirect("/student/onboarding");
 
   return (
-    <div className="mx-auto max-w-2xl px-5 py-20 sm:px-8">
+    <div className="mx-auto max-w-3xl px-5 py-20 sm:px-8">
       <p className="text-xs font-medium tracking-[0.12em] text-teal-ink uppercase">Almost there</p>
       <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">
         What are you looking for?

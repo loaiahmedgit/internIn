@@ -432,7 +432,7 @@ export function StudentProfileForm({
         <>
           <div>
             <label className="text-sm font-medium text-navy">What best describes you?</label>
-            <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
               {STAGE_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
