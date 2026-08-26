@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
-import { isRedirectError } from "@/lib/utils";
 
 export default function SignUpPage() {
   const [role, setRole] = useState<"student" | "company">("student");
@@ -17,11 +16,9 @@ export default function SignUpPage() {
   async function handleSubmit(formData: FormData) {
     setError(null);
     setPending(true);
-    try {
-      await signUp(formData);
-    } catch (e) {
-      if (isRedirectError(e)) throw e;
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+    const result = await signUp(formData);
+    if (result?.error) {
+      setError(result.error);
       setPending(false);
     }
   }

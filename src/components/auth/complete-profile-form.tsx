@@ -5,7 +5,6 @@ import { completeOAuthProfile } from "@/app/(auth)/actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { isRedirectError } from "@/lib/utils";
 
 export function CompleteProfileForm({ defaultFullName }: { defaultFullName: string }) {
   const [role, setRole] = useState<"student" | "company">("student");
@@ -15,11 +14,9 @@ export function CompleteProfileForm({ defaultFullName }: { defaultFullName: stri
   async function handleSubmit(formData: FormData) {
     setError(null);
     setPending(true);
-    try {
-      await completeOAuthProfile(formData);
-    } catch (e) {
-      if (isRedirectError(e)) throw e;
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+    const result = await completeOAuthProfile(formData);
+    if (result?.error) {
+      setError(result.error);
       setPending(false);
     }
   }

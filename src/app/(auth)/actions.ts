@@ -34,27 +34,37 @@ function slugify(name: string) {
   );
 }
 
-export async function signUp(formData: FormData) {
+/**
+ * Note on redirect(): Next.js throws a special digest internally for
+ * redirect() and requires it be called outside try/catch. Every action
+ * below therefore validates and mutates first and returns `{ error }` for
+ * any expected failure, then calls redirect() as the last, un-wrapped
+ * statement — nothing left afterward can race with it or accidentally
+ * catch it client-side.
+ */
+export async function signUp(formData: FormData): Promise<{ error: string } | void> {
+  const parsed = SignUpSchema.safeParse({
+    email: String(formData.get("email") ?? ""),
+    password: String(formData.get("password") ?? ""),
+    fullName: String(formData.get("fullName") ?? ""),
+    role: String(formData.get("role") ?? "student"),
+    companyName: String(formData.get("companyName") ?? ""),
+    jobTitle: String(formData.get("jobTitle") ?? "") || undefined,
+    companyWebsite: String(formData.get("companyWebsite") ?? "") || undefined,
+    companyIndustry: String(formData.get("companyIndustry") ?? "") || undefined,
+    companySize: String(formData.get("companySize") ?? "") || undefined,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
   const { email, password, fullName, role, companyName, jobTitle, companyWebsite, companyIndustry, companySize } =
-    SignUpSchema.parse({
-      email: String(formData.get("email") ?? ""),
-      password: String(formData.get("password") ?? ""),
-      fullName: String(formData.get("fullName") ?? ""),
-      role: String(formData.get("role") ?? "student"),
-      companyName: String(formData.get("companyName") ?? ""),
-      jobTitle: String(formData.get("jobTitle") ?? "") || undefined,
-      companyWebsite: String(formData.get("companyWebsite") ?? "") || undefined,
-      companyIndustry: String(formData.get("companyIndustry") ?? "") || undefined,
-      companySize: String(formData.get("companySize") ?? "") || undefined,
-    });
+    parsed.data;
   if (role === "company" && (!companyName || !jobTitle || !companyWebsite || !companyIndustry)) {
-    throw new Error("Company name, your role, website, and industry are required.");
+    return { error: "Company name, your role, website, and industry are required." };
   }
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error) throw new Error(error.message);
-  if (!data.user) throw new Error("Sign up did not return a user.");
+  if (error) return { error: error.message };
+  if (!data.user) return { error: "Sign up did not return a user." };
 
   const db = getDb();
   const [user] = await db
@@ -64,7 +74,6 @@ export async function signUp(formData: FormData) {
 
   if (role === "student") {
     await db.insert(schema.studentProfiles).values({ userId: user.id });
-    redirect("/");
   } else {
     let slug = slugify(companyName);
     const existing = await db.select().from(schema.companies).where(eq(schema.companies.slug, slug));
@@ -77,8 +86,9 @@ export async function signUp(formData: FormData) {
     await db
       .insert(schema.companyMembers)
       .values({ companyId: company.id, userId: user.id, role: "owner", jobTitle });
-    redirect("/company/dashboard");
   }
+
+  redirect(role === "student" ? "/" : "/company/dashboard");
 }
 
 const CompleteOAuthProfileSchema = z.object({
@@ -98,26 +108,27 @@ const CompleteOAuthProfileSchema = z.object({
  * provider has no concept of finally gets decided, same row-creation shape
  * as the email/password signUp action minus the password step.
  */
-export async function completeOAuthProfile(formData: FormData) {
-  const { fullName, role, companyName, jobTitle, companyWebsite, companyIndustry, companySize } =
-    CompleteOAuthProfileSchema.parse({
-      fullName: String(formData.get("fullName") ?? ""),
-      role: String(formData.get("role") ?? "student"),
-      companyName: String(formData.get("companyName") ?? ""),
-      jobTitle: String(formData.get("jobTitle") ?? "") || undefined,
-      companyWebsite: String(formData.get("companyWebsite") ?? "") || undefined,
-      companyIndustry: String(formData.get("companyIndustry") ?? "") || undefined,
-      companySize: String(formData.get("companySize") ?? "") || undefined,
-    });
+export async function completeOAuthProfile(formData: FormData): Promise<{ error: string } | void> {
+  const parsed = CompleteOAuthProfileSchema.safeParse({
+    fullName: String(formData.get("fullName") ?? ""),
+    role: String(formData.get("role") ?? "student"),
+    companyName: String(formData.get("companyName") ?? ""),
+    jobTitle: String(formData.get("jobTitle") ?? "") || undefined,
+    companyWebsite: String(formData.get("companyWebsite") ?? "") || undefined,
+    companyIndustry: String(formData.get("companyIndustry") ?? "") || undefined,
+    companySize: String(formData.get("companySize") ?? "") || undefined,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  const { fullName, role, companyName, jobTitle, companyWebsite, companyIndustry, companySize } = parsed.data;
   if (role === "company" && (!companyName || !jobTitle || !companyWebsite || !companyIndustry)) {
-    throw new Error("Company name, your role, website, and industry are required.");
+    return { error: "Company name, your role, website, and industry are required." };
   }
 
   const supabase = await createClient();
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser();
-  if (!authUser) throw new Error("Not signed in.");
+  if (!authUser) return { error: "Not signed in." };
 
   const db = getDb();
   const [existing] = await db
@@ -130,7 +141,7 @@ export async function completeOAuthProfile(formData: FormData) {
   }
 
   const email = authUser.email;
-  if (!email) throw new Error("Your account has no email address to use.");
+  if (!email) return { error: "Your account has no email address to use." };
 
   const [user] = await db
     .insert(schema.users)
@@ -139,7 +150,6 @@ export async function completeOAuthProfile(formData: FormData) {
 
   if (role === "student") {
     await db.insert(schema.studentProfiles).values({ userId: user.id });
-    redirect("/student/dashboard");
   } else {
     let slug = slugify(companyName);
     const existingCompany = await db.select().from(schema.companies).where(eq(schema.companies.slug, slug));
@@ -152,20 +162,23 @@ export async function completeOAuthProfile(formData: FormData) {
     await db
       .insert(schema.companyMembers)
       .values({ companyId: company.id, userId: user.id, role: "owner", jobTitle });
-    redirect("/company/dashboard");
   }
+
+  redirect(role === "student" ? "/student/dashboard" : "/company/dashboard");
 }
 
-export async function signIn(formData: FormData) {
-  const { email, password, redirectTo } = SignInSchema.parse({
+export async function signIn(formData: FormData): Promise<{ error: string } | void> {
+  const parsed = SignInSchema.safeParse({
     email: String(formData.get("email") ?? ""),
     password: String(formData.get("password") ?? ""),
     redirectTo: String(formData.get("redirectTo") ?? ""),
   });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  const { email, password, redirectTo } = parsed.data;
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   const safeRedirect = redirectTo.startsWith("/") && !redirectTo.startsWith("//")
     ? redirectTo

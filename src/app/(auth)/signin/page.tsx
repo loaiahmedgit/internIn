@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
-import { isRedirectError } from "@/lib/utils";
 
 function SignInForm() {
   const searchParams = useSearchParams();
@@ -19,11 +18,9 @@ function SignInForm() {
   async function handleSubmit(formData: FormData) {
     setError(null);
     setPending(true);
-    try {
-      await signIn(formData);
-    } catch (e) {
-      if (isRedirectError(e)) throw e;
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+    const result = await signIn(formData);
+    if (result?.error) {
+      setError(result.error);
       setPending(false);
     }
   }
