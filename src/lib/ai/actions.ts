@@ -1,7 +1,7 @@
 "use server";
 
 import { aiProvider } from "./index";
-import { requireCurrentCompanyMember } from "@/lib/auth";
+import { requireCurrentCompanyMember, requireCurrentStudent } from "@/lib/auth";
 import { z } from "zod";
 import {
   CandidateComparisonRowSchema,
@@ -9,6 +9,7 @@ import {
   ChallengeSchema,
   InternshipDraftSchema,
   InternshipProgramSchema,
+  ResumeExtractionSchema,
   type Challenge,
   type InternshipDraft,
   type CandidateEvidence,
@@ -89,4 +90,10 @@ export async function generateInternshipProgramAction(input: {
     goals: z.string().trim().min(20).max(4000),
   }).parse(input);
   return InternshipProgramSchema.parse(await aiProvider.generateInternshipProgram(validated));
+}
+
+export async function extractResumeInfoAction(resumeText: string) {
+  await requireCurrentStudent();
+  const validated = z.string().trim().min(20).max(50000).parse(resumeText);
+  return ResumeExtractionSchema.parse(await aiProvider.extractResumeInfo(validated));
 }

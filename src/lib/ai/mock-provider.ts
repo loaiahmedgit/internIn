@@ -5,6 +5,7 @@ import type {
   Challenge,
   InternshipDraft,
   InternshipProgram,
+  ResumeExtraction,
   RubricCriterion,
   Scenario,
 } from "./schemas";
@@ -321,6 +322,25 @@ export class MockAIProvider implements AIProvider {
       durationWeeks: input.durationWeeks,
       hoursPerWeek: input.hoursPerWeek,
       weeks,
+    };
+  }
+
+  async extractResumeInfo(resumeText: string): Promise<ResumeExtraction> {
+    await wait(800);
+    const lower = resumeText.toLowerCase();
+    const skillKeywords = [
+      "excel", "sql", "python", "javascript", "figma", "photoshop", "marketing",
+      "sales", "leadership", "communication", "research", "writing", "data analysis",
+    ];
+    const interestKeywords = [
+      "software engineering", "data & analytics", "marketing", "finance", "design",
+      "business & operations", "sales", "human resources", "research",
+    ];
+    const skills = skillKeywords.filter((k) => lower.includes(k)).map((k) => k.replace(/\b\w/g, (c) => c.toUpperCase()));
+    const interests = interestKeywords.filter((k) => lower.includes(k.split(" ")[0]));
+    return {
+      skills: skills.length > 0 ? skills : ["Communication", "Teamwork"],
+      interests: interests.length > 0 ? interests : ["Business & Operations"],
     };
   }
 }

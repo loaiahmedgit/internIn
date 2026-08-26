@@ -93,6 +93,7 @@ export const studentProfiles = pgTable("student_profiles", {
   skills: jsonb("skills").$type<string[]>().notNull().default([]),
   availability: text("availability"),
   cvUrl: text("cv_url"),
+  cvFileKey: text("cv_file_key"),
   ...timestamps,
 });
 

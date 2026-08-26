@@ -213,3 +213,19 @@ describe("generateInternshipProgram", () => {
     expect(program.weeks[1].objectives[0]).toContain("learn the product");
   });
 });
+
+describe("extractResumeInfo", () => {
+  it("detects known skill/interest keywords in resume text", async () => {
+    const result = await provider.extractResumeInfo(
+      "Experienced with Python, SQL, and Excel. Led marketing campaigns and enjoy data analysis.",
+    );
+    expect(result.skills).toEqual(expect.arrayContaining(["Python", "Sql", "Excel"]));
+    expect(result.interests.length).toBeGreaterThan(0);
+  });
+
+  it("falls back to defaults when nothing matches", async () => {
+    const result = await provider.extractResumeInfo("A completely unrelated block of text with no keywords at all.");
+    expect(result.skills).toEqual(["Communication", "Teamwork"]);
+    expect(result.interests).toEqual(["Business & Operations"]);
+  });
+});

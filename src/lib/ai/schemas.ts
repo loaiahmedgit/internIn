@@ -100,3 +100,11 @@ export const InternshipProgramSchema = z.object({
   weeks: z.array(InternshipWeekSchema),
 });
 export type InternshipProgram = z.infer<typeof InternshipProgramSchema>;
+
+export const ResumeExtractionSchema = z.object({
+  skills: z.array(z.string()).describe("Concrete skills mentioned in the resume — tools, languages, technical or soft skills"),
+  interests: z
+    .array(z.string())
+    .describe("Career fields or areas of interest implied by the resume's experience and education"),
+});
+export type ResumeExtraction = z.infer<typeof ResumeExtractionSchema>;

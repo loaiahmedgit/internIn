@@ -4,7 +4,12 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { updateStudentProfileAction } from "@/lib/opportunities/student-actions";
+import { createClient } from "@/lib/supabase/client";
+import {
+  updateStudentProfileAction,
+  getCvUploadUrlAction,
+  extractCvAction,
+} from "@/lib/opportunities/student-actions";
 
 type EducationStage = "high_school" | "university" | "graduate" | "vocational" | "other";
 
@@ -320,6 +325,7 @@ type ProfileValues = {
   skills: string;
   availability: string;
   cvUrl: string;
+  cvFileKey: string;
 };
 
 function toList(value: string) {
@@ -341,10 +347,42 @@ export function StudentProfileForm({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [cvBusy, setCvBusy] = useState(false);
+  const [cvMessage, setCvMessage] = useState<string | null>(null);
+  const [cvError, setCvError] = useState<string | null>(null);
 
   function set<K extends keyof ProfileValues>(key: K, value: string) {
     setSaved(false);
     setValues((v) => ({ ...v, [key]: value }));
+  }
+
+  async function handleCvUpload(file: File) {
+    setCvBusy(true);
+    setCvError(null);
+    setCvMessage(null);
+    try {
+      const { token, path } = await getCvUploadUrlAction(file.name);
+      const supabase = createClient();
+      const { error: uploadError } = await supabase.storage.from("student-cvs").uploadToSignedUrl(path, token, file);
+      if (uploadError) throw new Error(`Couldn't upload the file: ${uploadError.message}`);
+
+      const extracted = await extractCvAction(path);
+      const mergedSkills = Array.from(new Set([...toList(values.skills), ...extracted.skills]));
+      const mergedInterests = Array.from(new Set([...toList(values.interests), ...extracted.interests]));
+      setValues((v) => ({
+        ...v,
+        skills: mergedSkills.join(", "),
+        interests: mergedInterests.join(", "),
+        cvFileKey: path,
+      }));
+      setCvMessage(
+        `Found ${extracted.skills.length} skill(s) and ${extracted.interests.length} interest area(s) — review below, then Save profile to keep them.`,
+      );
+    } catch (err) {
+      setCvError(err instanceof Error ? err.message : "Couldn't process that file.");
+    } finally {
+      setCvBusy(false);
+    }
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -367,6 +405,7 @@ export function StudentProfileForm({
           skills: toList(values.skills),
           availability: values.availability,
           cvUrl: values.cvUrl,
+          cvFileKey: values.cvFileKey || undefined,
         });
         if (variant === "onboarding") {
           router.push("/student/preferences");
@@ -512,6 +551,33 @@ export function StudentProfileForm({
               onChange={(e) => set("cvUrl", e.target.value)}
               className="mt-1.5"
             />
+          </div>
+
+          <div>
+            <label htmlFor="cv-upload" className="text-sm font-medium text-navy">
+              Or upload your CV (optional)
+            </label>
+            <p className="mt-1 text-xs text-navy/50">
+              PDF only. We'll pull out skills and interest areas for you to review — nothing saves automatically.
+            </p>
+            <input
+              id="cv-upload"
+              type="file"
+              accept="application/pdf"
+              disabled={cvBusy}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleCvUpload(file);
+                e.target.value = "";
+              }}
+              className="mt-1.5 text-sm text-navy/70"
+            />
+            {cvBusy && <p className="mt-1 text-xs text-navy/50">Reading your CV…</p>}
+            {cvMessage && <p className="mt-1 text-xs text-teal-ink">{cvMessage}</p>}
+            {cvError && <p className="mt-1 text-xs text-destructive">{cvError}</p>}
+            {values.cvFileKey && !cvBusy && !cvMessage && (
+              <p className="mt-1 text-xs text-navy/50">A CV is on file.</p>
+            )}
           </div>
         </>
       )}

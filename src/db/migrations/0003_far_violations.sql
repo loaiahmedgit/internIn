@@ -1,0 +1,1 @@
+ALTER TABLE "student_profiles" ADD COLUMN "cv_file_key" text;

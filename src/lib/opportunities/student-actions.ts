@@ -104,6 +104,55 @@ export async function getSubmissionUploadUrlAction(applicationId: string, fileNa
   return { signedUrl: data.signedUrl, token: data.token, path, publicUrl: publicUrlData.publicUrl };
 }
 
+/**
+ * CVs are real personal documents, unlike synthetic challenge submissions —
+ * this bucket is private, no public URL is ever generated. Only this
+ * student's own path prefix can be uploaded to or read back.
+ */
+export async function getCvUploadUrlAction(fileName: string) {
+  const { user } = await requireCurrentStudent();
+  const validatedFileName = FileNameSchema.parse(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const supabase = createAdminClient();
+  const path = `${user.id}/${crypto.randomUUID()}-${validatedFileName}`;
+
+  const { data, error } = await supabase.storage.from("student-cvs").createSignedUploadUrl(path);
+  if (error) throw new Error("Couldn't prepare an upload URL.");
+
+  return { signedUrl: data.signedUrl, token: data.token, path };
+}
+
+/**
+ * Downloads the uploaded CV, extracts its text, and asks the AI provider
+ * for skills/interests it can find — returns them for the student to
+ * review, never writes them to the profile itself. That happens only when
+ * the student explicitly saves via updateStudentProfileAction.
+ */
+export async function extractCvAction(path: string) {
+  const { user } = await requireCurrentStudent();
+  const validatedPath = z.string().min(1).max(500).parse(path);
+  if (!validatedPath.startsWith(`${user.id}/`)) {
+    throw new Error("Not authorized for this file.");
+  }
+
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const supabase = createAdminClient();
+  const { data: fileBlob, error } = await supabase.storage.from("student-cvs").download(validatedPath);
+  if (error || !fileBlob) throw new Error("Couldn't read the uploaded file.");
+
+  const buffer = Buffer.from(await fileBlob.arrayBuffer());
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+  const { text } = await parser.getText();
+  if (!text || text.trim().length < 20) {
+    throw new Error("Couldn't read any text from that PDF. Try a different file.");
+  }
+
+  const { extractResumeInfoAction } = await import("@/lib/ai/actions");
+  return extractResumeInfoAction(text);
+}
+
 export async function submitChallengeAction(input: {
   applicationId: string;
   notes: string;
@@ -213,6 +262,7 @@ const StudentProfileInputSchema = z.object({
   skills: z.array(z.string().trim().min(1).max(60)).max(30),
   availability: z.string().trim().max(200).optional(),
   cvUrl: z.string().trim().url().max(2000).optional().or(z.literal("")),
+  cvFileKey: z.string().max(500).optional(),
 });
 
 export async function updateStudentProfileAction(input: z.infer<typeof StudentProfileInputSchema>) {
@@ -233,6 +283,7 @@ export async function updateStudentProfileAction(input: z.infer<typeof StudentPr
       skills: validated.skills,
       availability: validated.availability || null,
       cvUrl: validated.cvUrl || null,
+      cvFileKey: validated.cvFileKey || null,
       updatedAt: new Date(),
     })
     .where(eq(schema.studentProfiles.userId, user.id));

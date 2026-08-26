@@ -10,6 +10,7 @@ import {
   CandidateEvidenceSchema,
   CandidateComparisonRowSchema,
   InternshipProgramSchema,
+  ResumeExtractionSchema,
   type Challenge,
   type CandidateComparisonRow,
 } from "./schemas";
@@ -182,5 +183,19 @@ Manager's goals: "${input.goals}"
 Requirements: exactly ${input.durationWeeks} weeks (week numbers 1 to ${input.durationWeeks}). Week 1 must be onboarding (meet team, learn context, tool access). The final week must be a capstone/final project + presentation + documentation. Middle weeks should build toward the stated goals.`,
     });
     return { internName: input.internName, role: input.role, durationWeeks: input.durationWeeks, hoursPerWeek: input.hoursPerWeek, ...object };
+  }
+
+  async extractResumeInfo(resumeText: string) {
+    const { object } = await generateObject({
+      model: getModel(),
+      schema: ResumeExtractionSchema,
+      prompt: `Extract concrete skills and career-interest fields from this resume text. Only extract what's actually stated or clearly implied — don't invent anything.
+
+Resume text:
+"""
+${resumeText.slice(0, 8000)}
+"""`,
+    });
+    return object;
   }
 }

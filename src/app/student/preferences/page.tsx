@@ -39,6 +39,7 @@ export default async function StudentPreferencesPage() {
           skills: (profile.skills ?? []).join(", "),
           availability: profile.availability ?? "",
           cvUrl: profile.cvUrl ?? "",
+          cvFileKey: profile.cvFileKey ?? "",
         }}
       />
 

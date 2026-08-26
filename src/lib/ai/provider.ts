@@ -4,6 +4,7 @@ import type {
   Challenge,
   InternshipDraft,
   InternshipProgram,
+  ResumeExtraction,
   RubricCriterion,
   Scenario,
 } from "./schemas";
@@ -54,4 +55,7 @@ export interface AIProvider {
     hoursPerWeek: number;
     goals: string;
   }): Promise<InternshipProgram>;
+
+  /** Extract skills/interests from resume text. Never written to the profile directly — the student reviews it first. */
+  extractResumeInfo(resumeText: string): Promise<ResumeExtraction>;
 }

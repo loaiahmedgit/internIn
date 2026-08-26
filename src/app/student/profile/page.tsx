@@ -33,6 +33,7 @@ export default async function StudentProfilePage() {
           skills: (profile?.skills ?? []).join(", "),
           availability: profile?.availability ?? "",
           cvUrl: profile?.cvUrl ?? "",
+          cvFileKey: profile?.cvFileKey ?? "",
         }}
       />
     </div>
