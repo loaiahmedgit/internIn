@@ -144,17 +144,32 @@ internIn/
   - `inngest-cli` added as a devDependency (with a `package.json` `allowScripts` entry for its binary postinstall) so `npx inngest-cli dev -u http://localhost:3000/api/inngest` works out of the box for local testing.
   - **Real gotcha**: with real `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` set (as they are here), the SDK assumes production ("cloud") mode and the local Dev Server's sync fails with `Error: Expected server kind cloud, got dev`. Fix: `INNGEST_DEV=1` in `.env.local` forces dev mode locally — it's gitignored/local-only and must never be set in an actual deployment's env vars (documented in `.env.local.example`).
   - **Verified for real, not just build-passing**: ran the local Dev Server, confirmed it synced the app and found the function, POSTed a real `internship/offer.created` test event to it, watched the run complete, and confirmed the function's actual output was `{"sent": true}` — Resend genuinely sent an email (to `delivered@resend.dev`, Resend's own supported delivery-simulation address) through the real pipeline, not a mock.
-  - Not done: no other events/functions yet (e.g. "submission received" notifying the company, "offer accepted/declined" notifying the company, "supervisor feedback added" notifying the student) — `sendInternshipOfferEmail` is the first of what could be several notification jobs, added because it closed the most obvious gap.
+  - **Now has three more notification jobs**, all following the same pattern (event emitted from the relevant server action, function no-ops without `RESEND_API_KEY`, registered in `src/app/api/inngest/route.ts`):
+    - `submission/received` — emitted from `submitChallengeAction` (`student-actions.ts`), notifies every company member's email (via a new `getCompanyContext` helper joining `companyMembers`+`users`), links to `/company/submissions/[id]`.
+    - `internship_offer/responded` — emitted from `respondToOfferAction`, notifies company members whether the student accepted or declined, links to `/company/opportunities/[id]`.
+    - `supervisor_feedback/added` — emitted from `addSupervisorFeedbackAction` (`program-actions.ts`, whose `assertOwnsProgram` now also selects `companyName`/`applicationId`/`studentEmail`/`studentName` for this), notifies the student, links to `/student/applications/[id]`.
+
+- **Real file upload via Supabase Storage**:
+  - Bucket `submission-artifacts` created (public — these are synthetic-challenge submissions, not real company data, so a durable public link was chosen over signed-read-URL expiry/regeneration complexity).
+  - `src/lib/supabase/admin.ts` — service-role client, server-only (never imported client-side, same discipline as `aiProvider`).
+  - `getSubmissionUploadUrlAction` (`student-actions.ts`) — verifies the student owns the application, returns a short-lived signed **upload** URL scoped to `{applicationId}/{uuid}-{filename}`, plus the eventual public URL.
+  - `SubmitChallengeForm` now has a real file input: picks a file → gets the signed URL → uploads directly from the browser via `supabase.storage.from(...).uploadToSignedUrl(...)` → the resulting public URL becomes the submission's `artifactUrl`, exactly as if the student had pasted a link. **No schema or `submitChallengeAction` changes needed** — the existing `artifacts: {name, url}[]` shape already fit.
+  - Verified with a real end-to-end test (not just types): admin client signs an upload URL, an anon client uploads through it, the resulting public URL served the exact uploaded content back over HTTP.
+
+- **Smart Matching** (docs/02, "guidance, never a gate"):
+  - `computeMatchScore` (`src/lib/matching.ts`, 7 tests in `matching.test.ts`) — case-insensitive overlap between a student's `skills`+`interests` and an opportunity's declared `skills`, as a 0–100 percentage.
+  - `/opportunities` computes this per opportunity for a signed-in student with a profile, shows a "X% match" badge, and sorts the list by it. Companies and anonymous visitors see the unsorted list with no badges (no profile to match against). **Never gates applying** — `applyToOpportunityAction` is completely unaware this exists, per docs/02's explicit rule.
+  - Not done: no explanation of *why* a score is what it is (e.g. which skills matched); no matching against `availability` (docs/02 also mentions this) — only skills+interests are used.
 
 ## 6. What's NOT done (the actual next work, in priority order)
 
-Phase 6 (Resend, PostHog, Sentry, Inngest) is now complete. What's left is smaller, already-known gaps rather than infrastructure:
+Every gap from the original build plan is now closed. What's left is genuinely optional polish, not missing functionality:
 
-1. More Inngest-driven notifications beyond the offer-invite email (submission received, offer accepted/declined, supervisor feedback added) — see the Inngest entry above.
-2. Discover/Smart Matching scoring (docs/02) — explicitly deferred, not MVP-required.
-3. Real file upload via Supabase Storage — submissions currently take a URL, not an uploaded file.
+1. Smart Matching could factor in `availability`/major, and could explain *why* a score is what it is (which skills matched) — currently just a bare percentage.
+2. More Inngest notification events could exist (e.g. "internship program completed," "task marked done") but the ones that matter most (offer created, submission received, offer responded, feedback added) are all wired.
+3. No admin/moderation surface exists (explicitly out of v1 scope per docs/08).
 
-The full company → AI Challenge → student submission → evidence → comparison → invite → accept (with a real notification email) → program → tasks/feedback → Verified Experience → student portfolio loop (docs/00–04) now has a working vertical slice end to end, backed by a real, live Supabase database, a real OpenRouter key, real Resend-backed confirmation emails sent from a verified domain, real PostHog/Sentry observability, and real Inngest background jobs (see section 10) — nothing in the core product loop is running on mocks or placeholders anymore.
+The full company → AI Challenge → student submission (with real file upload) → evidence → comparison → invite (with a real notification email) → accept (with a real notification email) → program → tasks/feedback (with a real notification email) → Verified Experience → student portfolio loop (docs/00–04) now has a working, fully wired, end-to-end implementation — real database, real Auth, real AI, real email, real analytics/error-tracking, real background jobs, real file storage, and Smart Matching. Nothing in the product is running on a mock, a placeholder, or a stub except the QAR 499 payment charge itself, which docs/06 explicitly calls out as intentionally stubbed for v1 (see `internship_offers.placementFeeStatus`).
 
 ## 7. Cross-cutting rules to keep following (don't relax these)
 
