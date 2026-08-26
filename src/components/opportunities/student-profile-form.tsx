@@ -24,6 +24,151 @@ const STAGE_FIELD_LABELS: Record<EducationStage, { institution: string; program:
   other: { institution: "", program: "Current education / career stage", year: "" },
 };
 
+// Curated, not scraped — this list is small and stable enough (~15 institutions)
+// that a live API/scraper would be slower and more fragile than just maintaining
+// this by hand. "Other" covers anything not listed.
+const QATAR_UNIVERSITIES = [
+  "Qatar University",
+  "Hamad Bin Khalifa University",
+  "Carnegie Mellon University in Qatar",
+  "Georgetown University in Qatar",
+  "Northwestern University in Qatar",
+  "Texas A&M University at Qatar",
+  "Virginia Commonwealth University School of the Arts in Qatar",
+  "Weill Cornell Medicine - Qatar",
+  "HEC Paris in Qatar",
+  "University of Calgary in Qatar",
+  "University of Doha for Science and Technology",
+  "College of the North Atlantic - Qatar",
+  "Community College of Qatar",
+  "Stenden University Qatar",
+  "Ahmed bin Mohammed Military College",
+];
+
+// Representative, not exhaustive — Qatar has 100+ K-12 schools across curricula.
+// "Other" is the fallback for anything not on this shortlist.
+const QATAR_SCHOOLS = [
+  "Qatar Academy Doha",
+  "American School of Doha",
+  "Doha College",
+  "Qatar International School",
+  "International School of London Qatar",
+  "Park House English School",
+  "Newton International School",
+  "DPS Modern Indian School",
+  "MES Indian School",
+  "Birla Public School",
+  "Qatar Canadian School",
+  "Al Bayan Independent School",
+  "A Qatari public/government school",
+];
+
+const QATAR_CITIES = [
+  "Doha",
+  "Al Rayyan",
+  "Al Wakrah",
+  "Umm Salal",
+  "Al Khor",
+  "Al Daayen",
+  "Al Shamal",
+  "Al Shahaniya",
+  "Dukhan",
+  "Mesaieed",
+  "Lusail",
+];
+
+const MAJORS = [
+  "Computer Science",
+  "Information Technology",
+  "Data Science",
+  "Business Administration",
+  "Marketing",
+  "Finance",
+  "Accounting",
+  "Economics",
+  "Mechanical Engineering",
+  "Electrical Engineering",
+  "Civil Engineering",
+  "Petroleum Engineering",
+  "Architecture",
+  "Graphic Design",
+  "Communication / Media",
+  "Psychology",
+  "Biology",
+  "Medicine",
+  "Law",
+  "International Relations",
+  "Human Resources",
+  "Education",
+];
+
+function currentYearRange() {
+  const now = new Date().getFullYear();
+  const years: number[] = [];
+  for (let y = now - 6; y <= now + 8; y++) years.push(y);
+  return years;
+}
+
+const selectClassName =
+  "mt-1.5 h-8 w-full rounded-lg border border-gray-cool/60 bg-transparent px-2.5 text-sm text-navy outline-none focus-visible:border-teal";
+
+function SelectWithOther({
+  id,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [otherMode, setOtherMode] = useState(() => value !== "" && !options.includes(value));
+  const selectValue = otherMode ? "Other" : value;
+
+  return (
+    <div>
+      <label htmlFor={id} className="text-sm font-medium text-navy">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={selectValue}
+        onChange={(e) => {
+          if (e.target.value === "Other") {
+            setOtherMode(true);
+            onChange("");
+          } else {
+            setOtherMode(false);
+            onChange(e.target.value);
+          }
+        }}
+        className={selectClassName}
+      >
+        <option value="" disabled>
+          Select…
+        </option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+        <option value="Other">Other (type your own)</option>
+      </select>
+      {otherMode && (
+        <Input
+          className="mt-2"
+          placeholder="Type it in"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+
 type ProfileValues = {
   educationStage: EducationStage | "";
   university: string;
@@ -96,6 +241,8 @@ export function StudentProfileForm({
 
   const stage = values.educationStage || undefined;
   const stageLabels = stage ? STAGE_FIELD_LABELS[stage] : null;
+  const institutionOptions = stage === "high_school" ? QATAR_SCHOOLS : QATAR_UNIVERSITIES;
+  const years = currentYearRange();
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
@@ -122,43 +269,45 @@ export function StudentProfileForm({
       {stageLabels && (
         <div className="grid gap-5 sm:grid-cols-2">
           {stageLabels.institution && (
-            <div>
-              <label htmlFor="university" className="text-sm font-medium text-navy">
-                {stageLabels.institution}
-              </label>
-              <Input
-                id="university"
-                value={values.university}
-                onChange={(e) => set("university", e.target.value)}
-                className="mt-1.5"
-              />
-            </div>
+            <SelectWithOther
+              key={`${stage}-institution`}
+              id="university"
+              label={stageLabels.institution}
+              options={institutionOptions}
+              value={values.university}
+              onChange={(v) => set("university", v)}
+            />
           )}
           {stageLabels.program && (
-            <div>
-              <label htmlFor="major" className="text-sm font-medium text-navy">
-                {stageLabels.program}
-              </label>
-              <Input
-                id="major"
-                value={values.major}
-                onChange={(e) => set("major", e.target.value)}
-                className="mt-1.5"
-              />
-            </div>
+            <SelectWithOther
+              key={`${stage}-program`}
+              id="major"
+              label={stageLabels.program}
+              options={MAJORS}
+              value={values.major}
+              onChange={(v) => set("major", v)}
+            />
           )}
           {stageLabels.year && (
             <div>
               <label htmlFor="graduation-year" className="text-sm font-medium text-navy">
                 {stageLabels.year}
               </label>
-              <Input
+              <select
                 id="graduation-year"
-                type="number"
                 value={values.graduationYear}
                 onChange={(e) => set("graduationYear", e.target.value)}
-                className="mt-1.5"
-              />
+                className={selectClassName}
+              >
+                <option value="" disabled>
+                  Select…
+                </option>
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
         </div>
@@ -193,18 +342,13 @@ export function StudentProfileForm({
         </div>
       </div>
 
-      <div>
-        <label htmlFor="location" className="text-sm font-medium text-navy">
-          Location
-        </label>
-        <Input
-          id="location"
-          placeholder="Doha, Qatar"
-          value={values.location}
-          onChange={(e) => set("location", e.target.value)}
-          className="mt-1.5"
-        />
-      </div>
+      <SelectWithOther
+        id="location"
+        label="Location"
+        options={QATAR_CITIES}
+        value={values.location}
+        onChange={(v) => set("location", v)}
+      />
 
       {variant === "full" && (
         <>
