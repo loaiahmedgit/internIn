@@ -63,7 +63,7 @@ export default function SignUpPage() {
       <form action={handleSubmit} className="mt-5 space-y-4">
         <input type="hidden" name="role" value={role} />
         <div>
-          <Label htmlFor="fullName">Full name</Label>
+          <Label htmlFor="fullName">Your name</Label>
           <Input id="fullName" name="fullName" required className="mt-1.5" />
         </div>
         {role === "company" && (

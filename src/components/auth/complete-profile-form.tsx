@@ -50,7 +50,7 @@ export function CompleteProfileForm({ defaultFullName }: { defaultFullName: stri
       <form action={handleSubmit} className="mt-5 space-y-4">
         <input type="hidden" name="role" value={role} />
         <div>
-          <Label htmlFor="fullName">Full name</Label>
+          <Label htmlFor="fullName">Your name</Label>
           <Input id="fullName" name="fullName" defaultValue={defaultFullName} required className="mt-1.5" />
         </div>
         {role === "company" && (
