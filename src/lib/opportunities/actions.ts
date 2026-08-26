@@ -2,6 +2,7 @@
 
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
+import { inngest } from "@/lib/inngest/client";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -226,9 +227,18 @@ export async function inviteToInternshipAction(applicationId: string) {
   const db = getDb();
 
   const [application] = await db
-    .select({ id: schema.applications.id, opportunityCompanyId: schema.opportunities.companyId })
+    .select({
+      id: schema.applications.id,
+      opportunityCompanyId: schema.opportunities.companyId,
+      role: schema.opportunities.role,
+      companyName: schema.companies.name,
+      studentEmail: schema.users.email,
+      studentName: schema.users.fullName,
+    })
     .from(schema.applications)
     .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
+    .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
+    .innerJoin(schema.users, eq(schema.applications.studentId, schema.users.id))
     .where(eq(schema.applications.id, validatedApplicationId))
     .limit(1);
   if (!application || application.opportunityCompanyId !== companyId) {
@@ -262,6 +272,17 @@ export async function inviteToInternshipAction(applicationId: string) {
     eventType: "internship_offer_created",
     actorUserId: userId,
     metadata: { placementFeeStatus: "stubbed_paid", placementFeeQar: 499 },
+  });
+
+  await inngest.send({
+    name: "internship/offer.created",
+    data: {
+      studentEmail: application.studentEmail,
+      studentName: application.studentName,
+      companyName: application.companyName,
+      role: application.role,
+      applicationId: validatedApplicationId,
+    },
   });
 
   return offer.id as string;
