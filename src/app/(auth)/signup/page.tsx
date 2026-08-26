@@ -67,10 +67,50 @@ export default function SignUpPage() {
           <Input id="fullName" name="fullName" required className="mt-1.5" />
         </div>
         {role === "company" && (
-          <div>
-            <Label htmlFor="companyName">Company name</Label>
-            <Input id="companyName" name="companyName" required className="mt-1.5" />
-          </div>
+          <>
+            <div>
+              <Label htmlFor="jobTitle">Your role</Label>
+              <select
+                id="jobTitle"
+                name="jobTitle"
+                required
+                defaultValue=""
+                className="mt-1.5 h-8 w-full rounded-lg border border-gray-cool/60 bg-transparent px-2.5 text-sm text-navy outline-none focus-visible:border-teal"
+              >
+                <option value="" disabled>
+                  Select your role
+                </option>
+                <option value="Founder / Owner">Founder / Owner</option>
+                <option value="HR / Talent Acquisition">HR / Talent Acquisition</option>
+                <option value="Hiring Manager">Hiring Manager</option>
+                <option value="Team Manager">Team Manager</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="companyName">Company name</Label>
+              <Input id="companyName" name="companyName" required className="mt-1.5" />
+            </div>
+            <div>
+              <Label htmlFor="companyWebsite">Company website</Label>
+              <Input
+                id="companyWebsite"
+                name="companyWebsite"
+                type="url"
+                placeholder="https://…"
+                required
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="companyIndustry">Industry</Label>
+              <Input id="companyIndustry" name="companyIndustry" required className="mt-1.5" />
+            </div>
+            <div>
+              <Label htmlFor="companySize">Company size (optional)</Label>
+              <Input id="companySize" name="companySize" placeholder="e.g. 1-10, 11-50…" className="mt-1.5" />
+            </div>
+          </>
         )}
         <div>
           <Label htmlFor="email">Email</Label>

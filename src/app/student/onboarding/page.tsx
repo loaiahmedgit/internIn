@@ -1,9 +1,10 @@
+import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
 import { StudentProfileForm } from "@/components/opportunities/student-profile-form";
 
-export default async function StudentProfilePage() {
+export default async function StudentOnboardingPage() {
   const { user } = await requireCurrentStudent();
   const db = getDb();
 
@@ -12,16 +13,21 @@ export default async function StudentProfilePage() {
     .from(schema.studentProfiles)
     .where(eq(schema.studentProfiles.userId, user.id))
     .limit(1);
+  if (profile?.educationStage) redirect("/student/dashboard");
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-20 sm:px-8">
-      <p className="text-xs font-medium tracking-[0.12em] text-teal-ink uppercase">Your profile</p>
-      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">{user.fullName}</h1>
+      <p className="text-xs font-medium tracking-[0.12em] text-teal-ink uppercase">One more step</p>
+      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">
+        Tell us a little about where you are now.
+      </h1>
       <p className="mt-2 text-sm text-navy/68">
-        Keep this simple — companies judge you on your Challenge submissions, not this form.
+        Just enough to personalize opportunities — everything else is optional and editable later from your
+        profile.
       </p>
 
       <StudentProfileForm
+        variant="onboarding"
         initial={{
           educationStage: profile?.educationStage ?? "",
           university: profile?.university ?? "",

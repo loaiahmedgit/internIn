@@ -27,6 +27,18 @@ async function getCompanyIdForCurrentUser() {
   return { companyId: membership.companyId, userId: user.id, memberRole: membership.role };
 }
 
+async function assertCompanyVerified(companyId: string) {
+  const db = getDb();
+  const [company] = await db
+    .select({ verified: schema.companies.verified })
+    .from(schema.companies)
+    .where(eq(schema.companies.id, companyId))
+    .limit(1);
+  if (!company?.verified) {
+    throw new Error("Verify your company before publishing or inviting candidates.");
+  }
+}
+
 async function assertOwnsOpportunity(opportunityId: string, companyId: string) {
   const db = getDb();
   const [opportunity] = await db
@@ -157,6 +169,7 @@ export async function publishOpportunityAction(opportunityId: string) {
   const validatedOpportunityId = IdSchema.parse(opportunityId);
   const { companyId, userId, memberRole } = await getCompanyIdForCurrentUser();
   if (memberRole === "member") throw new Error("Only a company owner or admin can publish a challenge.");
+  await assertCompanyVerified(companyId);
   await assertOwnsOpportunity(validatedOpportunityId, companyId);
   const db = getDb();
 
@@ -224,6 +237,7 @@ export async function shortlistApplicationAction(applicationId: string) {
 export async function inviteToInternshipAction(applicationId: string) {
   const validatedApplicationId = IdSchema.parse(applicationId);
   const { companyId, userId } = await getCompanyIdForCurrentUser();
+  await assertCompanyVerified(companyId);
   const db = getDb();
 
   const [application] = await db

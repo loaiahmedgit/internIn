@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
@@ -6,6 +7,13 @@ import { requireCurrentStudent } from "@/lib/auth";
 export default async function StudentDashboardPage() {
   const { user } = await requireCurrentStudent();
   const db = getDb();
+
+  const [profile] = await db
+    .select({ educationStage: schema.studentProfiles.educationStage })
+    .from(schema.studentProfiles)
+    .where(eq(schema.studentProfiles.userId, user.id))
+    .limit(1);
+  if (!profile?.educationStage) redirect("/student/onboarding");
 
   const applications = await db
     .select({

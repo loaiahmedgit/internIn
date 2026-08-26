@@ -12,6 +12,10 @@ const SignUpSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   role: z.enum(["student", "company"]),
   companyName: z.string().trim().max(160),
+  jobTitle: z.string().trim().max(160).optional(),
+  companyWebsite: z.string().trim().max(2000).optional(),
+  companyIndustry: z.string().trim().max(160).optional(),
+  companySize: z.string().trim().max(160).optional(),
 });
 
 const SignInSchema = z.object({
@@ -31,15 +35,20 @@ function slugify(name: string) {
 }
 
 export async function signUp(formData: FormData) {
-  const { email, password, fullName, role, companyName } = SignUpSchema.parse({
-    email: String(formData.get("email") ?? ""),
-    password: String(formData.get("password") ?? ""),
-    fullName: String(formData.get("fullName") ?? ""),
-    role: String(formData.get("role") ?? "student"),
-    companyName: String(formData.get("companyName") ?? ""),
-  });
-  if (role === "company" && !companyName) {
-    throw new Error("Company name is required.");
+  const { email, password, fullName, role, companyName, jobTitle, companyWebsite, companyIndustry, companySize } =
+    SignUpSchema.parse({
+      email: String(formData.get("email") ?? ""),
+      password: String(formData.get("password") ?? ""),
+      fullName: String(formData.get("fullName") ?? ""),
+      role: String(formData.get("role") ?? "student"),
+      companyName: String(formData.get("companyName") ?? ""),
+      jobTitle: String(formData.get("jobTitle") ?? "") || undefined,
+      companyWebsite: String(formData.get("companyWebsite") ?? "") || undefined,
+      companyIndustry: String(formData.get("companyIndustry") ?? "") || undefined,
+      companySize: String(formData.get("companySize") ?? "") || undefined,
+    });
+  if (role === "company" && (!companyName || !jobTitle || !companyWebsite || !companyIndustry)) {
+    throw new Error("Company name, your role, website, and industry are required.");
   }
 
   const supabase = await createClient();
@@ -61,8 +70,13 @@ export async function signUp(formData: FormData) {
     const existing = await db.select().from(schema.companies).where(eq(schema.companies.slug, slug));
     if (existing.length > 0) slug = `${slug}-${user.id.slice(0, 6)}`;
 
-    const [company] = await db.insert(schema.companies).values({ name: companyName, slug }).returning();
-    await db.insert(schema.companyMembers).values({ companyId: company.id, userId: user.id, role: "owner" });
+    const [company] = await db
+      .insert(schema.companies)
+      .values({ name: companyName, slug, website: companyWebsite, industry: companyIndustry, size: companySize })
+      .returning();
+    await db
+      .insert(schema.companyMembers)
+      .values({ companyId: company.id, userId: user.id, role: "owner", jobTitle });
     redirect("/company/dashboard");
   }
 }
@@ -71,6 +85,10 @@ const CompleteOAuthProfileSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
   role: z.enum(["student", "company"]),
   companyName: z.string().trim().max(160),
+  jobTitle: z.string().trim().max(160).optional(),
+  companyWebsite: z.string().trim().max(2000).optional(),
+  companyIndustry: z.string().trim().max(160).optional(),
+  companySize: z.string().trim().max(160).optional(),
 });
 
 /**
@@ -81,13 +99,18 @@ const CompleteOAuthProfileSchema = z.object({
  * as the email/password signUp action minus the password step.
  */
 export async function completeOAuthProfile(formData: FormData) {
-  const { fullName, role, companyName } = CompleteOAuthProfileSchema.parse({
-    fullName: String(formData.get("fullName") ?? ""),
-    role: String(formData.get("role") ?? "student"),
-    companyName: String(formData.get("companyName") ?? ""),
-  });
-  if (role === "company" && !companyName) {
-    throw new Error("Company name is required.");
+  const { fullName, role, companyName, jobTitle, companyWebsite, companyIndustry, companySize } =
+    CompleteOAuthProfileSchema.parse({
+      fullName: String(formData.get("fullName") ?? ""),
+      role: String(formData.get("role") ?? "student"),
+      companyName: String(formData.get("companyName") ?? ""),
+      jobTitle: String(formData.get("jobTitle") ?? "") || undefined,
+      companyWebsite: String(formData.get("companyWebsite") ?? "") || undefined,
+      companyIndustry: String(formData.get("companyIndustry") ?? "") || undefined,
+      companySize: String(formData.get("companySize") ?? "") || undefined,
+    });
+  if (role === "company" && (!companyName || !jobTitle || !companyWebsite || !companyIndustry)) {
+    throw new Error("Company name, your role, website, and industry are required.");
   }
 
   const supabase = await createClient();
@@ -122,8 +145,13 @@ export async function completeOAuthProfile(formData: FormData) {
     const existingCompany = await db.select().from(schema.companies).where(eq(schema.companies.slug, slug));
     if (existingCompany.length > 0) slug = `${slug}-${user.id.slice(0, 6)}`;
 
-    const [company] = await db.insert(schema.companies).values({ name: companyName, slug }).returning();
-    await db.insert(schema.companyMembers).values({ companyId: company.id, userId: user.id, role: "owner" });
+    const [company] = await db
+      .insert(schema.companies)
+      .values({ name: companyName, slug, website: companyWebsite, industry: companyIndustry, size: companySize })
+      .returning();
+    await db
+      .insert(schema.companyMembers)
+      .values({ companyId: company.id, userId: user.id, role: "owner", jobTitle });
     redirect("/company/dashboard");
   }
 }

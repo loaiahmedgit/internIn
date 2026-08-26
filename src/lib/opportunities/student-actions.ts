@@ -203,10 +203,13 @@ export async function respondToOfferAction(applicationId: string, decision: "acc
 }
 
 const StudentProfileInputSchema = z.object({
+  educationStage: z.enum(["high_school", "university", "graduate", "vocational", "other"]).optional(),
   university: z.string().trim().max(200).optional(),
   major: z.string().trim().max(200).optional(),
   graduationYear: z.number().int().min(1950).max(2100).optional(),
+  location: z.string().trim().max(200).optional(),
   interests: z.array(z.string().trim().min(1).max(60)).max(30),
+  opportunityTypes: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
   skills: z.array(z.string().trim().min(1).max(60)).max(30),
   availability: z.string().trim().max(200).optional(),
   cvUrl: z.string().trim().url().max(2000).optional().or(z.literal("")),
@@ -220,10 +223,13 @@ export async function updateStudentProfileAction(input: z.infer<typeof StudentPr
   await db
     .update(schema.studentProfiles)
     .set({
+      educationStage: validated.educationStage ?? null,
       university: validated.university || null,
       major: validated.major || null,
       graduationYear: validated.graduationYear ?? null,
+      location: validated.location || null,
       interests: validated.interests,
+      opportunityTypes: validated.opportunityTypes ?? [],
       skills: validated.skills,
       availability: validated.availability || null,
       cvUrl: validated.cvUrl || null,

@@ -33,6 +33,13 @@ const timestamps = {
 
 export const userRoleEnum = pgEnum("user_role", ["student", "company"]);
 export const companyMemberRoleEnum = pgEnum("company_member_role", ["owner", "admin", "member"]);
+export const educationStageEnum = pgEnum("education_stage", [
+  "high_school",
+  "university",
+  "graduate",
+  "vocational",
+  "other",
+]);
 export const opportunityStatusEnum = pgEnum("opportunity_status", ["draft", "published", "closed"]);
 export const challengeStatusEnum = pgEnum("challenge_status", [
   "draft",
@@ -76,10 +83,13 @@ export const studentProfiles = pgTable("student_profiles", {
     .notNull()
     .unique()
     .references(() => users.id, { onDelete: "cascade" }),
+  educationStage: educationStageEnum("education_stage"),
   university: text("university"),
   major: text("major"),
   graduationYear: integer("graduation_year"),
+  location: text("location"),
   interests: jsonb("interests").$type<string[]>().notNull().default([]),
+  opportunityTypes: jsonb("opportunity_types").$type<string[]>().notNull().default([]),
   skills: jsonb("skills").$type<string[]>().notNull().default([]),
   availability: text("availability"),
   cvUrl: text("cv_url"),
@@ -91,6 +101,10 @@ export const companies = pgTable("companies", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   logoUrl: text("logo_url"),
+  website: text("website"),
+  industry: text("industry"),
+  size: text("size"),
+  verified: boolean("verified").notNull().default(false),
   ...timestamps,
 });
 
@@ -105,6 +119,7 @@ export const companyMembers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     role: companyMemberRoleEnum("role").notNull().default("member"),
+    jobTitle: text("job_title"),
     ...timestamps,
   },
   (t) => [uniqueIndex("company_members_company_user_uidx").on(t.companyId, t.userId)],
