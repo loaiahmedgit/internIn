@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { getCurrentUser } from "@/lib/auth";
 import { ApplyButton } from "@/components/opportunities/apply-button";
+import { Navbar } from "@/components/marketing/navbar";
+import { Footer } from "@/components/marketing/footer";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { STUDENT_NAV_ITEMS } from "@/lib/dashboard-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -32,14 +37,10 @@ export default async function OpportunityDetailPage({
 
   if (!opportunity || opportunity.status !== "published") notFound();
 
-  return (
-    <div className="mx-auto max-w-3xl px-5 py-20 sm:px-8">
-      <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">
-        {opportunity.companyName}
-      </p>
-      <h1 className="mt-2 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">
-        {opportunity.role}
-      </h1>
+  const content = (
+    <>
+      <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{opportunity.companyName}</p>
+      <h1 className="mt-2 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">{opportunity.role}</h1>
       <p className="mt-2 text-sm text-navy/68">
         {opportunity.duration} · {opportunity.hoursPerWeek}h/week · {opportunity.location}
       </p>
@@ -57,6 +58,28 @@ export default async function OpportunityDetailPage({
       <div className="mt-10">
         <ApplyButton opportunityId={opportunity.id} />
       </div>
+    </>
+  );
+
+  const currentUser = await getCurrentUser();
+
+  if (currentUser?.role === "student") {
+    return (
+      <DashboardShell eyebrow="Student" displayName={currentUser.fullName} navItems={STUDENT_NAV_ITEMS}>
+        <div className="max-w-3xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">{content}</div>
+      </DashboardShell>
+    );
+  }
+
+  const dashboardHref = currentUser ? (currentUser.role === "company" ? "/company/dashboard" : "/student/dashboard") : null;
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <Navbar dashboardHref={dashboardHref} />
+      <main className="flex-1">
+        <div className="mx-auto max-w-3xl px-5 py-20 sm:px-8">{content}</div>
+      </main>
+      <Footer />
     </div>
   );
 }
