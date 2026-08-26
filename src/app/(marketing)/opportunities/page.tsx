@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getDb, schema } from "@/db";
 import { eq } from "drizzle-orm";
+import { getCurrentUser } from "@/lib/auth";
+import { computeMatchScore } from "@/lib/matching";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +22,26 @@ export default async function OpportunitiesPage() {
     .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
     .where(eq(schema.opportunities.status, "published"));
 
+  const currentUser = await getCurrentUser();
+  const studentProfile =
+    currentUser?.role === "student"
+      ? (
+          await db
+            .select({ skills: schema.studentProfiles.skills, interests: schema.studentProfiles.interests })
+            .from(schema.studentProfiles)
+            .where(eq(schema.studentProfiles.userId, currentUser.id))
+            .limit(1)
+        )[0]
+      : undefined;
+
+  const withMatch = opportunities.map((o) => ({
+    ...o,
+    matchScore: studentProfile
+      ? computeMatchScore(studentProfile.skills, studentProfile.interests, o.skills)
+      : undefined,
+  }));
+  if (studentProfile) withMatch.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+
   return (
     <div className="mx-auto max-w-5xl px-5 py-20 sm:px-8">
       <p className="text-xs font-medium tracking-[0.12em] text-teal-ink uppercase">Opportunities</p>
@@ -27,19 +49,26 @@ export default async function OpportunitiesPage() {
         Prove what you can do.
       </h1>
 
-      {opportunities.length === 0 ? (
+      {withMatch.length === 0 ? (
         <p className="mt-12 text-navy/68">
           No published opportunities yet. Companies are still building challenges — check back soon.
         </p>
       ) : (
         <div className="mt-12 grid gap-4 sm:grid-cols-2">
-          {opportunities.map((o) => (
+          {withMatch.map((o) => (
             <Link
               key={o.id}
               href={`/opportunities/${o.id}`}
               className="block border border-navy/12 bg-white p-6 transition-colors hover:border-teal/40"
             >
-              <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{o.companyName}</p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{o.companyName}</p>
+                {o.matchScore !== undefined && (
+                  <span className="shrink-0 rounded-full bg-teal/10 px-2.5 py-1 text-xs font-medium text-teal-ink">
+                    {o.matchScore}% match
+                  </span>
+                )}
+              </div>
               <p className="mt-1.5 text-lg font-semibold text-navy">{o.role}</p>
               <p className="mt-2 text-sm text-navy/68">
                 {o.duration} · {o.hoursPerWeek}h/week · {o.location}

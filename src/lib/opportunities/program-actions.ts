@@ -2,6 +2,7 @@
 
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
+import { inngest } from "@/lib/inngest/client";
 import { eq, and, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -50,11 +51,17 @@ async function assertOwnsProgram(programId: string, companyId: string) {
       program: schema.internshipPrograms,
       opportunityCompanyId: schema.opportunities.companyId,
       opportunitySkills: schema.opportunities.skills,
+      companyName: schema.companies.name,
+      applicationId: schema.applications.id,
+      studentEmail: schema.users.email,
+      studentName: schema.users.fullName,
     })
     .from(schema.internshipPrograms)
     .innerJoin(schema.internshipOffers, eq(schema.internshipPrograms.offerId, schema.internshipOffers.id))
     .innerJoin(schema.applications, eq(schema.internshipOffers.applicationId, schema.applications.id))
     .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
+    .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
+    .innerJoin(schema.users, eq(schema.applications.studentId, schema.users.id))
     .where(eq(schema.internshipPrograms.id, programId))
     .limit(1);
   if (!row || row.opportunityCompanyId !== companyId) throw new Error("Not authorized for this program.");
@@ -114,7 +121,10 @@ export async function addSupervisorFeedbackAction(programId: string, feedback: s
   const validatedFeedback = FeedbackSchema.parse(feedback);
   const validatedWeekId = weekId ? IdSchema.parse(weekId) : undefined;
   const { user, membership } = await requireCurrentCompanyMember();
-  const { program } = await assertOwnsProgram(validatedProgramId, membership.companyId);
+  const { program, companyName, applicationId, studentEmail, studentName } = await assertOwnsProgram(
+    validatedProgramId,
+    membership.companyId,
+  );
   if (validatedWeekId) await assertOwnsWeek(validatedWeekId, membership.companyId);
 
   const db = getDb();
@@ -133,6 +143,11 @@ export async function addSupervisorFeedbackAction(programId: string, feedback: s
     entityId: program.id,
     eventType: "supervisor_feedback_added",
     actorUserId: user.id,
+  });
+
+  await inngest.send({
+    name: "supervisor_feedback/added",
+    data: { studentEmail, studentName, companyName, feedback: validatedFeedback, applicationId },
   });
 
   return entry.id as string;

@@ -2,8 +2,24 @@
 
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
+import { inngest } from "@/lib/inngest/client";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+
+async function getCompanyContext(opportunityId: string) {
+  const db = getDb();
+  const [opportunity] = await db
+    .select({ role: schema.opportunities.role, companyId: schema.opportunities.companyId })
+    .from(schema.opportunities)
+    .where(eq(schema.opportunities.id, opportunityId))
+    .limit(1);
+  const members = await db
+    .select({ email: schema.users.email })
+    .from(schema.companyMembers)
+    .innerJoin(schema.users, eq(schema.companyMembers.userId, schema.users.id))
+    .where(eq(schema.companyMembers.companyId, opportunity.companyId));
+  return { role: opportunity.role, companyEmails: members.map((m) => m.email) };
+}
 
 /**
  * Student-side counterpart to src/lib/opportunities/actions.ts. Same rule:
@@ -61,6 +77,33 @@ async function assertOwnsApplication(applicationId: string, studentUserId: strin
   return application;
 }
 
+const FileNameSchema = z.string().trim().min(1).max(200);
+
+/**
+ * Returns a short-lived signed upload URL scoped to this student's own
+ * application, plus the public URL the file will be reachable at once
+ * uploaded (used as the submission's artifact link — same field a pasted
+ * URL would populate). Bucket is public: these are synthetic-challenge
+ * submissions, not real company data, so a durable public link is a
+ * reasonable tradeoff against signed-read-URL expiry/regeneration.
+ */
+export async function getSubmissionUploadUrlAction(applicationId: string, fileName: string) {
+  const { user } = await requireCurrentStudent();
+  const application = await assertOwnsApplication(applicationId, user.id);
+  const validatedFileName = FileNameSchema.parse(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const supabase = createAdminClient();
+  const path = `${application.id}/${crypto.randomUUID()}-${validatedFileName}`;
+
+  const { data, error } = await supabase.storage.from("submission-artifacts").createSignedUploadUrl(path);
+  if (error) throw new Error("Couldn't prepare an upload URL.");
+
+  const { data: publicUrlData } = supabase.storage.from("submission-artifacts").getPublicUrl(path);
+
+  return { signedUrl: data.signedUrl, token: data.token, path, publicUrl: publicUrlData.publicUrl };
+}
+
 export async function submitChallengeAction(input: {
   applicationId: string;
   notes: string;
@@ -101,6 +144,14 @@ export async function submitChallengeAction(input: {
     actorUserId: user.id,
   });
 
+  const { role, companyEmails } = await getCompanyContext(application.opportunityId);
+  if (companyEmails.length > 0) {
+    await inngest.send({
+      name: "submission/received",
+      data: { companyEmails, studentName: user.fullName, role, submissionId: submission.id },
+    });
+  }
+
   return submission.id as string;
 }
 
@@ -135,6 +186,20 @@ export async function respondToOfferAction(applicationId: string, decision: "acc
     eventType: decision === "accepted" ? "offer_accepted" : "offer_declined",
     actorUserId: user.id,
   });
+
+  const { role, companyEmails } = await getCompanyContext(application.opportunityId);
+  if (companyEmails.length > 0) {
+    await inngest.send({
+      name: "internship_offer/responded",
+      data: {
+        companyEmails,
+        studentName: user.fullName,
+        role,
+        decision,
+        opportunityId: application.opportunityId,
+      },
+    });
+  }
 }
 
 const StudentProfileInputSchema = z.object({

@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { submitChallengeAction } from "@/lib/opportunities/student-actions";
+import { createClient } from "@/lib/supabase/client";
+import { getSubmissionUploadUrlAction, submitChallengeAction } from "@/lib/opportunities/student-actions";
 
 export function SubmitChallengeForm({ applicationId }: { applicationId: string }) {
   const router = useRouter();
   const [notes, setNotes] = useState("");
   const [artifactUrl, setArtifactUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -19,7 +21,19 @@ export function SubmitChallengeForm({ applicationId }: { applicationId: string }
     setError(null);
     startTransition(async () => {
       try {
-        await submitChallengeAction({ applicationId, notes, artifactUrl: artifactUrl || undefined });
+        let finalArtifactUrl = artifactUrl || undefined;
+
+        if (file) {
+          const { path, token, publicUrl } = await getSubmissionUploadUrlAction(applicationId, file.name);
+          const supabase = createClient();
+          const { error: uploadError } = await supabase.storage
+            .from("submission-artifacts")
+            .uploadToSignedUrl(path, token, file);
+          if (uploadError) throw new Error(`Couldn't upload the file: ${uploadError.message}`);
+          finalArtifactUrl = publicUrl;
+        }
+
+        await submitChallengeAction({ applicationId, notes, artifactUrl: finalArtifactUrl });
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Couldn't submit. Try again.");
@@ -30,8 +44,19 @@ export function SubmitChallengeForm({ applicationId }: { applicationId: string }
   return (
     <form onSubmit={handleSubmit} className="mt-6 space-y-4 border border-navy/12 bg-white p-6">
       <div>
+        <label htmlFor="artifact-file" className="text-sm font-medium text-navy">
+          Upload your work
+        </label>
+        <Input
+          id="artifact-file"
+          type="file"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="mt-1.5"
+        />
+      </div>
+      <div>
         <label htmlFor="artifact-url" className="text-sm font-medium text-navy">
-          Link to your work
+          Or link to your work
         </label>
         <Input
           id="artifact-url"
@@ -39,6 +64,7 @@ export function SubmitChallengeForm({ applicationId }: { applicationId: string }
           placeholder="https://..."
           value={artifactUrl}
           onChange={(e) => setArtifactUrl(e.target.value)}
+          disabled={!!file}
           className="mt-1.5"
         />
       </div>
