@@ -7,6 +7,7 @@ import { signIn } from "../actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
 function SignInForm() {
   const searchParams = useSearchParams();
@@ -28,6 +29,15 @@ function SignInForm() {
   return (
     <div className="rounded-xl border border-gray-cool/60 bg-white p-7">
       <h1 className="text-xl font-bold text-navy">Sign in</h1>
+
+      <div className="mt-5">
+        <OAuthButtons />
+      </div>
+      <div className="mt-5 flex items-center gap-3 text-xs text-navy/40">
+        <div className="h-px flex-1 bg-gray-cool/60" />
+        or
+        <div className="h-px flex-1 bg-gray-cool/60" />
+      </div>
 
       <form action={handleSubmit} className="mt-5 space-y-4">
         <input type="hidden" name="redirectTo" value={redirectTo} />

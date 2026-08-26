@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { signUp } from "../actions";
+import { completeOAuthProfile } from "@/app/(auth)/actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
-export default function SignUpPage() {
+export function CompleteProfileForm({ defaultFullName }: { defaultFullName: string }) {
   const [role, setRole] = useState<"student" | "company">("student");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -17,7 +15,7 @@ export default function SignUpPage() {
     setError(null);
     setPending(true);
     try {
-      await signUp(formData);
+      await completeOAuthProfile(formData);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
       setPending(false);
@@ -25,18 +23,7 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="rounded-xl border border-gray-cool/60 bg-white p-7">
-      <h1 className="text-xl font-bold text-navy">Create your account</h1>
-
-      <div className="mt-5">
-        <OAuthButtons />
-      </div>
-      <div className="mt-5 flex items-center gap-3 text-xs text-navy/40">
-        <div className="h-px flex-1 bg-gray-cool/60" />
-        or
-        <div className="h-px flex-1 bg-gray-cool/60" />
-      </div>
-
+    <>
       <div className="mt-5 grid grid-cols-2 gap-2">
         <button
           type="button"
@@ -62,7 +49,7 @@ export default function SignUpPage() {
         <input type="hidden" name="role" value={role} />
         <div>
           <Label htmlFor="fullName">Full name</Label>
-          <Input id="fullName" name="fullName" required className="mt-1.5" />
+          <Input id="fullName" name="fullName" defaultValue={defaultFullName} required className="mt-1.5" />
         </div>
         {role === "company" && (
           <div>
@@ -70,28 +57,13 @@ export default function SignUpPage() {
             <Input id="companyName" name="companyName" required className="mt-1.5" />
           </div>
         )}
-        <div>
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" required className="mt-1.5" />
-        </div>
-        <div>
-          <Label htmlFor="password">Password</Label>
-          <Input id="password" name="password" type="password" required minLength={8} className="mt-1.5" />
-        </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button type="submit" disabled={pending} className="w-full bg-teal text-white hover:bg-teal/90">
-          {pending ? "Creating account..." : "Create account"}
+          {pending ? "Setting up…" : "Continue"}
         </Button>
       </form>
-
-      <p className="mt-5 text-center text-sm text-navy/60">
-        Already have an account?{" "}
-        <Link href="/signin" className="font-medium text-teal hover:underline">
-          Sign in
-        </Link>
-      </p>
-    </div>
+    </>
   );
 }

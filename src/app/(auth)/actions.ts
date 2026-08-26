@@ -67,6 +67,67 @@ export async function signUp(formData: FormData) {
   }
 }
 
+const CompleteOAuthProfileSchema = z.object({
+  fullName: z.string().trim().min(2).max(120),
+  role: z.enum(["student", "company"]),
+  companyName: z.string().trim().max(160),
+});
+
+/**
+ * Completes a first-time OAuth sign-in (Google/LinkedIn/Microsoft): the
+ * Supabase auth user already exists (created by the OAuth callback), but
+ * our app-level `users` row doesn't yet — this is where the role the OAuth
+ * provider has no concept of finally gets decided, same row-creation shape
+ * as the email/password signUp action minus the password step.
+ */
+export async function completeOAuthProfile(formData: FormData) {
+  const { fullName, role, companyName } = CompleteOAuthProfileSchema.parse({
+    fullName: String(formData.get("fullName") ?? ""),
+    role: String(formData.get("role") ?? "student"),
+    companyName: String(formData.get("companyName") ?? ""),
+  });
+  if (role === "company" && !companyName) {
+    throw new Error("Company name is required.");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  if (!authUser) throw new Error("Not signed in.");
+
+  const db = getDb();
+  const [existing] = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.authUserId, authUser.id))
+    .limit(1);
+  if (existing) {
+    redirect(existing.role === "company" ? "/company/dashboard" : "/student/dashboard");
+  }
+
+  const email = authUser.email;
+  if (!email) throw new Error("Your account has no email address to use.");
+
+  const [user] = await db
+    .insert(schema.users)
+    .values({ authUserId: authUser.id, email, role, fullName })
+    .returning();
+
+  if (role === "student") {
+    await db.insert(schema.studentProfiles).values({ userId: user.id });
+    redirect("/student/dashboard");
+  } else {
+    let slug = slugify(companyName);
+    const existingCompany = await db.select().from(schema.companies).where(eq(schema.companies.slug, slug));
+    if (existingCompany.length > 0) slug = `${slug}-${user.id.slice(0, 6)}`;
+
+    const [company] = await db.insert(schema.companies).values({ name: companyName, slug }).returning();
+    await db.insert(schema.companyMembers).values({ companyId: company.id, userId: user.id, role: "owner" });
+    redirect("/company/dashboard");
+  }
+}
+
 export async function signIn(formData: FormData) {
   const { email, password, redirectTo } = SignInSchema.parse({
     email: String(formData.get("email") ?? ""),
