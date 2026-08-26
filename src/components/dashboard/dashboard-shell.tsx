@@ -36,7 +36,7 @@ export function DashboardShell({
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
                 isActive(pathname, item.href)
                   ? "bg-teal/8 text-teal-ink"
                   : "text-navy/60 hover:bg-gray-light hover:text-navy"

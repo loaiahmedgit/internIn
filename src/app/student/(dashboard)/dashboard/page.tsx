@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
 import { StatusRail } from "@/components/dashboard/status-rail";
+import { Button } from "@/components/ui/button";
+import { Sparkles } from "lucide-react";
 
 export default async function StudentDashboardPage() {
   const { user } = await requireCurrentStudent();
@@ -22,6 +24,7 @@ export default async function StudentDashboardPage() {
       status: schema.applications.status,
       role: schema.opportunities.role,
       companyName: schema.companies.name,
+      skills: schema.opportunities.skills,
     })
     .from(schema.applications)
     .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
@@ -35,30 +38,49 @@ export default async function StudentDashboardPage() {
         <h1 className="text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">Track your progress.</h1>
         {applications.length > 0 && (
           <p className="text-sm text-navy/50">
-            <span className="font-semibold text-navy">{applications.length}</span>{" "}
+            <span className="font-semibold tabular-nums text-navy">{applications.length}</span>{" "}
             {applications.length === 1 ? "application" : "applications"}
           </p>
         )}
       </div>
 
       {applications.length === 0 ? (
-        <p className="mt-12 text-navy/68">
-          You haven&apos;t applied to anything yet.{" "}
-          <Link href="/opportunities" className="text-teal-ink underline underline-offset-2">
+        <div className="mt-16 max-w-md">
+          <div className="flex size-14 items-center justify-center rounded-full bg-teal/10">
+            <Sparkles className="size-6 text-teal" />
+          </div>
+          <h2 className="mt-6 text-lg font-semibold text-navy">No applications yet</h2>
+          <p className="mt-2 text-sm text-navy/60">
+            Find a real work challenge and start proving what you can do — no CV required.
+          </p>
+          <Button
+            render={<Link href="/opportunities" />}
+            nativeButton={false}
+            size="lg"
+            className="mt-8 bg-teal text-white hover:bg-teal/90"
+          >
             Browse opportunities
-          </Link>
-          .
-        </p>
+          </Button>
+        </div>
       ) : (
         <div className="mt-10 max-w-2xl space-y-3">
           {applications.map((a) => (
             <Link
               key={a.id}
               href={`/student/applications/${a.id}`}
-              className="block rounded-xl border border-navy/12 bg-white p-5 transition-colors hover:border-teal/40"
+              className="block rounded-xl border border-navy/12 bg-white p-5 transition-colors hover:border-teal/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
             >
               <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{a.companyName}</p>
               <p className="mt-1 text-lg font-semibold text-navy">{a.role}</p>
+              {a.skills.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {a.skills.map((skill) => (
+                    <span key={skill} className="rounded-full bg-gray-light px-2 py-0.5 text-xs text-navy/60">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="mt-3">
                 <StatusRail status={a.status} />
               </div>
