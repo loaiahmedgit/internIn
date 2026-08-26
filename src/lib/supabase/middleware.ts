@@ -21,7 +21,8 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/student/applications") ||
     request.nextUrl.pathname.startsWith("/student/experience") ||
     request.nextUrl.pathname.startsWith("/student/profile") ||
-    request.nextUrl.pathname.startsWith("/student/onboarding");
+    request.nextUrl.pathname.startsWith("/student/onboarding") ||
+    request.nextUrl.pathname.startsWith("/student/preferences");
 
   // Keep public marketing and the local MVP demo available before Supabase
   // credentials are connected. Protected product routes still fail closed.

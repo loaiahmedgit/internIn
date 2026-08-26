@@ -138,8 +138,103 @@ const MAJORS = [
   "Education",
 ];
 
+const FIELD_OPTIONS = [
+  "Software Engineering",
+  "Data & Analytics",
+  "Marketing",
+  "Finance",
+  "Design",
+  "Business & Operations",
+  "Sales",
+  "Human Resources",
+  "Research",
+  "Product Management",
+  "Customer Support",
+];
+
+const OPPORTUNITY_TYPE_OPTIONS = ["Internship", "Part-time", "Full-time", "Volunteer"];
+
 const selectClassName =
   "mt-1.5 h-8 w-full rounded-lg border border-gray-cool/60 bg-transparent px-2.5 text-sm text-navy outline-none focus-visible:border-teal";
+
+function MultiChipSelect({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const selected = toList(value);
+  const [customValue, setCustomValue] = useState("");
+
+  function toggle(option: string) {
+    const next = selected.includes(option) ? selected.filter((s) => s !== option) : [...selected, option];
+    onChange(next.join(", "));
+  }
+
+  function addCustom() {
+    const trimmed = customValue.trim();
+    if (!trimmed || selected.includes(trimmed)) return;
+    onChange([...selected, trimmed].join(", "));
+    setCustomValue("");
+  }
+
+  return (
+    <div>
+      <label className="text-sm font-medium text-navy">{label}</label>
+      <div className="mt-1.5 flex flex-wrap gap-2">
+        {options.map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => toggle(opt)}
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium ${
+              selected.includes(opt) ? "border-teal bg-teal/5 text-teal" : "border-gray-cool/60 text-navy/60"
+            }`}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <Input
+          placeholder="Add your own…"
+          value={customValue}
+          onChange={(e) => setCustomValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addCustom();
+            }
+          }}
+        />
+        <Button type="button" variant="outline" onClick={addCustom}>
+          Add
+        </Button>
+      </div>
+      {selected.filter((s) => !options.includes(s)).length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {selected
+            .filter((s) => !options.includes(s))
+            .map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => toggle(s)}
+                className="rounded-full border border-teal bg-teal/5 px-3 py-1.5 text-sm font-medium text-teal"
+              >
+                {s} ×
+              </button>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Native browser calendar/month picker (icon + popup with month/year
 // navigation) — we only need the year, so it's stored as "YYYY-01" and the
@@ -237,7 +332,7 @@ export function StudentProfileForm({
   variant = "full",
 }: {
   initial: ProfileValues;
-  variant?: "full" | "onboarding";
+  variant?: "full" | "onboarding" | "preferences";
 }) {
   const router = useRouter();
   const [values, setValues] = useState(initial);
@@ -272,6 +367,10 @@ export function StudentProfileForm({
           cvUrl: values.cvUrl,
         });
         if (variant === "onboarding") {
+          router.push("/student/preferences");
+          return;
+        }
+        if (variant === "preferences") {
           router.push("/student/dashboard");
           return;
         }
@@ -288,95 +387,87 @@ export function StudentProfileForm({
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-      <div>
-        <label className="text-sm font-medium text-navy">What best describes you?</label>
-        <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {STAGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => set("educationStage", opt.value)}
-              className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                values.educationStage === opt.value
-                  ? "border-teal bg-teal/5 text-teal"
-                  : "border-gray-cool/60 text-navy/60"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {variant !== "preferences" && (
+        <>
+          <div>
+            <label className="text-sm font-medium text-navy">What best describes you?</label>
+            <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {STAGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => set("educationStage", opt.value)}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                    values.educationStage === opt.value
+                      ? "border-teal bg-teal/5 text-teal"
+                      : "border-gray-cool/60 text-navy/60"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {stageLabels && (
-        <div className="grid gap-5 sm:grid-cols-2">
-          {stageLabels.institution && (
-            <SelectWithOther
-              key={`${stage}-institution`}
-              id="university"
-              label={stageLabels.institution}
-              options={institutionOptions}
-              value={values.university}
-              onChange={(v) => set("university", v)}
-            />
-          )}
-          {stageLabels.program && (
-            <SelectWithOther
-              key={`${stage}-program`}
-              id="major"
-              label={stageLabels.program}
-              options={MAJORS}
-              value={values.major}
-              onChange={(v) => set("major", v)}
-            />
-          )}
-          {stageLabels.year && (
-            <div>
-              <label htmlFor="graduation-year" className="text-sm font-medium text-navy">
-                {stageLabels.year}
-              </label>
-              <YearMonthPicker value={values.graduationYear} onChange={(v) => set("graduationYear", v)} />
+          {stageLabels && (
+            <div className="grid gap-5 sm:grid-cols-2">
+              {stageLabels.institution && (
+                <SelectWithOther
+                  key={`${stage}-institution`}
+                  id="university"
+                  label={stageLabels.institution}
+                  options={institutionOptions}
+                  value={values.university}
+                  onChange={(v) => set("university", v)}
+                />
+              )}
+              {stageLabels.program && (
+                <SelectWithOther
+                  key={`${stage}-program`}
+                  id="major"
+                  label={stageLabels.program}
+                  options={MAJORS}
+                  value={values.major}
+                  onChange={(v) => set("major", v)}
+                />
+              )}
+              {stageLabels.year && (
+                <div>
+                  <label htmlFor="graduation-year" className="text-sm font-medium text-navy">
+                    {stageLabels.year}
+                  </label>
+                  <YearMonthPicker value={values.graduationYear} onChange={(v) => set("graduationYear", v)} />
+                </div>
+              )}
             </div>
           )}
-        </div>
+
+          <SelectWithOther
+            id="location"
+            label="Location"
+            options={QATAR_CITIES}
+            value={values.location}
+            onChange={(v) => set("location", v)}
+          />
+        </>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div>
-          <label htmlFor="interests" className="text-sm font-medium text-navy">
-            Fields / career areas you&apos;re interested in
-          </label>
-          <Input
-            id="interests"
-            placeholder="Data analysis, marketing, product…"
+      {variant !== "onboarding" && (
+        <>
+          <MultiChipSelect
+            label="Fields / career areas you're interested in"
+            options={FIELD_OPTIONS}
             value={values.interests}
-            onChange={(e) => set("interests", e.target.value)}
-            className="mt-1.5"
+            onChange={(v) => set("interests", v)}
           />
-          <p className="mt-1 text-xs text-navy/50">Comma-separated.</p>
-        </div>
-        <div>
-          <label htmlFor="opportunity-types" className="text-sm font-medium text-navy">
-            Type of opportunities you&apos;re looking for
-          </label>
-          <Input
-            id="opportunity-types"
-            placeholder="Internship, part-time…"
+          <MultiChipSelect
+            label="Type of opportunities you're looking for"
+            options={OPPORTUNITY_TYPE_OPTIONS}
             value={values.opportunityTypes}
-            onChange={(e) => set("opportunityTypes", e.target.value)}
-            className="mt-1.5"
+            onChange={(v) => set("opportunityTypes", v)}
           />
-          <p className="mt-1 text-xs text-navy/50">Comma-separated.</p>
-        </div>
-      </div>
-
-      <SelectWithOther
-        id="location"
-        label="Location"
-        options={QATAR_CITIES}
-        value={values.location}
-        onChange={(v) => set("location", v)}
-      />
+        </>
+      )}
 
       {variant === "full" && (
         <>
@@ -426,7 +517,7 @@ export function StudentProfileForm({
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Saving…" : variant === "onboarding" ? "Continue" : "Save profile"}
+          {isPending ? "Saving…" : variant !== "full" ? "Continue" : "Save profile"}
         </Button>
         {saved && !isPending && <span className="text-sm text-teal-ink">Saved.</span>}
       </div>

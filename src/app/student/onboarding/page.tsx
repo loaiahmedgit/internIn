@@ -13,7 +13,7 @@ export default async function StudentOnboardingPage() {
     .from(schema.studentProfiles)
     .where(eq(schema.studentProfiles.userId, user.id))
     .limit(1);
-  if (profile?.educationStage) redirect("/student/dashboard");
+  if (profile?.educationStage) redirect("/student/preferences");
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-20 sm:px-8">
