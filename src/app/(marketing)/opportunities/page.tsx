@@ -34,13 +34,16 @@ export default async function OpportunitiesPage() {
         )[0]
       : undefined;
 
+  const hasMatchData = Boolean(
+    studentProfile && (studentProfile.skills.length > 0 || studentProfile.interests.length > 0),
+  );
   const withMatch = opportunities.map((o) => ({
     ...o,
-    matchScore: studentProfile
-      ? computeMatchScore(studentProfile.skills, studentProfile.interests, o.skills)
+    matchScore: hasMatchData
+      ? computeMatchScore(studentProfile!.skills, studentProfile!.interests, o.skills)
       : undefined,
   }));
-  if (studentProfile) withMatch.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+  if (hasMatchData) withMatch.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-20 sm:px-8">
@@ -48,6 +51,14 @@ export default async function OpportunitiesPage() {
       <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">
         Prove what you can do.
       </h1>
+      {currentUser?.role === "student" && !hasMatchData && (
+        <p className="mt-2 text-sm text-navy/50">
+          <Link href="/student/profile" className="text-teal-ink underline underline-offset-2">
+            Add your skills and interests
+          </Link>{" "}
+          to see match scores.
+        </p>
+      )}
 
       {withMatch.length === 0 ? (
         <p className="mt-12 text-navy/68">

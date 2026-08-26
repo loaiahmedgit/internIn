@@ -13,7 +13,7 @@ const links = [
   { href: "/#pricing", label: "Pricing" },
 ];
 
-export function Navbar() {
+export function Navbar({ dashboardHref }: { dashboardHref?: string | null }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -50,12 +50,20 @@ export function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button render={<Link href="/signin" />} nativeButton={false} variant="ghost" className="h-10 rounded-full px-4 text-navy hover:bg-gray-light">
-            Sign in
-          </Button>
-          <Button render={<Link href="/company/opportunities/new" />} nativeButton={false} className="h-10 rounded-full bg-teal-ink px-4 text-white hover:bg-[#0b625c]">
-            Get started <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
-          </Button>
+          {dashboardHref ? (
+            <Button render={<Link href={dashboardHref} />} nativeButton={false} className="h-10 rounded-full bg-teal-ink px-4 text-white hover:bg-[#0b625c]">
+              Dashboard <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
+            </Button>
+          ) : (
+            <>
+              <Button render={<Link href="/signin" />} nativeButton={false} variant="ghost" className="h-10 rounded-full px-4 text-navy hover:bg-gray-light">
+                Sign in
+              </Button>
+              <Button render={<Link href="/company/opportunities/new" />} nativeButton={false} className="h-10 rounded-full bg-teal-ink px-4 text-white hover:bg-[#0b625c]">
+                Get started <ArrowRight className="ml-1 size-3.5" aria-hidden="true" />
+              </Button>
+            </>
+          )}
         </div>
 
         <button
@@ -78,12 +86,20 @@ export function Navbar() {
                 </Link>
               ))}
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <Button render={<Link href="/signin" onClick={() => setOpen(false)} />} nativeButton={false} variant="outline" className="h-11 rounded-full border-navy/15 text-navy">
-                  Sign in
-                </Button>
-                <Button render={<Link href="/company/opportunities/new" onClick={() => setOpen(false)} />} nativeButton={false} className="h-11 rounded-full bg-teal-ink text-white hover:bg-[#0b625c]">
-                  Get started
-                </Button>
+                {dashboardHref ? (
+                  <Button render={<Link href={dashboardHref} onClick={() => setOpen(false)} />} nativeButton={false} className="col-span-2 h-11 rounded-full bg-teal-ink text-white hover:bg-[#0b625c]">
+                    Dashboard
+                  </Button>
+                ) : (
+                  <>
+                    <Button render={<Link href="/signin" onClick={() => setOpen(false)} />} nativeButton={false} variant="outline" className="h-11 rounded-full border-navy/15 text-navy">
+                      Sign in
+                    </Button>
+                    <Button render={<Link href="/company/opportunities/new" onClick={() => setOpen(false)} />} nativeButton={false} className="h-11 rounded-full bg-teal-ink text-white hover:bg-[#0b625c]">
+                      Get started
+                    </Button>
+                  </>
+                )}
               </div>
             </nav>
           </div>
