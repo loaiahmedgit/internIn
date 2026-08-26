@@ -24,10 +24,11 @@ const STAGE_FIELD_LABELS: Record<EducationStage, { institution: string; program:
   other: { institution: "", program: "Current education / career stage", year: "" },
 };
 
-// Sourced via Firecrawl directly from the Ministry of Education and Higher
-// Education's official page (edu.gov.qa/en/Content/HigherEducationinQatar),
-// not memory or a secondary cross-check. Still a static list, not a live
-// scrape at request time — "Other" covers anything renamed/closed since.
+// Sourced via Firecrawl from the Ministry of Education and Higher
+// Education's official page (edu.gov.qa/en/Content/HigherEducationinQatar)
+// and cross-verified against MOEHE's own official university-list PDF
+// (dated Jan 2026). Still a static list, not a live scrape at request
+// time — "Other" covers anything renamed/closed since.
 const QATAR_UNIVERSITIES = [
   // Public
   "Qatar University",
@@ -53,6 +54,7 @@ const QATAR_UNIVERSITIES = [
   "Carnegie Mellon University in Qatar",
   "HEC Paris, Doha",
   "Weill Cornell Medicine - Qatar",
+  "Qatar Center for Professional Development",
   // Private
   "Al Rayyan International University College (with the University of Derby, UK)",
   "Doha Institute for Graduate Studies",
