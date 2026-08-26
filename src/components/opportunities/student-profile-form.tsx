@@ -141,12 +141,31 @@ const MAJORS = [
 function currentYearRange() {
   const now = new Date().getFullYear();
   const years: number[] = [];
-  for (let y = now - 6; y <= now + 8; y++) years.push(y);
+  for (let y = now - 2; y <= now + 7; y++) years.push(y);
   return years;
 }
 
 const selectClassName =
   "mt-1.5 h-8 w-full rounded-lg border border-gray-cool/60 bg-transparent px-2.5 text-sm text-navy outline-none focus-visible:border-teal";
+
+function YearGrid({ years, value, onChange }: { years: number[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="mt-1.5 grid grid-cols-5 gap-1.5 sm:grid-cols-6">
+      {years.map((y) => (
+        <button
+          key={y}
+          type="button"
+          onClick={() => onChange(String(y))}
+          className={`rounded-lg border py-1.5 text-sm font-medium ${
+            value === String(y) ? "border-teal bg-teal/5 text-teal" : "border-gray-cool/60 text-navy/60"
+          }`}
+        >
+          {y}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function SelectWithOther({
   id,
@@ -325,25 +344,13 @@ export function StudentProfileForm({
             />
           )}
           {stageLabels.year && (
-            <div>
-              <label htmlFor="graduation-year" className="text-sm font-medium text-navy">
-                {stageLabels.year}
-              </label>
-              <select
-                id="graduation-year"
+            <div className="sm:col-span-2">
+              <label className="text-sm font-medium text-navy">{stageLabels.year}</label>
+              <YearGrid
+                years={years}
                 value={values.graduationYear}
-                onChange={(e) => set("graduationYear", e.target.value)}
-                className={selectClassName}
-              >
-                <option value="" disabled>
-                  Select…
-                </option>
-                {years.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => set("graduationYear", v)}
+              />
             </div>
           )}
         </div>
