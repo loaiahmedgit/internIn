@@ -138,32 +138,20 @@ const MAJORS = [
   "Education",
 ];
 
-function currentYearRange() {
-  const now = new Date().getFullYear();
-  const years: number[] = [];
-  for (let y = now - 2; y <= now + 7; y++) years.push(y);
-  return years;
-}
-
 const selectClassName =
   "mt-1.5 h-8 w-full rounded-lg border border-gray-cool/60 bg-transparent px-2.5 text-sm text-navy outline-none focus-visible:border-teal";
 
-function YearGrid({ years, value, onChange }: { years: number[]; value: string; onChange: (v: string) => void }) {
+// Native browser calendar/month picker (icon + popup with month/year
+// navigation) — we only need the year, so it's stored as "YYYY-01" and the
+// year is pulled out on submit.
+function YearMonthPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className="mt-1.5 grid grid-cols-5 gap-1.5 sm:grid-cols-6">
-      {years.map((y) => (
-        <button
-          key={y}
-          type="button"
-          onClick={() => onChange(String(y))}
-          className={`rounded-lg border py-1.5 text-sm font-medium ${
-            value === String(y) ? "border-teal bg-teal/5 text-teal" : "border-gray-cool/60 text-navy/60"
-          }`}
-        >
-          {y}
-        </button>
-      ))}
-    </div>
+    <input
+      type="month"
+      value={value ? `${value}-01` : ""}
+      onChange={(e) => onChange(e.target.value ? e.target.value.split("-")[0] : "")}
+      className={selectClassName}
+    />
   );
 }
 
@@ -297,7 +285,6 @@ export function StudentProfileForm({
   const stage = values.educationStage || undefined;
   const stageLabels = stage ? STAGE_FIELD_LABELS[stage] : null;
   const institutionOptions = stage === "high_school" ? QATAR_SCHOOLS : QATAR_UNIVERSITIES;
-  const years = currentYearRange();
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
@@ -344,13 +331,11 @@ export function StudentProfileForm({
             />
           )}
           {stageLabels.year && (
-            <div className="sm:col-span-2">
-              <label className="text-sm font-medium text-navy">{stageLabels.year}</label>
-              <YearGrid
-                years={years}
-                value={values.graduationYear}
-                onChange={(v) => set("graduationYear", v)}
-              />
+            <div>
+              <label htmlFor="graduation-year" className="text-sm font-medium text-navy">
+                {stageLabels.year}
+              </label>
+              <YearMonthPicker value={values.graduationYear} onChange={(v) => set("graduationYear", v)} />
             </div>
           )}
         </div>
