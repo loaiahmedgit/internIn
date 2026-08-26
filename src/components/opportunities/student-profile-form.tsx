@@ -54,21 +54,35 @@ const QATAR_UNIVERSITIES = [
   "Northumbria University (Qatar)",
 ];
 
-// Representative, not exhaustive — Qatar has 100+ K-12 schools across curricula.
-// "Other" is the fallback for anything not on this shortlist.
+// Sourced via Firecrawl from edarabia.com/schools/qatar/ (a maintained Gulf
+// school directory), not memory-based — still not exhaustive (Qatar has
+// 100+ K-12 schools across curricula), "Other" covers anything not listed.
 const QATAR_SCHOOLS = [
-  "Qatar Academy Doha",
+  "GEMS American Academy Qatar",
+  "GEMS Wellington School",
+  "Swiss International School (SISQ)",
+  "Arab International Academy - Doha",
+  "Kings College Doha",
+  "Arab International Academy - Lusail",
   "American School of Doha",
-  "Doha College",
-  "Qatar International School",
-  "International School of London Qatar",
+  "The Hamilton International School",
+  "ACS Doha International School",
+  "The Cambridge School, Doha",
   "Park House English School",
-  "Newton International School",
-  "DPS Modern Indian School",
-  "MES Indian School",
+  "Doha College, Al Wajba Campus",
+  "International School of London - Qatar",
+  "Nord Anglia International School Al Khor",
+  "Northview International School",
+  "Doha Modern Indian School",
+  "Blyth Academy",
+  "Doha English Speaking School",
+  "Sherborne Qatar",
+  "Al Wataniya International School - AWIS",
+  "American Academy School",
   "Birla Public School",
-  "Qatar Canadian School",
-  "Al Bayan Independent School",
+  "MES Indian School",
+  "Michael E. DeBakey High School",
+  "Qatar International School",
   "A Qatari public/government school",
 ];
 
