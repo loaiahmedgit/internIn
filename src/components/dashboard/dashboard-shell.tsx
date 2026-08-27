@@ -5,10 +5,21 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
 import { signOut } from "@/app/(auth)/actions";
-import { Menu, X, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import type { NavItem } from "@/lib/dashboard-nav";
+import { Menu, X, PanelLeftClose, PanelLeftOpen, ClipboardList, User, BadgeCheck, Briefcase, PlusCircle } from "lucide-react";
+import type { NavItem, IconName } from "@/lib/dashboard-nav";
 
 const STORAGE_KEY = "internin-sidebar-collapsed";
+
+// Resolved here, not in the shared data — the icon components themselves
+// can't cross the Server -> Client prop boundary (NavItem carries only a
+// string name for exactly that reason).
+const ICON_MAP: Record<IconName, typeof ClipboardList> = {
+  "clipboard-list": ClipboardList,
+  user: User,
+  "badge-check": BadgeCheck,
+  briefcase: Briefcase,
+  "plus-circle": PlusCircle,
+};
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -25,7 +36,7 @@ function NavLink({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
-  const Icon = item.icon;
+  const Icon = ICON_MAP[item.icon];
   return (
     <Link
       href={item.href}
