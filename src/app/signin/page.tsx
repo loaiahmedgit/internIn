@@ -28,14 +28,17 @@ function SignInForm() {
   }
 
   return (
-    <div className="flex min-h-full">
-      <div className="flex w-full flex-col justify-center px-6 py-12 sm:px-12 lg:w-1/2 lg:px-16 xl:px-24">
+    <div className="flex h-dvh">
+      <div className="flex w-full flex-col justify-center overflow-y-auto px-6 py-12 sm:px-12 lg:w-1/2 lg:px-16 xl:px-24">
         <Link href="/" className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-navy/50 hover:text-navy/70">
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back to home
         </Link>
 
         <div className="mx-auto mt-10 w-full max-w-sm">
+          <Link href="/" className="mb-8 inline-block">
+            <Wordmark size="sm" />
+          </Link>
           <h1 className="text-2xl font-semibold tracking-[-0.02em] text-navy">Welcome back.</h1>
           <p className="mt-1.5 text-sm text-navy/60">Sign in to continue where you left off.</p>
 
@@ -84,9 +87,6 @@ function SignInForm() {
         }}
       >
         <div className="flex flex-col items-center gap-4 px-10 text-center">
-          <div className="rounded-lg bg-white/5 p-2">
-            <Wordmark className="h-9 brightness-0 invert" />
-          </div>
           <p className="max-w-xs text-sm text-white/60">
             Connecting ambition with opportunity through evidence, structure, and a fair first chance.
           </p>
