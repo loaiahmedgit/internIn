@@ -39,7 +39,7 @@ export default async function StudentChallengesPage({
 
   if (applications.length === 0) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+      <div className="mx-auto max-w-screen-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
         <StudentPageHeader
           eyebrow="Challenges"
           title="Show what you can do"
@@ -118,7 +118,7 @@ export default async function StudentChallengesPage({
   const activeItems = grouped[activeTab];
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+    <div className="@container mx-auto max-w-screen-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
       <StudentPageHeader
         eyebrow="Challenges"
         title="Show what you can do"
@@ -142,7 +142,7 @@ export default async function StudentChallengesPage({
       {activeItems.length === 0 ? (
         <p className="mt-8 text-sm text-navy/60">Nothing in this list yet.</p>
       ) : (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-5 @2xl:grid-cols-2 @6xl:grid-cols-3">
           {activeItems.map((item) => (
             <OpportunityCard
               key={item.opportunity.id}

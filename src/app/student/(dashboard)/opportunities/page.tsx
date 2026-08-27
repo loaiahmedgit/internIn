@@ -77,7 +77,7 @@ export default async function StudentOpportunitiesPage({
   const hasActiveFilters = Boolean(q || location || duration || workMode || savedOnly);
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+    <div className="@container mx-auto max-w-screen-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
       <StudentPageHeader eyebrow="Opportunities" title="Prove what you can do." />
 
       <form method="get" className="mt-8 space-y-3">
@@ -181,7 +181,7 @@ export default async function StudentOpportunitiesPage({
           />
         )
       ) : (
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-5 grid grid-cols-1 gap-5 @2xl:grid-cols-2 @6xl:grid-cols-3">
           {filtered.map((o) => {
             const application = applicationByOpportunityId.get(o.id);
             const submission = application ? submissionByApplicationId.get(application.id) : undefined;

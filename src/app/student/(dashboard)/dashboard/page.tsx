@@ -13,12 +13,14 @@ import { OpportunityCard } from "@/components/opportunities/opportunity-card";
 import { StudentPageHeader } from "@/components/dashboard/student-page-header";
 import { ArrowRight, ChevronRight } from "lucide-react";
 
-function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function StatCell({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-navy/10 bg-white px-5 py-4">
-      <p className="text-xs font-medium uppercase tracking-[0.08em] text-navy/40">{label}</p>
-      <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-[-0.02em] text-navy">{value}</p>
-      {hint && <p className="mt-1 text-xs text-navy/50">{hint}</p>}
+    <div className="bg-white px-4 py-3">
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-navy/40">{label}</p>
+      <p className="mt-0.5 flex items-baseline gap-1.5">
+        <span className="text-lg font-semibold tabular-nums tracking-[-0.01em] text-navy">{value}</span>
+        {hint && <span className="truncate text-xs text-navy/45">{hint}</span>}
+      </p>
     </div>
   );
 }
@@ -178,34 +180,44 @@ export default async function StudentDashboardPage() {
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .slice(0, 3);
 
-  let nextStep: { label: string; href: string } | undefined;
+  let nextStep: { title: string; description: string; ctaLabel: string; href: string } | undefined;
   if (profileCompletion.percent < 100) {
-    nextStep = { label: "Complete your profile to improve your recommendations", href: "/student/profile" };
+    nextStep = {
+      title: `Your profile is ${profileCompletion.percent}% complete`,
+      description: `Add your ${profileCompletion.missing[0]?.toLowerCase() ?? "remaining details"} to improve recommendations.`,
+      ctaLabel: "Complete profile",
+      href: "/student/profile",
+    };
   } else if (applications.length === 0) {
-    nextStep = { label: "Browse opportunities to get started", href: "/student/opportunities" };
+    nextStep = {
+      title: "Ready to get started?",
+      description: "Browse open opportunities and apply to your first role.",
+      ctaLabel: "Browse opportunities",
+      href: "/student/opportunities",
+    };
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+    <div className="mx-auto max-w-screen-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
       <StudentPageHeader eyebrow="Dashboard" title={`Welcome back, ${user.fullName.split(" ")[0]}.`} />
 
-      <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
+      <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-navy/10 bg-navy/10 sm:grid-cols-4">
+        <StatCell
           label="Applications"
           value={String(applications.length)}
           hint={inReviewCount > 0 ? `${inReviewCount} in review` : undefined}
         />
-        <StatCard
+        <StatCell
           label="Open opportunities"
           value={String(opportunities.length)}
           hint={newThisWeek > 0 ? `${newThisWeek} new this week` : undefined}
         />
-        <StatCard label="Active challenges" value={String(activeChallengesCount)} />
-        <StatCard label="Profile completion" value={`${profileCompletion.percent}%`} />
+        <StatCell label="Active challenges" value={String(activeChallengesCount)} />
+        <StatCell label="Profile completion" value={`${profileCompletion.percent}%`} />
       </div>
 
-      <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_300px]">
-        <div className="min-w-0">
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="@container min-w-0">
           {(activeProgramSummary || continueItem) && (
             <div className="rounded-xl border border-teal/30 bg-teal/5 p-5">
               <p className="text-xs font-semibold uppercase tracking-wide text-teal-ink">Continue where you left off</p>
@@ -265,7 +277,7 @@ export default async function StudentDashboardPage() {
                   : "You've applied to everything that's currently open — nice work. Check back soon for more."}
               </p>
             ) : (
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="mt-5 grid grid-cols-1 gap-5 @2xl:grid-cols-2 @6xl:grid-cols-3">
                 {recommended.map((o) => (
                   <OpportunityCard
                     key={o.id}
@@ -286,17 +298,29 @@ export default async function StudentDashboardPage() {
         </div>
 
         <aside className="space-y-6">
-          <div className="rounded-xl border border-navy/10 bg-white p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-navy">Saved opportunities ({savedOpportunities.length})</p>
-              <Link href="/student/opportunities?saved=1" className="flex items-center text-xs font-medium text-teal-ink hover:underline">
-                View all
-                <ChevronRight className="size-3.5" aria-hidden="true" />
+          {nextStep && (
+            <div className="rounded-xl border border-navy/10 bg-white p-5">
+              <p className="text-sm font-semibold text-navy">Next step</p>
+              <p className="mt-2 text-sm font-medium text-navy">{nextStep.title}</p>
+              <p className="mt-1 text-sm text-navy/60">{nextStep.description}</p>
+              <Link
+                href={nextStep.href}
+                className="mt-4 inline-flex rounded-lg bg-teal px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal/90"
+              >
+                {nextStep.ctaLabel}
               </Link>
             </div>
-            {savedOpportunities.length === 0 ? (
-              <p className="mt-3 text-xs text-navy/50">Bookmark roles you&apos;re interested in to see them here.</p>
-            ) : (
+          )}
+
+          {savedOpportunities.length > 0 && (
+            <div className="rounded-xl border border-navy/10 bg-white p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-navy">Saved ({savedOpportunities.length})</p>
+                <Link href="/student/opportunities?saved=1" className="flex items-center text-xs font-medium text-teal-ink hover:underline">
+                  View all
+                  <ChevronRight className="size-3.5" aria-hidden="true" />
+                </Link>
+              </div>
               <ul className="mt-3 space-y-3">
                 {savedOpportunities.map((o) => (
                   <li key={o.id}>
@@ -307,8 +331,8 @@ export default async function StudentDashboardPage() {
                   </li>
                 ))}
               </ul>
-            )}
-          </div>
+            </div>
+          )}
 
           {recentUpdates.length > 0 && (
             <div className="rounded-xl border border-navy/10 bg-white p-5">
@@ -333,16 +357,6 @@ export default async function StudentDashboardPage() {
                   );
                 })}
               </ul>
-            </div>
-          )}
-
-          {nextStep && (
-            <div className="rounded-xl border border-navy/10 bg-white p-5">
-              <p className="text-sm font-semibold text-navy">Next step</p>
-              <Link href={nextStep.href} className="mt-2 flex items-start gap-2 hover:text-teal-ink">
-                <span className="mt-1 size-1.5 shrink-0 rounded-full bg-teal" aria-hidden="true" />
-                <span className="text-sm text-navy">{nextStep.label}</span>
-              </Link>
             </div>
           )}
         </aside>
