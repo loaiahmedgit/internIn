@@ -13,7 +13,7 @@ import {
 
 type EducationStage = "high_school" | "university" | "graduate" | "vocational" | "other";
 
-const STAGE_OPTIONS: { value: EducationStage; label: string }[] = [
+export const STAGE_OPTIONS: { value: EducationStage; label: string }[] = [
   { value: "high_school", label: "High school student" },
   { value: "university", label: "University / college student" },
   { value: "graduate", label: "Recent graduate" },
@@ -314,6 +314,69 @@ function SelectWithOther({
   );
 }
 
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-navy/40">{label}</p>
+      <p className="mt-1 text-sm font-medium text-navy">{value || "—"}</p>
+    </div>
+  );
+}
+
+function SectionCard({
+  title,
+  editing,
+  onEdit,
+  onCancel,
+  onSave,
+  saving,
+  children,
+  view,
+}: {
+  title: string;
+  editing: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+  saving: boolean;
+  children: React.ReactNode;
+  view: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-navy/10 bg-white p-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-navy">{title}</h3>
+        {!editing && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded-full border border-navy/15 px-3 py-1.5 text-xs font-medium text-navy/70 transition-colors hover:bg-gray-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+          >
+            Edit
+          </button>
+        )}
+      </div>
+      <div className="mt-5">
+        {editing ? (
+          <div className="space-y-5">
+            {children}
+            <div className="flex items-center gap-2 pt-1">
+              <Button type="button" onClick={onSave} disabled={saving} className="h-9 bg-teal text-white hover:bg-teal/90">
+                {saving ? "Saving…" : "Save"}
+              </Button>
+              <Button type="button" variant="outline" onClick={onCancel} disabled={saving} className="h-9">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          view
+        )}
+      </div>
+    </div>
+  );
+}
+
 type ProfileValues = {
   educationStage: EducationStage | "";
   university: string;
@@ -335,6 +398,8 @@ function toList(value: string) {
     .filter((s) => s.length > 0);
 }
 
+type Section = "education" | "preferences" | "skills";
+
 export function StudentProfileForm({
   initial,
   variant = "full",
@@ -350,6 +415,7 @@ export function StudentProfileForm({
   const [cvBusy, setCvBusy] = useState(false);
   const [cvMessage, setCvMessage] = useState<string | null>(null);
   const [cvError, setCvError] = useState<string | null>(null);
+  const [editingSection, setEditingSection] = useState<Section | null>(null);
 
   function set<K extends keyof ProfileValues>(key: K, value: string) {
     setSaved(false);
@@ -376,7 +442,7 @@ export function StudentProfileForm({
         cvFileKey: path,
       }));
       setCvMessage(
-        `Found ${extracted.skills.length} skill(s) and ${extracted.interests.length} interest area(s) — review below, then Save profile to keep them.`,
+        `Found ${extracted.skills.length} skill(s) and ${extracted.interests.length} interest area(s) — review below, then Save to keep them.`,
       );
     } catch (err) {
       setCvError(err instanceof Error ? err.message : "Couldn't process that file.");
@@ -385,207 +451,312 @@ export function StudentProfileForm({
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function save() {
     setError(null);
     if (variant === "onboarding" && !values.educationStage) {
       setError("Tell us what best describes you.");
-      return;
+      return false;
     }
+    try {
+      await updateStudentProfileAction({
+        educationStage: values.educationStage || undefined,
+        university: values.university,
+        major: values.major,
+        graduationYear: values.graduationYear ? Number(values.graduationYear) : undefined,
+        location: values.location,
+        interests: toList(values.interests),
+        opportunityTypes: toList(values.opportunityTypes),
+        skills: toList(values.skills),
+        availability: values.availability,
+        cvUrl: values.cvUrl,
+        cvFileKey: values.cvFileKey || undefined,
+      });
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save your profile. Try again.");
+      return false;
+    }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     startTransition(async () => {
-      try {
-        await updateStudentProfileAction({
-          educationStage: values.educationStage || undefined,
-          university: values.university,
-          major: values.major,
-          graduationYear: values.graduationYear ? Number(values.graduationYear) : undefined,
-          location: values.location,
-          interests: toList(values.interests),
-          opportunityTypes: toList(values.opportunityTypes),
-          skills: toList(values.skills),
-          availability: values.availability,
-          cvUrl: values.cvUrl,
-          cvFileKey: values.cvFileKey || undefined,
-        });
-        if (variant === "onboarding") {
-          router.push("/student/preferences");
-          return;
-        }
-        if (variant === "preferences") {
-          router.push("/student/dashboard");
-          return;
-        }
-        setSaved(true);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't save your profile. Try again.");
+      const ok = await save();
+      if (!ok) return;
+      if (variant === "onboarding") {
+        router.push("/student/preferences");
+        return;
       }
+      if (variant === "preferences") {
+        router.push("/student/dashboard");
+        return;
+      }
+      setSaved(true);
     });
+  }
+
+  function saveSection() {
+    startTransition(async () => {
+      const ok = await save();
+      if (ok) setEditingSection(null);
+    });
+  }
+
+  function cancelSection(section: Section) {
+    if (section === "education") {
+      setValues((v) => ({
+        ...v,
+        educationStage: initial.educationStage,
+        university: initial.university,
+        major: initial.major,
+        graduationYear: initial.graduationYear,
+        location: initial.location,
+      }));
+    } else if (section === "preferences") {
+      setValues((v) => ({ ...v, interests: initial.interests, opportunityTypes: initial.opportunityTypes }));
+    } else {
+      setValues((v) => ({
+        ...v,
+        availability: initial.availability,
+        skills: initial.skills,
+        cvUrl: initial.cvUrl,
+        cvFileKey: initial.cvFileKey,
+      }));
+    }
+    setEditingSection(null);
+    setCvMessage(null);
+    setCvError(null);
   }
 
   const stage = values.educationStage || undefined;
   const stageLabels = stage ? STAGE_FIELD_LABELS[stage] : null;
   const institutionOptions = stage === "high_school" ? QATAR_SCHOOLS : QATAR_UNIVERSITIES;
+  const stageLabel = STAGE_OPTIONS.find((o) => o.value === values.educationStage)?.label ?? "";
+
+  const educationFields = (
+    <>
+      <div>
+        <label className="text-sm font-medium text-navy">What best describes you?</label>
+        <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {STAGE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => set("educationStage", opt.value)}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                values.educationStage === opt.value
+                  ? "border-teal bg-teal/5 text-teal"
+                  : "border-gray-cool/60 text-navy/60"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {stageLabels && (
+        <div className="grid gap-5 sm:grid-cols-2">
+          {stageLabels.institution && (
+            <SelectWithOther
+              key={`${stage}-institution`}
+              id="university"
+              label={stageLabels.institution}
+              options={institutionOptions}
+              value={values.university}
+              onChange={(v) => set("university", v)}
+            />
+          )}
+          {stageLabels.program && (
+            <SelectWithOther
+              key={`${stage}-program`}
+              id="major"
+              label={stageLabels.program}
+              options={MAJORS}
+              value={values.major}
+              onChange={(v) => set("major", v)}
+            />
+          )}
+          {stageLabels.year && (
+            <div>
+              <label htmlFor="graduation-year" className="text-sm font-medium text-navy">
+                {stageLabels.year}
+              </label>
+              <YearMonthPicker value={values.graduationYear} onChange={(v) => set("graduationYear", v)} />
+            </div>
+          )}
+        </div>
+      )}
+
+      <SelectWithOther
+        id="location"
+        label="Location"
+        options={QATAR_CITIES}
+        value={values.location}
+        onChange={(v) => set("location", v)}
+      />
+    </>
+  );
+
+  const preferencesFields = (
+    <>
+      <MultiChipSelect
+        label="Fields / career areas you're interested in"
+        options={FIELD_OPTIONS}
+        value={values.interests}
+        onChange={(v) => set("interests", v)}
+      />
+      <MultiChipSelect
+        label="Type of opportunities you're looking for"
+        options={OPPORTUNITY_TYPE_OPTIONS}
+        value={values.opportunityTypes}
+        onChange={(v) => set("opportunityTypes", v)}
+      />
+    </>
+  );
+
+  const skillsFields = (
+    <>
+      <div>
+        <label htmlFor="availability" className="text-sm font-medium text-navy">
+          Availability
+        </label>
+        <Input
+          id="availability"
+          placeholder="e.g. 20 hours/week, starting June"
+          value={values.availability}
+          onChange={(e) => set("availability", e.target.value)}
+          className="mt-1.5"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="skills" className="text-sm font-medium text-navy">
+          Skills
+        </label>
+        <Input
+          id="skills"
+          placeholder="Excel, SQL, Figma…"
+          value={values.skills}
+          onChange={(e) => set("skills", e.target.value)}
+          className="mt-1.5"
+        />
+        <p className="mt-1 text-xs text-navy/50">Comma-separated.</p>
+      </div>
+
+      <div>
+        <label htmlFor="cv-url" className="text-sm font-medium text-navy">
+          CV link (optional)
+        </label>
+        <Input
+          id="cv-url"
+          type="url"
+          placeholder="https://…"
+          value={values.cvUrl}
+          onChange={(e) => set("cvUrl", e.target.value)}
+          className="mt-1.5"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="cv-upload" className="text-sm font-medium text-navy">
+          Or upload your CV (optional)
+        </label>
+        <p className="mt-1 text-xs text-navy/50">
+          PDF only. We&apos;ll pull out skills and interest areas for you to review — nothing saves automatically.
+        </p>
+        <input
+          id="cv-upload"
+          type="file"
+          accept="application/pdf"
+          disabled={cvBusy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleCvUpload(file);
+            e.target.value = "";
+          }}
+          className="mt-1.5 text-sm text-navy/70"
+        />
+        {cvBusy && <p className="mt-1 text-xs text-navy/50">Reading your CV…</p>}
+        {cvMessage && <p className="mt-1 text-xs text-teal-ink">{cvMessage}</p>}
+        {cvError && <p className="mt-1 text-xs text-destructive">{cvError}</p>}
+        {values.cvFileKey && !cvBusy && !cvMessage && <p className="mt-1 text-xs text-navy/50">A CV is on file.</p>}
+      </div>
+    </>
+  );
+
+  if (variant === "full") {
+    return (
+      <div className="mt-8 space-y-5">
+        <SectionCard
+          title="Education"
+          editing={editingSection === "education"}
+          onEdit={() => setEditingSection("education")}
+          onCancel={() => cancelSection("education")}
+          onSave={saveSection}
+          saving={isPending}
+          view={
+            <div className="grid gap-5 sm:grid-cols-2">
+              <InfoRow label="Status" value={stageLabel} />
+              {stageLabels?.institution && <InfoRow label={stageLabels.institution} value={values.university} />}
+              {stageLabels?.program && <InfoRow label={stageLabels.program} value={values.major} />}
+              {stageLabels?.year && <InfoRow label={stageLabels.year} value={values.graduationYear} />}
+              <InfoRow label="Location" value={values.location} />
+            </div>
+          }
+        >
+          {educationFields}
+        </SectionCard>
+
+        <SectionCard
+          title="Preferences"
+          editing={editingSection === "preferences"}
+          onEdit={() => setEditingSection("preferences")}
+          onCancel={() => cancelSection("preferences")}
+          onSave={saveSection}
+          saving={isPending}
+          view={
+            <div className="grid gap-5 sm:grid-cols-2">
+              <InfoRow label="Fields / career areas" value={values.interests} />
+              <InfoRow label="Opportunity types" value={values.opportunityTypes} />
+            </div>
+          }
+        >
+          {preferencesFields}
+        </SectionCard>
+
+        <SectionCard
+          title="Skills & CV"
+          editing={editingSection === "skills"}
+          onEdit={() => setEditingSection("skills")}
+          onCancel={() => cancelSection("skills")}
+          onSave={saveSection}
+          saving={isPending}
+          view={
+            <div className="grid gap-5 sm:grid-cols-2">
+              <InfoRow label="Availability" value={values.availability} />
+              <InfoRow label="Skills" value={values.skills} />
+              <InfoRow label="CV" value={values.cvFileKey ? "Uploaded" : values.cvUrl ? values.cvUrl : ""} />
+            </div>
+          }
+        >
+          {skillsFields}
+        </SectionCard>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-      {variant !== "preferences" && (
-        <>
-          <div>
-            <label className="text-sm font-medium text-navy">What best describes you?</label>
-            <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-              {STAGE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => set("educationStage", opt.value)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                    values.educationStage === opt.value
-                      ? "border-teal bg-teal/5 text-teal"
-                      : "border-gray-cool/60 text-navy/60"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {stageLabels && (
-            <div className="grid gap-5 sm:grid-cols-2">
-              {stageLabels.institution && (
-                <SelectWithOther
-                  key={`${stage}-institution`}
-                  id="university"
-                  label={stageLabels.institution}
-                  options={institutionOptions}
-                  value={values.university}
-                  onChange={(v) => set("university", v)}
-                />
-              )}
-              {stageLabels.program && (
-                <SelectWithOther
-                  key={`${stage}-program`}
-                  id="major"
-                  label={stageLabels.program}
-                  options={MAJORS}
-                  value={values.major}
-                  onChange={(v) => set("major", v)}
-                />
-              )}
-              {stageLabels.year && (
-                <div>
-                  <label htmlFor="graduation-year" className="text-sm font-medium text-navy">
-                    {stageLabels.year}
-                  </label>
-                  <YearMonthPicker value={values.graduationYear} onChange={(v) => set("graduationYear", v)} />
-                </div>
-              )}
-            </div>
-          )}
-
-          <SelectWithOther
-            id="location"
-            label="Location"
-            options={QATAR_CITIES}
-            value={values.location}
-            onChange={(v) => set("location", v)}
-          />
-        </>
-      )}
-
-      {variant !== "onboarding" && (
-        <>
-          <MultiChipSelect
-            label="Fields / career areas you're interested in"
-            options={FIELD_OPTIONS}
-            value={values.interests}
-            onChange={(v) => set("interests", v)}
-          />
-          <MultiChipSelect
-            label="Type of opportunities you're looking for"
-            options={OPPORTUNITY_TYPE_OPTIONS}
-            value={values.opportunityTypes}
-            onChange={(v) => set("opportunityTypes", v)}
-          />
-        </>
-      )}
-
-      {variant === "full" && (
-        <>
-          <div>
-            <label htmlFor="availability" className="text-sm font-medium text-navy">
-              Availability
-            </label>
-            <Input
-              id="availability"
-              placeholder="e.g. 20 hours/week, starting June"
-              value={values.availability}
-              onChange={(e) => set("availability", e.target.value)}
-              className="mt-1.5"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="skills" className="text-sm font-medium text-navy">
-              Skills
-            </label>
-            <Input
-              id="skills"
-              placeholder="Excel, SQL, Figma…"
-              value={values.skills}
-              onChange={(e) => set("skills", e.target.value)}
-              className="mt-1.5"
-            />
-            <p className="mt-1 text-xs text-navy/50">Comma-separated.</p>
-          </div>
-
-          <div>
-            <label htmlFor="cv-url" className="text-sm font-medium text-navy">
-              CV link (optional)
-            </label>
-            <Input
-              id="cv-url"
-              type="url"
-              placeholder="https://…"
-              value={values.cvUrl}
-              onChange={(e) => set("cvUrl", e.target.value)}
-              className="mt-1.5"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="cv-upload" className="text-sm font-medium text-navy">
-              Or upload your CV (optional)
-            </label>
-            <p className="mt-1 text-xs text-navy/50">
-              PDF only. We'll pull out skills and interest areas for you to review — nothing saves automatically.
-            </p>
-            <input
-              id="cv-upload"
-              type="file"
-              accept="application/pdf"
-              disabled={cvBusy}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleCvUpload(file);
-                e.target.value = "";
-              }}
-              className="mt-1.5 text-sm text-navy/70"
-            />
-            {cvBusy && <p className="mt-1 text-xs text-navy/50">Reading your CV…</p>}
-            {cvMessage && <p className="mt-1 text-xs text-teal-ink">{cvMessage}</p>}
-            {cvError && <p className="mt-1 text-xs text-destructive">{cvError}</p>}
-            {values.cvFileKey && !cvBusy && !cvMessage && (
-              <p className="mt-1 text-xs text-navy/50">A CV is on file.</p>
-            )}
-          </div>
-        </>
-      )}
+      {variant !== "preferences" && educationFields}
+      {variant !== "onboarding" && preferencesFields}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Saving…" : variant !== "full" ? "Continue" : "Save profile"}
+          {isPending ? "Saving…" : "Continue"}
         </Button>
         {saved && !isPending && <span className="text-sm text-teal-ink">Saved.</span>}
       </div>
