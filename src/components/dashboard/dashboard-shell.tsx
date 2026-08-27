@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
 import { signOut } from "@/app/(auth)/actions";
 import {
@@ -59,6 +59,8 @@ function NavLink({
     <Link
       href={item.href}
       onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      aria-label={collapsed ? item.label : undefined}
       className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
         active ? "bg-teal/8 text-teal-ink" : "text-navy/60 hover:bg-gray-light hover:text-navy"
       }`}
@@ -67,7 +69,7 @@ function NavLink({
       {!collapsed && <span className="truncate">{item.label}</span>}
       {collapsed && (
         <span
-          role="tooltip"
+          aria-hidden="true"
           className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-navy px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 z-50"
         >
           {item.label}
@@ -91,9 +93,15 @@ export function DashboardShell({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     try {
+      // Reading localStorage can only happen after hydration (SSR has no
+      // access to it) — that's a genuine one-time read of an external
+      // system, not the "derived state" pattern the lint rule targets.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (localStorage.getItem(STORAGE_KEY) === "1") setCollapsed(true);
     } catch {
       // localStorage unavailable (private mode etc.) — default to expanded.
@@ -102,12 +110,18 @@ export function DashboardShell({
 
   useEffect(() => {
     if (!mobileOpen) return;
+    closeButtonRef.current?.focus();
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") setMobileOpen(false);
     }
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [mobileOpen]);
+
+  function closeMobileMenu() {
+    setMobileOpen(false);
+    menuButtonRef.current?.focus();
+  }
 
   function toggleCollapsed() {
     setCollapsed((current) => {
@@ -161,8 +175,13 @@ export function DashboardShell({
 
         <div className="mt-auto border-t border-navy/10 px-4 py-4">
           {collapsed ? (
-            <div className="flex justify-center" title={displayName}>
-              <div className="flex size-8 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink">
+            <div className="flex justify-center">
+              <div
+                className="flex size-8 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink"
+                role="img"
+                aria-label={displayName}
+                title={displayName}
+              >
                 {displayName.charAt(0).toUpperCase() || "?"}
               </div>
             </div>
@@ -186,6 +205,7 @@ export function DashboardShell({
         </Link>
         <button
           type="button"
+          ref={menuButtonRef}
           onClick={() => setMobileOpen(true)}
           aria-label="Open navigation"
           className="flex size-9 items-center justify-center rounded-md text-navy transition-colors hover:bg-gray-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
@@ -196,21 +216,17 @@ export function DashboardShell({
 
       {/* Mobile drawer — a real overlay, not the fixed desktop rail squeezed down */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 sm:hidden">
-          <button
-            type="button"
-            aria-label="Close navigation"
-            onClick={() => setMobileOpen(false)}
-            className="absolute inset-0 bg-navy/30"
-          />
+        <div className="fixed inset-0 z-50 sm:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+          <button type="button" aria-label="Close navigation" onClick={closeMobileMenu} className="absolute inset-0 bg-navy/30" />
           <div className="absolute inset-y-0 left-0 flex w-[260px] flex-col bg-white shadow-[0_0_40px_rgba(33,50,72,0.15)]">
             <div className="flex items-center justify-between px-4 py-5">
-              <Link href="/" onClick={() => setMobileOpen(false)}>
+              <Link href="/" onClick={closeMobileMenu}>
                 <Wordmark size="sm" />
               </Link>
               <button
                 type="button"
-                onClick={() => setMobileOpen(false)}
+                ref={closeButtonRef}
+                onClick={closeMobileMenu}
                 aria-label="Close navigation"
                 className="flex size-8 items-center justify-center rounded-md text-navy/60 hover:bg-gray-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
               >
@@ -220,13 +236,7 @@ export function DashboardShell({
             <p className="px-7 text-[11px] font-medium uppercase tracking-[0.1em] text-navy/40">{eyebrow}</p>
             <nav className="mt-2 flex flex-col gap-0.5 px-3">
               {navItems.map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  active={isActive(pathname, item.href)}
-                  collapsed={false}
-                  onNavigate={() => setMobileOpen(false)}
-                />
+                <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} collapsed={false} onNavigate={closeMobileMenu} />
               ))}
             </nav>
             <div className="mt-auto border-t border-navy/10 px-4 py-4">

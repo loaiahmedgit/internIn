@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, and, isNotNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { ApplyButton } from "@/components/opportunities/apply-button";
@@ -7,6 +8,7 @@ import { Navbar } from "@/components/marketing/navbar";
 import { Footer } from "@/components/marketing/footer";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { STUDENT_NAV_ITEMS } from "@/lib/dashboard-nav";
+import { BadgeCheck, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,7 @@ export default async function OpportunityDetailPage({
       skills: schema.opportunities.skills,
       status: schema.opportunities.status,
       companyName: schema.companies.name,
+      companyVerified: schema.companies.verified,
     })
     .from(schema.opportunities)
     .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
@@ -37,9 +40,31 @@ export default async function OpportunityDetailPage({
 
   if (!opportunity || opportunity.status !== "published") notFound();
 
+  const [challenge] = await db
+    .select({ estimatedMinutes: schema.challengeVersions.estimatedMinutes, taskCount: schema.challengeVersions.tasks })
+    .from(schema.challenges)
+    .innerJoin(schema.challengeVersions, eq(schema.challenges.currentVersionId, schema.challengeVersions.id))
+    .where(and(eq(schema.challenges.opportunityId, opportunity.id), eq(schema.challenges.status, "published"), isNotNull(schema.challenges.currentVersionId)))
+    .limit(1);
+
+  const currentUser = await getCurrentUser();
+
+  let existingApplicationId: string | undefined;
+  if (currentUser?.role === "student") {
+    const [existing] = await db
+      .select({ id: schema.applications.id })
+      .from(schema.applications)
+      .where(and(eq(schema.applications.opportunityId, opportunity.id), eq(schema.applications.studentId, currentUser.id)))
+      .limit(1);
+    existingApplicationId = existing?.id;
+  }
+
   const content = (
     <>
-      <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{opportunity.companyName}</p>
+      <div className="flex items-center gap-1.5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{opportunity.companyName}</p>
+        {opportunity.companyVerified && <BadgeCheck className="size-3.5 text-teal-ink" aria-label="Verified company" />}
+      </div>
       <h1 className="mt-2 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">{opportunity.role}</h1>
       <p className="mt-2 text-sm text-navy/68">
         {opportunity.duration} · {opportunity.hoursPerWeek}h/week · {opportunity.location}
@@ -53,20 +78,60 @@ export default async function OpportunityDetailPage({
         ))}
       </div>
 
-      <p className="mt-8 whitespace-pre-wrap text-navy/80">{opportunity.description}</p>
+      <h2 className="mt-10 text-lg font-semibold text-navy">What you&apos;ll work on</h2>
+      <p className="mt-2 whitespace-pre-wrap text-navy/80">{opportunity.description}</p>
+
+      {opportunity.skills.length > 0 && (
+        <>
+          <h2 className="mt-8 text-lg font-semibold text-navy">What you&apos;ll practice</h2>
+          <p className="mt-2 text-navy/80">{opportunity.skills.join(", ")}.</p>
+        </>
+      )}
+
+      <h2 className="mt-8 text-lg font-semibold text-navy">Who can apply</h2>
+      <p className="mt-2 text-navy/80">
+        Any student or recent graduate. internIn doesn&apos;t require years of prior experience — you show {opportunity.companyName} what you
+        can do directly, through the Challenge below.
+      </p>
+
+      <h2 className="mt-8 text-lg font-semibold text-navy">How selection works</h2>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-navy/80">
+        <li>Apply and complete the Challenge for this role.</li>
+        <li>{opportunity.companyName} reviews your submission as real evidence of your ability.</li>
+        <li>Strong candidates move to interview and offer.</li>
+      </ol>
+
+      {challenge && (
+        <>
+          <h2 className="mt-8 text-lg font-semibold text-navy">Challenge details</h2>
+          <div className="mt-2 flex items-center gap-1.5 text-sm text-navy/68">
+            <Clock className="size-4" aria-hidden="true" />
+            <span>
+              ~{challenge.estimatedMinutes} minutes · {challenge.taskCount.length} {challenge.taskCount.length === 1 ? "task" : "tasks"}
+            </span>
+          </div>
+        </>
+      )}
 
       <div className="mt-10">
-        <ApplyButton opportunityId={opportunity.id} />
+        {existingApplicationId ? (
+          <Link
+            href={`/student/applications/${existingApplicationId}`}
+            className="inline-flex rounded-lg bg-teal px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal/90"
+          >
+            View your application
+          </Link>
+        ) : (
+          <ApplyButton opportunityId={opportunity.id} />
+        )}
       </div>
     </>
   );
 
-  const currentUser = await getCurrentUser();
-
   if (currentUser?.role === "student") {
     return (
       <DashboardShell eyebrow="Student" displayName={currentUser.fullName} navItems={STUDENT_NAV_ITEMS}>
-        <div className="max-w-3xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">{content}</div>
+        <div className="mx-auto max-w-3xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">{content}</div>
       </DashboardShell>
     );
   }

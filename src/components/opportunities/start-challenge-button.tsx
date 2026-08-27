@@ -3,29 +3,29 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { applyToOpportunityAction } from "@/lib/opportunities/student-actions";
+import { startChallengeAction } from "@/lib/opportunities/student-actions";
 
-export function ApplyButton({ opportunityId }: { opportunityId: string }) {
+export function StartChallengeButton({ applicationId }: { applicationId: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function handleApply() {
+  function handleStart() {
     setError(null);
     startTransition(async () => {
       try {
-        const applicationId = await applyToOpportunityAction(opportunityId);
-        router.push(`/student/applications/${applicationId}`);
+        await startChallengeAction(applicationId);
+        router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't apply. Try again.");
+        setError(err instanceof Error ? err.message : "Couldn't start the challenge. Try again.");
       }
     });
   }
 
   return (
     <div>
-      <Button onClick={handleApply} disabled={isPending}>
-        {isPending ? "Applying…" : "Apply"}
+      <Button onClick={handleStart} disabled={isPending} className="bg-teal text-white hover:bg-teal/90">
+        {isPending ? "Starting…" : "Start challenge"}
       </Button>
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
     </div>

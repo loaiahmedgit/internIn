@@ -1,0 +1,1 @@
+ALTER TABLE "applications" ADD COLUMN "challenge_started_at" timestamp with time zone;

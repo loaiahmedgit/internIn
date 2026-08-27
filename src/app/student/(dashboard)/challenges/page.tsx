@@ -1,85 +1,159 @@
+import Link from "next/link";
 import { eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
-import { getOpportunitiesWithMatch, getPublishedChallengeOpportunityIds } from "@/lib/opportunities/browse";
+import { getPublishedChallengeInfo } from "@/lib/opportunities/browse";
 import { getSavedOpportunityIds } from "@/lib/opportunities/saved";
 import { getChallengeState, type ChallengeState } from "@/lib/opportunities/challenge-state";
 import { OpportunityCard, type OpportunityCardData } from "@/components/opportunities/opportunity-card";
+import { StudentPageHeader } from "@/components/dashboard/student-page-header";
+import { EmptyState } from "@/components/dashboard/empty-state";
+import { Zap } from "lucide-react";
 
-function ChallengeGroup({
-  title,
-  items,
-  savedIds,
+type TabKey = "to_do" | "in_progress" | "submitted" | "completed";
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "to_do", label: "To do" },
+  { key: "in_progress", label: "In progress" },
+  { key: "submitted", label: "Submitted" },
+  { key: "completed", label: "Completed" },
+];
+
+export default async function StudentChallengesPage({
+  searchParams,
 }: {
-  title: string;
-  items: { opportunity: OpportunityCardData; challengeState: ChallengeState }[];
-  savedIds: Set<string>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  if (items.length === 0) return null;
-  return (
-    <div className="mt-10 first:mt-0">
-      <h2 className="text-lg font-semibold tracking-[-0.02em] text-navy">
-        {title} ({items.length})
-      </h2>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {items.map(({ opportunity, challengeState }) => (
-          <OpportunityCard key={opportunity.id} opportunity={opportunity} saved={savedIds.has(opportunity.id)} challengeState={challengeState} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export default async function StudentChallengesPage() {
   const { user } = await requireCurrentStudent();
+  const params = await searchParams;
+  const activeTab: TabKey = TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "to_do";
   const db = getDb();
 
   const applications = await db
-    .select({ id: schema.applications.id, opportunityId: schema.applications.opportunityId })
+    .select({
+      id: schema.applications.id,
+      opportunityId: schema.applications.opportunityId,
+      challengeStartedAt: schema.applications.challengeStartedAt,
+    })
     .from(schema.applications)
     .where(eq(schema.applications.studentId, user.id));
+
+  if (applications.length === 0) {
+    return (
+      <div className="mx-auto max-w-6xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+        <StudentPageHeader
+          eyebrow="Challenges"
+          title="Show what you can do"
+          description="Once you apply to a role, its Challenge shows up here — the real evidence companies actually review."
+        />
+        <EmptyState
+          icon={Zap}
+          title="No challenges yet"
+          description="Apply to an opportunity to unlock its Challenge and start building evidence."
+          ctaLabel="Browse opportunities"
+          ctaHref="/student/opportunities"
+        />
+      </div>
+    );
+  }
+
   const applicationIds = applications.map((a) => a.id);
-  const submissions = applicationIds.length
+  const submissions = await db
+    .select({ id: schema.submissions.id, applicationId: schema.submissions.applicationId })
+    .from(schema.submissions)
+    .where(inArray(schema.submissions.applicationId, applicationIds));
+  const submissionIds = submissions.map((s) => s.id);
+  const evidenceRows = submissionIds.length
     ? await db
-        .select({ applicationId: schema.submissions.applicationId, status: schema.submissions.status })
-        .from(schema.submissions)
-        .where(inArray(schema.submissions.applicationId, applicationIds))
+        .select({ submissionId: schema.candidateEvidence.submissionId })
+        .from(schema.candidateEvidence)
+        .where(inArray(schema.candidateEvidence.submissionId, submissionIds))
     : [];
-  const submissionByApplicationId = new Map(submissions.map((s) => [s.applicationId, s]));
-  const applicationByOpportunityId = new Map(applications.map((a) => [a.opportunityId, a]));
+  const evidencedSubmissionIds = new Set(evidenceRows.map((e) => e.submissionId));
+  const submissionByApplicationId = new Map(
+    submissions.map((s) => [s.applicationId, { hasEvidence: evidencedSubmissionIds.has(s.id) }]),
+  );
 
-  const [{ opportunities }, publishedChallengeIds, savedIds] = await Promise.all([
-    getOpportunitiesWithMatch(user.id),
-    getPublishedChallengeOpportunityIds(),
-    getSavedOpportunityIds(user.id),
-  ]);
+  const opportunityIds = applications.map((a) => a.opportunityId);
+  const opportunityRows = await db
+    .select({
+      id: schema.opportunities.id,
+      role: schema.opportunities.role,
+      description: schema.opportunities.description,
+      duration: schema.opportunities.duration,
+      hoursPerWeek: schema.opportunities.hoursPerWeek,
+      location: schema.opportunities.location,
+      skills: schema.opportunities.skills,
+      companyName: schema.companies.name,
+      companyVerified: schema.companies.verified,
+    })
+    .from(schema.opportunities)
+    .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
+    .where(inArray(schema.opportunities.id, opportunityIds));
+  const opportunityById = new Map(opportunityRows.map((o) => [o.id, o]));
 
-  const withState = opportunities
-    .filter((o) => publishedChallengeIds.has(o.id))
-    .map((o) => {
-      const application = applicationByOpportunityId.get(o.id);
-      const submission = application ? submissionByApplicationId.get(application.id) : undefined;
-      return { opportunity: o, challengeState: getChallengeState({ challengePublished: true, application, submission }) };
+  const [publishedChallengeInfo, savedIds] = await Promise.all([getPublishedChallengeInfo(), getSavedOpportunityIds(user.id)]);
+
+  const withState: { opportunity: OpportunityCardData; skills: string[]; estimatedMinutes?: number; challengeState: ChallengeState }[] = [];
+  for (const application of applications) {
+    if (!publishedChallengeInfo.has(application.opportunityId)) continue;
+    const opportunity = opportunityById.get(application.opportunityId);
+    if (!opportunity) continue;
+    withState.push({
+      opportunity,
+      skills: opportunity.skills,
+      estimatedMinutes: publishedChallengeInfo.get(application.opportunityId)?.estimatedMinutes,
+      challengeState: getChallengeState({
+        challengePublished: true,
+        application,
+        submission: submissionByApplicationId.get(application.id),
+      }),
     });
+  }
 
-  const inProgress = withState.filter((x) => x.challengeState.kind === "in_progress");
-  const submitted = withState.filter((x) => x.challengeState.kind === "submitted" || x.challengeState.kind === "reviewed");
-  const notStarted = withState.filter((x) => x.challengeState.kind === "not_started");
+  const grouped: Record<TabKey, typeof withState> = { to_do: [], in_progress: [], submitted: [], completed: [] };
+  for (const item of withState) {
+    if (item.challengeState.kind in grouped) grouped[item.challengeState.kind as TabKey].push(item);
+  }
+
+  const activeItems = grouped[activeTab];
 
   return (
-    <div className="px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
-      <p className="text-xs font-medium uppercase tracking-[0.12em] text-teal-ink">Challenges</p>
-      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">Show what you can do</h1>
-      <p className="mt-2 text-sm text-navy/60">Every published Challenge you can start, continue, or have already submitted.</p>
+    <div className="mx-auto max-w-6xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+      <StudentPageHeader
+        eyebrow="Challenges"
+        title="Show what you can do"
+        description="Challenges from opportunities you've applied to — real evidence, reviewed by real companies."
+      />
 
-      {withState.length === 0 ? (
-        <p className="mt-8 text-navy/68">No published Challenges yet. Check back soon.</p>
+      <div className="mt-8 flex flex-wrap gap-1 border-b border-navy/10">
+        {TABS.map((tab) => (
+          <Link
+            key={tab.key}
+            href={tab.key === "to_do" ? "/student/challenges" : `/student/challenges?tab=${tab.key}`}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+              activeTab === tab.key ? "border-teal text-teal-ink" : "border-transparent text-navy/50 hover:text-navy"
+            }`}
+          >
+            {tab.label} ({grouped[tab.key].length})
+          </Link>
+        ))}
+      </div>
+
+      {activeItems.length === 0 ? (
+        <p className="mt-8 text-sm text-navy/60">Nothing in this list yet.</p>
       ) : (
-        <>
-          <ChallengeGroup title="In progress" items={inProgress} savedIds={savedIds} />
-          <ChallengeGroup title="Submitted" items={submitted} savedIds={savedIds} />
-          <ChallengeGroup title="Not started" items={notStarted} savedIds={savedIds} />
-        </>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {activeItems.map((item) => (
+            <OpportunityCard
+              key={item.opportunity.id}
+              opportunity={item.opportunity}
+              skills={item.skills}
+              saved={savedIds.has(item.opportunity.id)}
+              estimatedMinutes={item.estimatedMinutes}
+              challengeState={item.challengeState}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

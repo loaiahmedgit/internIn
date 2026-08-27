@@ -3,6 +3,7 @@ import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
 import { StudentProfileForm } from "@/components/opportunities/student-profile-form";
 import { STAGE_OPTIONS } from "@/lib/education-stages";
+import { StudentPageHeader } from "@/components/dashboard/student-page-header";
 
 export default async function StudentProfilePage() {
   const { user } = await requireCurrentStudent();
@@ -18,12 +19,12 @@ export default async function StudentProfilePage() {
   const subtitle = [stageLabel, profile?.location].filter(Boolean).join(" · ");
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-20 sm:px-8">
-      <p className="text-xs font-medium tracking-[0.12em] text-teal-ink uppercase">Your profile</p>
-      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">Profile</h1>
-      <p className="mt-2 text-sm text-navy/68">
-        Keep this simple — companies judge you on your Challenge submissions, not this form.
-      </p>
+    <div className="mx-auto max-w-3xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+      <StudentPageHeader
+        eyebrow="Your profile"
+        title="Profile"
+        description="Keep this simple — companies judge you on your Challenge submissions, not this form."
+      />
 
       <div className="mt-8 flex items-center gap-4 rounded-xl border border-navy/10 bg-white p-6">
         <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-teal/10 text-xl font-semibold text-teal-ink">

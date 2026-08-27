@@ -3,6 +3,10 @@ import { eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
 import { StatusRail } from "@/components/dashboard/status-rail";
+import { StudentPageHeader } from "@/components/dashboard/student-page-header";
+import { EmptyState } from "@/components/dashboard/empty-state";
+import { relativeTime } from "@/lib/relative-time";
+import { ClipboardList } from "lucide-react";
 
 function CompanyAvatar({ name }: { name: string }) {
   return (
@@ -10,6 +14,15 @@ function CompanyAvatar({ name }: { name: string }) {
       {name.charAt(0).toUpperCase()}
     </div>
   );
+}
+
+function nextActionFor(params: { status: string; hasSubmission: boolean; offerStatus?: string }): string | undefined {
+  if (params.status === "declined" || params.status === "withdrawn") return undefined;
+  if (params.offerStatus === "pending") return "Respond to your offer";
+  if (params.offerStatus === "accepted") return "View your internship workspace";
+  if (params.status === "shortlisted") return "Wait for the company's decision";
+  if (params.hasSubmission) return "Awaiting company review";
+  return "Complete the Challenge";
 }
 
 export default async function StudentApplicationsPage() {
@@ -20,6 +33,7 @@ export default async function StudentApplicationsPage() {
     .select({
       id: schema.applications.id,
       status: schema.applications.status,
+      updatedAt: schema.applications.updatedAt,
       role: schema.opportunities.role,
       companyName: schema.companies.name,
       skills: schema.opportunities.skills,
@@ -29,38 +43,42 @@ export default async function StudentApplicationsPage() {
     .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
     .where(eq(schema.applications.studentId, user.id));
 
+  if (applications.length === 0) {
+    return (
+      <div className="mx-auto max-w-6xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+        <StudentPageHeader eyebrow="Applications" title="Your applications" />
+        <EmptyState
+          icon={ClipboardList}
+          title="No applications yet"
+          description="Apply to an opportunity to start building real evidence of what you can do."
+          ctaLabel="Browse opportunities"
+          ctaHref="/student/opportunities"
+        />
+      </div>
+    );
+  }
+
   const applicationIds = applications.map((a) => a.id);
-  const submissions = applicationIds.length
-    ? await db
-        .select({ applicationId: schema.submissions.applicationId })
-        .from(schema.submissions)
-        .where(inArray(schema.submissions.applicationId, applicationIds))
-    : [];
-  const offers = applicationIds.length
-    ? await db
-        .select({ applicationId: schema.internshipOffers.applicationId })
-        .from(schema.internshipOffers)
-        .where(inArray(schema.internshipOffers.applicationId, applicationIds))
-    : [];
+  const submissions = await db
+    .select({ applicationId: schema.submissions.applicationId })
+    .from(schema.submissions)
+    .where(inArray(schema.submissions.applicationId, applicationIds));
+  const offers = await db
+    .select({ applicationId: schema.internshipOffers.applicationId, status: schema.internshipOffers.status })
+    .from(schema.internshipOffers)
+    .where(inArray(schema.internshipOffers.applicationId, applicationIds));
   const submittedIds = new Set(submissions.map((s) => s.applicationId));
-  const offeredIds = new Set(offers.map((o) => o.applicationId));
+  const offerByApplicationId = new Map(offers.map((o) => [o.applicationId, o]));
 
   return (
-    <div className="px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
-      <p className="text-xs font-medium uppercase tracking-[0.12em] text-teal-ink">Applications</p>
-      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">Your applications</h1>
+    <div className="mx-auto max-w-6xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+      <StudentPageHeader eyebrow="Applications" title="Your applications" />
 
-      {applications.length === 0 ? (
-        <p className="mt-8 text-navy/68">
-          You haven&apos;t applied to anything yet.{" "}
-          <Link href="/student/opportunities" className="text-teal-ink underline underline-offset-2">
-            Browse open opportunities
-          </Link>
-          .
-        </p>
-      ) : (
-        <div className="mt-8 max-w-2xl space-y-3">
-          {applications.map((a) => (
+      <div className="mt-8 max-w-2xl space-y-3">
+        {applications.map((a) => {
+          const offer = offerByApplicationId.get(a.id);
+          const nextAction = nextActionFor({ status: a.status, hasSubmission: submittedIds.has(a.id), offerStatus: offer?.status });
+          return (
             <Link
               key={a.id}
               href={`/student/applications/${a.id}`}
@@ -68,8 +86,13 @@ export default async function StudentApplicationsPage() {
             >
               <CompanyAvatar name={a.companyName} />
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{a.companyName}</p>
-                <p className="mt-1 text-lg font-semibold text-navy">{a.role}</p>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{a.companyName}</p>
+                    <p className="mt-1 text-lg font-semibold text-navy">{a.role}</p>
+                  </div>
+                  <p className="shrink-0 text-xs text-navy/40">Updated {relativeTime(a.updatedAt)}</p>
+                </div>
                 {a.skills.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {a.skills.map((skill) => (
@@ -80,13 +103,14 @@ export default async function StudentApplicationsPage() {
                   </div>
                 )}
                 <div className="mt-3">
-                  <StatusRail status={a.status} hasSubmission={submittedIds.has(a.id)} hasOffer={offeredIds.has(a.id)} />
+                  <StatusRail status={a.status} hasSubmission={submittedIds.has(a.id)} hasOffer={Boolean(offer)} />
                 </div>
+                {nextAction && <p className="mt-2 text-sm font-medium text-teal-ink">{nextAction}</p>}
               </div>
             </Link>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }

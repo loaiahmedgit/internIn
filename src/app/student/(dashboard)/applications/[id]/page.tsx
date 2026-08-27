@@ -4,6 +4,7 @@ import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
 import { SubmitChallengeForm } from "@/components/opportunities/submit-challenge-form";
 import { OfferResponseButtons } from "@/components/opportunities/offer-response-buttons";
+import { StartChallengeButton } from "@/components/opportunities/start-challenge-button";
 
 export default async function ApplicationWorkspacePage({
   params,
@@ -18,6 +19,7 @@ export default async function ApplicationWorkspacePage({
     .select({
       id: schema.applications.id,
       opportunityId: schema.applications.opportunityId,
+      challengeStartedAt: schema.applications.challengeStartedAt,
       role: schema.opportunities.role,
       companyName: schema.companies.name,
     })
@@ -107,8 +109,20 @@ export default async function ApplicationWorkspacePage({
     .orderBy(desc(schema.submissions.submittedAt))
     .limit(1);
 
+  const hasEvidence = latestSubmission
+    ? Boolean(
+        (
+          await db
+            .select({ id: schema.candidateEvidence.id })
+            .from(schema.candidateEvidence)
+            .where(eq(schema.candidateEvidence.submissionId, latestSubmission.id))
+            .limit(1)
+        )[0],
+      )
+    : false;
+
   return (
-    <div className="mx-auto max-w-3xl px-5 py-20 sm:px-8">
+    <div className="mx-auto max-w-3xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
       <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">
         {application.companyName} · {application.role}
       </p>
@@ -225,38 +239,53 @@ export default async function ApplicationWorkspacePage({
           <p className="mt-2 text-sm text-navy/68">
             ~{currentVersion.estimatedMinutes} minutes
           </p>
-          <p className="mt-6 whitespace-pre-wrap text-navy/80">{currentVersion.scenario}</p>
 
-          <h2 className="mt-8 text-lg font-semibold text-navy">Tasks</h2>
-          <ul className="mt-3 space-y-3">
-            {currentVersion.tasks.map((task) => (
-              <li key={task.id} className="border border-navy/12 bg-white p-4">
-                <p className="font-medium text-navy">{task.title}</p>
-                <p className="mt-1 text-sm text-navy/68">{task.description}</p>
-              </li>
-            ))}
-          </ul>
+          {!application.challengeStartedAt && !latestSubmission ? (
+            <div className="mt-6 border border-navy/12 bg-white p-5">
+              <p className="whitespace-pre-wrap text-navy/80">{currentVersion.scenario}</p>
+              <p className="mt-4 text-sm text-navy/50">
+                {currentVersion.tasks.length} tasks · ~{currentVersion.estimatedMinutes} minutes
+              </p>
+              <div className="mt-4">
+                <StartChallengeButton applicationId={application.id} />
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="mt-6 whitespace-pre-wrap text-navy/80">{currentVersion.scenario}</p>
 
-          <h2 className="mt-8 text-lg font-semibold text-navy">Deliverables</h2>
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-navy/80">
-            {currentVersion.deliverables.map((d) => (
-              <li key={d}>{d}</li>
-            ))}
-          </ul>
+              <h2 className="mt-8 text-lg font-semibold text-navy">Tasks</h2>
+              <ul className="mt-3 space-y-3">
+                {currentVersion.tasks.map((task) => (
+                  <li key={task.id} className="border border-navy/12 bg-white p-4">
+                    <p className="font-medium text-navy">{task.title}</p>
+                    <p className="mt-1 text-sm text-navy/68">{task.description}</p>
+                  </li>
+                ))}
+              </ul>
+
+              <h2 className="mt-8 text-lg font-semibold text-navy">Deliverables</h2>
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-navy/80">
+                {currentVersion.deliverables.map((d) => (
+                  <li key={d}>{d}</li>
+                ))}
+              </ul>
+            </>
+          )}
 
           {latestSubmission ? (
             <div className="mt-8 border border-teal/30 bg-teal/5 p-5">
-              <p className="font-medium text-navy">Submitted</p>
+              <p className="font-medium text-navy">{hasEvidence ? "Reviewed" : "Submitted"}</p>
               <p className="mt-1 text-sm text-navy/68">
-                Status: <span className="capitalize">{latestSubmission.status.replace(/_/g, " ")}</span>
+                {hasEvidence ? "The company has reviewed your submission." : "Awaiting review — not a hiring decision yet."}
               </p>
               {latestSubmission.notes && (
                 <p className="mt-3 whitespace-pre-wrap text-sm text-navy/80">{latestSubmission.notes}</p>
               )}
             </div>
-          ) : (
+          ) : application.challengeStartedAt ? (
             <SubmitChallengeForm applicationId={application.id} />
-          )}
+          ) : null}
         </>
       )}
     </div>

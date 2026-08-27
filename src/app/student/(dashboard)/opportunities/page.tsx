@@ -1,10 +1,13 @@
 import { eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
-import { getOpportunitiesWithMatch, getPublishedChallengeOpportunityIds } from "@/lib/opportunities/browse";
+import { getOpportunitiesWithMatch, getPublishedChallengeInfo } from "@/lib/opportunities/browse";
 import { getSavedOpportunityIds } from "@/lib/opportunities/saved";
 import { getChallengeState } from "@/lib/opportunities/challenge-state";
 import { OpportunityCard } from "@/components/opportunities/opportunity-card";
+import { StudentPageHeader } from "@/components/dashboard/student-page-header";
+import { EmptyState } from "@/components/dashboard/empty-state";
+import { SearchX } from "lucide-react";
 
 export default async function StudentOpportunitiesPage({
   searchParams,
@@ -22,22 +25,36 @@ export default async function StudentOpportunitiesPage({
   const savedOnly = params.saved === "1";
 
   const applications = await db
-    .select({ id: schema.applications.id, opportunityId: schema.applications.opportunityId, status: schema.applications.status })
+    .select({
+      id: schema.applications.id,
+      opportunityId: schema.applications.opportunityId,
+      challengeStartedAt: schema.applications.challengeStartedAt,
+    })
     .from(schema.applications)
     .where(eq(schema.applications.studentId, user.id));
   const applicationIds = applications.map((a) => a.id);
   const submissions = applicationIds.length
     ? await db
-        .select({ applicationId: schema.submissions.applicationId, status: schema.submissions.status })
+        .select({ id: schema.submissions.id, applicationId: schema.submissions.applicationId })
         .from(schema.submissions)
         .where(inArray(schema.submissions.applicationId, applicationIds))
     : [];
-  const submissionByApplicationId = new Map(submissions.map((s) => [s.applicationId, s]));
+  const submissionIds = submissions.map((s) => s.id);
+  const evidenceRows = submissionIds.length
+    ? await db
+        .select({ submissionId: schema.candidateEvidence.submissionId })
+        .from(schema.candidateEvidence)
+        .where(inArray(schema.candidateEvidence.submissionId, submissionIds))
+    : [];
+  const evidencedSubmissionIds = new Set(evidenceRows.map((e) => e.submissionId));
+  const submissionByApplicationId = new Map(
+    submissions.map((s) => [s.applicationId, { hasEvidence: evidencedSubmissionIds.has(s.id) }]),
+  );
   const applicationByOpportunityId = new Map(applications.map((a) => [a.opportunityId, a]));
 
-  const [{ opportunities }, publishedChallengeIds, savedIds] = await Promise.all([
+  const [{ opportunities }, publishedChallengeInfo, savedIds] = await Promise.all([
     getOpportunitiesWithMatch(user.id),
-    getPublishedChallengeOpportunityIds(),
+    getPublishedChallengeInfo(),
     getSavedOpportunityIds(user.id),
   ]);
 
@@ -60,12 +77,15 @@ export default async function StudentOpportunitiesPage({
   const hasActiveFilters = Boolean(q || location || duration || workMode || savedOnly);
 
   return (
-    <div className="px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
-      <p className="text-xs font-medium uppercase tracking-[0.12em] text-teal-ink">Opportunities</p>
-      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">Prove what you can do.</h1>
+    <div className="mx-auto max-w-6xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+      <StudentPageHeader eyebrow="Opportunities" title="Prove what you can do." />
 
       <form method="get" className="mt-8 space-y-3">
+        <label htmlFor="opportunity-search" className="sr-only">
+          Search roles, companies, or skills
+        </label>
         <input
+          id="opportunity-search"
           type="text"
           name="q"
           defaultValue={q}
@@ -73,8 +93,12 @@ export default async function StudentOpportunitiesPage({
           className="w-full max-w-xl rounded-lg border border-navy/15 bg-white px-3.5 py-2.5 text-sm text-navy placeholder:text-navy/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
         />
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+          <label htmlFor="opportunity-location" className="sr-only">
+            Location
+          </label>
           <select
+            id="opportunity-location"
             name="location"
             defaultValue={location}
             className="rounded-lg border border-navy/15 bg-white px-3 py-2 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
@@ -87,7 +111,11 @@ export default async function StudentOpportunitiesPage({
             ))}
           </select>
 
+          <label htmlFor="opportunity-duration" className="sr-only">
+            Duration
+          </label>
           <select
+            id="opportunity-duration"
             name="duration"
             defaultValue={duration}
             className="rounded-lg border border-navy/15 bg-white px-3 py-2 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
@@ -100,7 +128,11 @@ export default async function StudentOpportunitiesPage({
             ))}
           </select>
 
+          <label htmlFor="opportunity-work-mode" className="sr-only">
+            Work mode
+          </label>
           <select
+            id="opportunity-work-mode"
             name="workMode"
             defaultValue={workMode}
             className="rounded-lg border border-navy/15 bg-white px-3 py-2 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
@@ -110,23 +142,21 @@ export default async function StudentOpportunitiesPage({
             <option value="onsite">On-site</option>
           </select>
 
-          <label className="flex items-center gap-2 text-sm text-navy/70">
+          <label className="col-span-2 flex items-center gap-2 text-sm text-navy/70 sm:col-span-1">
             <input type="checkbox" name="saved" value="1" defaultChecked={savedOnly} className="size-4 rounded border-navy/30 accent-teal" />
             Saved only
           </label>
 
-          <button
-            type="submit"
-            className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal/90"
-          >
-            Apply filters
-          </button>
-
-          {hasActiveFilters && (
-            <a href="/student/opportunities" className="text-sm font-medium text-navy/50 hover:text-navy/70">
-              Clear filters
-            </a>
-          )}
+          <div className="col-span-2 flex items-center gap-3 sm:col-span-1">
+            <button type="submit" className="rounded-lg bg-teal px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal/90">
+              Apply filters
+            </button>
+            {hasActiveFilters && (
+              <a href="/student/opportunities" className="text-sm font-medium text-navy/50 hover:text-navy/70">
+                Clear
+              </a>
+            )}
+          </div>
         </div>
       </form>
 
@@ -135,11 +165,21 @@ export default async function StudentOpportunitiesPage({
       </p>
 
       {filtered.length === 0 ? (
-        <p className="mt-6 text-navy/68">
-          {opportunities.length === 0
-            ? "No published opportunities yet. Companies are still building challenges — check back soon."
-            : "No opportunities match these filters. Try widening your search."}
-        </p>
+        opportunities.length === 0 ? (
+          <EmptyState
+            icon={SearchX}
+            title="No published opportunities yet"
+            description="Companies are still building their Challenges — check back soon."
+          />
+        ) : (
+          <EmptyState
+            icon={SearchX}
+            title="No opportunities match these filters"
+            description="Try widening your search or clearing a filter."
+            ctaLabel="Clear filters"
+            ctaHref="/student/opportunities"
+          />
+        )
       ) : (
         <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((o) => {
@@ -149,9 +189,11 @@ export default async function StudentOpportunitiesPage({
               <OpportunityCard
                 key={o.id}
                 opportunity={o}
+                skills={o.skills}
                 saved={savedIds.has(o.id)}
+                estimatedMinutes={publishedChallengeInfo.get(o.id)?.estimatedMinutes}
                 challengeState={getChallengeState({
-                  challengePublished: publishedChallengeIds.has(o.id),
+                  challengePublished: publishedChallengeInfo.has(o.id),
                   application,
                   submission,
                 })}

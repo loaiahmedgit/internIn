@@ -14,6 +14,7 @@ export async function getOpportunitiesWithMatch(studentUserId?: string) {
     .select({
       id: schema.opportunities.id,
       role: schema.opportunities.role,
+      description: schema.opportunities.description,
       duration: schema.opportunities.duration,
       hoursPerWeek: schema.opportunities.hoursPerWeek,
       location: schema.opportunities.location,
@@ -57,16 +58,21 @@ export function countCreatedWithinMs(items: { createdAt: Date }[], windowMs: num
 }
 
 /**
- * Which opportunities actually have a Challenge a student can start —
- * a company can publish an opportunity before its Challenge is built.
- * Shared by Home, /student/opportunities, and /student/challenges so a
- * "Start challenge" CTA never appears for a challenge that doesn't exist.
+ * Which opportunities actually have a Challenge a student can start — a
+ * company can publish an opportunity before its Challenge is built. Shared
+ * by Home, /student/opportunities, and /student/challenges so a "Start
+ * challenge" CTA never appears for a challenge that doesn't exist, and so
+ * the real estimated time (never invented) can show on cards.
  */
-export async function getPublishedChallengeOpportunityIds(): Promise<Set<string>> {
+export async function getPublishedChallengeInfo(): Promise<Map<string, { estimatedMinutes: number }>> {
   const db = getDb();
   const rows = await db
-    .select({ opportunityId: schema.challenges.opportunityId })
+    .select({
+      opportunityId: schema.challenges.opportunityId,
+      estimatedMinutes: schema.challengeVersions.estimatedMinutes,
+    })
     .from(schema.challenges)
+    .innerJoin(schema.challengeVersions, eq(schema.challenges.currentVersionId, schema.challengeVersions.id))
     .where(and(eq(schema.challenges.status, "published"), isNotNull(schema.challenges.currentVersionId)));
-  return new Set(rows.map((r) => r.opportunityId));
+  return new Map(rows.map((r) => [r.opportunityId, { estimatedMinutes: r.estimatedMinutes }]));
 }

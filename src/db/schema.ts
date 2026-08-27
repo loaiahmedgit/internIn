@@ -213,6 +213,8 @@ export const applications = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     status: applicationStatusEnum("status").notNull().default("applied"),
+    /** Set only when the student explicitly clicks "Start challenge" — never on page view. Distinguishes "to do" from "in progress" without inventing a completion percentage. */
+    challengeStartedAt: timestamp("challenge_started_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

@@ -184,6 +184,24 @@ export async function extractCvAction(path: string) {
   return extractResumeInfoAction(text);
 }
 
+/**
+ * Marks the moment the student actually chose to start the work — this is
+ * what separates "to do" from "in progress" on /student/challenges. Never
+ * called implicitly on page view.
+ */
+export async function startChallengeAction(applicationId: string) {
+  const { user } = await requireCurrentStudent();
+  const db = getDb();
+  const application = await assertOwnsApplication(applicationId, user.id);
+
+  if (!application.challengeStartedAt) {
+    await db
+      .update(schema.applications)
+      .set({ challengeStartedAt: new Date() })
+      .where(eq(schema.applications.id, applicationId));
+  }
+}
+
 export async function submitChallengeAction(input: {
   applicationId: string;
   notes: string;
