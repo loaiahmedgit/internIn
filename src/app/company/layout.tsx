@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { COMPANY_NAV_ITEMS } from "@/lib/dashboard-nav";
 
 export default async function CompanyLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -22,10 +23,7 @@ export default async function CompanyLayout({ children }: { children: React.Reac
     <DashboardShell
       eyebrow="Company workspace"
       displayName={companyName || user?.fullName || ""}
-      navItems={[
-        { href: "/company/dashboard", label: "Internships" },
-        { href: "/company/opportunities/new", label: "Create internship" },
-      ]}
+      navItems={COMPANY_NAV_ITEMS}
     >
       {children}
     </DashboardShell>
