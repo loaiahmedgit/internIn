@@ -353,6 +353,24 @@ export const verifiedExperience = pgTable("verified_experience", {
   ...timestamps,
 });
 
+export const savedOpportunities = pgTable(
+  "saved_opportunities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    opportunityId: uuid("opportunity_id")
+      .notNull()
+      .references(() => opportunities.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("saved_opportunities_student_opportunity_uidx").on(t.studentId, t.opportunityId),
+    index("saved_opportunities_student_idx").on(t.studentId),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Append-only audit trail
 // ---------------------------------------------------------------------------

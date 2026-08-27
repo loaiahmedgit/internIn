@@ -64,6 +64,37 @@ export async function applyToOpportunityAction(opportunityId: string) {
   return application.id as string;
 }
 
+const OpportunityIdSchema = z.string().uuid();
+
+/**
+ * Toggles a bookmark on an opportunity for the current student. Returns the
+ * resulting saved state so the client can reconcile its optimistic update.
+ */
+export async function toggleSaveOpportunityAction(opportunityId: string): Promise<boolean> {
+  const { user } = await requireCurrentStudent();
+  const validatedOpportunityId = OpportunityIdSchema.parse(opportunityId);
+  const db = getDb();
+
+  const [existing] = await db
+    .select({ id: schema.savedOpportunities.id })
+    .from(schema.savedOpportunities)
+    .where(
+      and(
+        eq(schema.savedOpportunities.studentId, user.id),
+        eq(schema.savedOpportunities.opportunityId, validatedOpportunityId),
+      ),
+    )
+    .limit(1);
+
+  if (existing) {
+    await db.delete(schema.savedOpportunities).where(eq(schema.savedOpportunities.id, existing.id));
+    return false;
+  }
+
+  await db.insert(schema.savedOpportunities).values({ studentId: user.id, opportunityId: validatedOpportunityId });
+  return true;
+}
+
 async function assertOwnsApplication(applicationId: string, studentUserId: string) {
   const db = getDb();
   const [application] = await db

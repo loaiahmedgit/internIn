@@ -9,10 +9,10 @@ export const dynamic = "force-dynamic";
 
 export default async function OpportunitiesPage() {
   const currentUser = await getCurrentUser();
-  // The marketplace lives inline on /student/dashboard for signed-in
-  // students — this public route is only for anonymous visitors and
-  // companies checking out what's live.
-  if (currentUser?.role === "student") redirect("/student/dashboard");
+  // The real discovery experience lives at /student/opportunities for
+  // signed-in students — this public route is only for anonymous visitors
+  // and companies checking out what's live.
+  if (currentUser?.role === "student") redirect("/student/opportunities");
 
   const { opportunities } = await getOpportunitiesWithMatch();
   const dashboardHref = currentUser?.role === "company" ? "/company/dashboard" : null;

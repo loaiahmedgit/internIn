@@ -1,26 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
-import { StatusRail } from "@/components/dashboard/status-rail";
-import { getOpportunitiesWithMatch } from "@/lib/opportunities/browse";
+import { getOpportunitiesWithMatch, getPublishedChallengeOpportunityIds, countCreatedWithinMs } from "@/lib/opportunities/browse";
+import { getSavedOpportunityIds } from "@/lib/opportunities/saved";
+import { getChallengeState } from "@/lib/opportunities/challenge-state";
+import { getApplicationStageIndex } from "@/lib/opportunities/application-stage";
+import { getProfileCompletion } from "@/lib/profile-completion";
+import { OpportunityCard } from "@/components/opportunities/opportunity-card";
+import { ArrowRight, ChevronRight } from "lucide-react";
 
-function CompanyAvatar({ name }: { name: string }) {
-  return (
-    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal/10 text-sm font-semibold text-teal-ink">
-      {name.charAt(0).toUpperCase()}
-    </div>
-  );
-}
-
-function StatTile({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-xl border border-navy/10 bg-white px-5 py-4">
       <p className="text-xs font-medium uppercase tracking-[0.08em] text-navy/40">{label}</p>
-      <p className={`mt-1.5 text-3xl font-semibold tabular-nums tracking-[-0.02em] ${accent ? "text-teal-ink" : "text-navy"}`}>
-        {value}
-      </p>
+      <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-[-0.02em] text-navy">{value}</p>
+      {hint && <p className="mt-1 text-xs text-navy/50">{hint}</p>}
     </div>
   );
 }
@@ -32,7 +28,12 @@ export default async function StudentDashboardPage() {
   const [profile] = await db
     .select({
       educationStage: schema.studentProfiles.educationStage,
+      university: schema.studentProfiles.university,
+      major: schema.studentProfiles.major,
+      graduationYear: schema.studentProfiles.graduationYear,
+      location: schema.studentProfiles.location,
       skills: schema.studentProfiles.skills,
+      interests: schema.studentProfiles.interests,
       cvFileKey: schema.studentProfiles.cvFileKey,
     })
     .from(schema.studentProfiles)
@@ -41,134 +42,204 @@ export default async function StudentDashboardPage() {
   if (!profile?.educationStage) redirect("/student/onboarding");
 
   const applications = await db
-    .select({
-      id: schema.applications.id,
-      opportunityId: schema.applications.opportunityId,
-      status: schema.applications.status,
-      role: schema.opportunities.role,
-      companyName: schema.companies.name,
-      skills: schema.opportunities.skills,
-    })
+    .select({ id: schema.applications.id, opportunityId: schema.applications.opportunityId, status: schema.applications.status })
     .from(schema.applications)
-    .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
-    .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
     .where(eq(schema.applications.studentId, user.id));
 
-  const appliedOpportunityIds = new Set(applications.map((a) => a.opportunityId));
-  const { opportunities, hasMatchData } = await getOpportunitiesWithMatch(user.id);
-  const marketplace = opportunities.filter((o) => !appliedOpportunityIds.has(o.id));
+  const applicationIds = applications.map((a) => a.id);
+  const submissions = applicationIds.length
+    ? await db
+        .select({ applicationId: schema.submissions.applicationId, status: schema.submissions.status })
+        .from(schema.submissions)
+        .where(inArray(schema.submissions.applicationId, applicationIds))
+    : [];
+  const offers = applicationIds.length
+    ? await db
+        .select({ applicationId: schema.internshipOffers.applicationId })
+        .from(schema.internshipOffers)
+        .where(inArray(schema.internshipOffers.applicationId, applicationIds))
+    : [];
 
-  const profileStatus = profile.skills.length > 0 && profile.cvFileKey ? "Complete" : "In progress";
+  const submissionByApplicationId = new Map(submissions.map((s) => [s.applicationId, s]));
+  const offerApplicationIds = new Set(offers.map((o) => o.applicationId));
+  const applicationByOpportunityId = new Map(applications.map((a) => [a.opportunityId, a]));
+
+  const [{ opportunities, hasMatchData }, publishedChallengeIds, savedIds] = await Promise.all([
+    getOpportunitiesWithMatch(user.id),
+    getPublishedChallengeOpportunityIds(),
+    getSavedOpportunityIds(user.id),
+  ]);
+
+  const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+  const newThisWeek = countCreatedWithinMs(opportunities, oneWeekMs);
+
+  const inReviewCount = applications.filter((a) => {
+    const idx = getApplicationStageIndex({
+      status: a.status,
+      hasSubmission: submissionByApplicationId.has(a.id),
+      hasOffer: offerApplicationIds.has(a.id),
+    });
+    return idx === 1 || idx === 2;
+  }).length;
+
+  const activeChallengesCount = applications.filter(
+    (a) => !submissionByApplicationId.has(a.id) && publishedChallengeIds.has(a.opportunityId),
+  ).length;
+
+  const profileCompletion = getProfileCompletion(profile);
+
+  const recommended = (hasMatchData ? opportunities : [...opportunities].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())).slice(
+    0,
+    6,
+  );
+
+  const savedOpportunities = opportunities.filter((o) => savedIds.has(o.id)).slice(0, 3);
+
+  const nextSteps: { label: string; sublabel: string; href: string }[] = [];
+  if (profileCompletion.percent < 100) {
+    nextSteps.push({ label: "Complete your profile", sublabel: "Add education, skills & preferences", href: "/student/profile" });
+  }
+  const inProgressApplication = applications.find(
+    (a) => !submissionByApplicationId.has(a.id) && publishedChallengeIds.has(a.opportunityId),
+  );
+  if (inProgressApplication) {
+    nextSteps.push({
+      label: "Finish a challenge",
+      sublabel: "Show what you can do",
+      href: `/student/applications/${inProgressApplication.id}`,
+    });
+  }
+  if (!profile.cvFileKey) {
+    nextSteps.push({ label: "Upload your CV", sublabel: "Help companies know you better", href: "/student/profile" });
+  }
 
   return (
     <div className="px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
       <p className="text-xs font-medium uppercase tracking-[0.12em] text-teal-ink">Dashboard</p>
       <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">
-        Welcome back, {user.fullName.split(" ")[0]}.
+        Welcome back, {user.fullName.split(" ")[0]}. 👋
       </h1>
 
-      <div className="mt-8 grid max-w-2xl grid-cols-3 gap-3">
-        <StatTile label="Applications" value={String(applications.length)} accent />
-        <StatTile label="Open roles" value={String(opportunities.length)} />
-        <StatTile label="Profile" value={profileStatus} />
+      <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          label="Applications"
+          value={String(applications.length)}
+          hint={inReviewCount > 0 ? `${inReviewCount} in review` : undefined}
+        />
+        <StatCard
+          label="Open opportunities"
+          value={String(opportunities.length)}
+          hint={newThisWeek > 0 ? `${newThisWeek} new this week` : undefined}
+        />
+        <StatCard label="Active challenges" value={String(activeChallengesCount)} hint={activeChallengesCount > 0 ? "In progress" : undefined} />
+        <StatCard label="Profile completion" value={`${profileCompletion.percent}%`} />
       </div>
 
-      {applications.length > 0 && (
-        <div className="mt-14">
-          <h2 className="text-xl font-semibold tracking-[-0.02em] text-navy">Your applications</h2>
-          <div className="mt-5 max-w-2xl space-y-3">
-            {applications.map((a) => (
-              <Link
-                key={a.id}
-                href={`/student/applications/${a.id}`}
-                className="flex items-start gap-4 rounded-xl border border-navy/10 bg-white p-5 shadow-[0_1px_2px_rgba(33,50,72,0.04)] transition-shadow hover:shadow-[0_8px_24px_rgba(33,50,72,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
-              >
-                <CompanyAvatar name={a.companyName} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{a.companyName}</p>
-                  <p className="mt-1 text-lg font-semibold text-navy">{a.role}</p>
-                  {a.skills.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {a.skills.map((skill) => (
-                        <span key={skill} className="rounded-full bg-gray-light px-2 py-0.5 text-xs text-navy/60">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="mt-3">
-                    <StatusRail status={a.status} />
-                  </div>
-                </div>
-              </Link>
-            ))}
+      <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_300px]">
+        <div className="min-w-0">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold tracking-[-0.02em] text-navy">Recommended opportunities</h2>
+              <p className="mt-1 text-sm text-navy/60">Companies care about what you can do. Show them.</p>
+            </div>
+            <Link
+              href="/student/opportunities"
+              className="flex shrink-0 items-center gap-1 text-sm font-medium text-teal-ink hover:underline"
+            >
+              View all opportunities
+              <ArrowRight className="size-3.5" aria-hidden="true" />
+            </Link>
           </div>
+
+          {recommended.length === 0 ? (
+            <p className="mt-6 text-navy/68">
+              No published opportunities yet. Companies are still building challenges — check back soon.
+            </p>
+          ) : (
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {recommended.map((o) => {
+                const application = applicationByOpportunityId.get(o.id);
+                const submission = application ? submissionByApplicationId.get(application.id) : undefined;
+                return (
+                  <OpportunityCard
+                    key={o.id}
+                    opportunity={o}
+                    saved={savedIds.has(o.id)}
+                    challengeState={getChallengeState({
+                      challengePublished: publishedChallengeIds.has(o.id),
+                      application,
+                      submission,
+                    })}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
 
-      <div className="mt-14">
-        <h2 className="text-xl font-semibold tracking-[-0.02em] text-navy">
-          {applications.length === 0 ? "Prove what you can do" : "More opportunities for you"}
-        </h2>
-        {!hasMatchData && (
-          <p className="mt-1.5 text-sm text-navy/50">
-            <Link href="/student/profile" className="text-teal-ink underline underline-offset-2">
-              Add your skills and interests
-            </Link>{" "}
-            to see match scores.
-          </p>
-        )}
-
-        {marketplace.length === 0 ? (
-          <p className="mt-6 text-navy/68">
-            {opportunities.length === 0
-              ? "No published opportunities yet. Companies are still building challenges — check back soon."
-              : "You've applied to every open opportunity — nice work. Check back soon for more."}
-          </p>
-        ) : (
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {marketplace.map((o) => (
-              <Link
-                key={o.id}
-                href={`/opportunities/${o.id}`}
-                className="block rounded-xl border border-navy/10 bg-white p-5 shadow-[0_1px_2px_rgba(33,50,72,0.04)] transition-shadow hover:shadow-[0_8px_24px_rgba(33,50,72,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
-              >
-                <div className="flex items-start gap-3">
-                  <CompanyAvatar name={o.companyName} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{o.companyName}</p>
-                      {o.matchScore !== undefined && (
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
-                            o.matchScore >= 50
-                              ? "bg-teal text-white"
-                              : o.matchScore > 0
-                                ? "bg-teal/10 text-teal-ink"
-                                : "bg-gray-light text-navy/50"
-                          }`}
-                        >
-                          {o.matchScore}%
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-lg font-semibold text-navy">{o.role}</p>
-                  </div>
-                </div>
-                <p className="mt-3 text-sm text-navy/68">
-                  {o.duration} · {o.hoursPerWeek}h/week · {o.location}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {o.skills.slice(0, 3).map((s) => (
-                    <span key={s} className="rounded-full bg-gray-light px-2 py-0.5 text-xs text-navy/60">
-                      {s}
-                    </span>
-                  ))}
-                </div>
-              </Link>
-            ))}
+        <aside className="space-y-6">
+          <div className="rounded-xl border border-navy/10 bg-white p-5">
+            <p className="text-sm font-semibold text-navy">Profile completion</p>
+            <p className="mt-3 text-2xl font-semibold tabular-nums text-teal-ink">{profileCompletion.percent}%</p>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-light">
+              <div className="h-full rounded-full bg-teal transition-[width]" style={{ width: `${profileCompletion.percent}%` }} />
+            </div>
+            <p className="mt-3 text-xs text-navy/60">
+              {profileCompletion.percent >= 100
+                ? "Your profile is complete."
+                : `You're doing great! Complete a few more details to stand out.`}
+            </p>
+            <Link
+              href="/student/profile"
+              className="mt-4 block rounded-lg bg-teal px-3 py-2 text-center text-sm font-medium text-white transition-colors hover:bg-teal/90"
+            >
+              Complete profile
+            </Link>
           </div>
-        )}
+
+          <div className="rounded-xl border border-navy/10 bg-white p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-navy">Saved opportunities ({savedOpportunities.length})</p>
+              <Link href="/student/opportunities?saved=1" className="flex items-center text-xs font-medium text-teal-ink hover:underline">
+                View all
+                <ChevronRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            </div>
+            {savedOpportunities.length === 0 ? (
+              <p className="mt-3 text-xs text-navy/50">Bookmark roles you&apos;re interested in to see them here.</p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {savedOpportunities.map((o) => (
+                  <li key={o.id}>
+                    <Link href={`/opportunities/${o.id}`} className="block hover:text-teal-ink">
+                      <p className="text-sm font-medium text-navy">{o.role}</p>
+                      <p className="text-xs text-navy/50">{o.companyName}</p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {nextSteps.length > 0 && (
+            <div className="rounded-xl border border-navy/10 bg-white p-5">
+              <p className="text-sm font-semibold text-navy">Next steps</p>
+              <ul className="mt-3 space-y-3">
+                {nextSteps.map((step) => (
+                  <li key={step.label}>
+                    <Link href={step.href} className="flex items-start gap-2 hover:text-teal-ink">
+                      <span className="mt-1 size-1.5 shrink-0 rounded-full bg-teal" aria-hidden="true" />
+                      <span>
+                        <span className="block text-sm font-medium text-navy">{step.label}</span>
+                        <span className="block text-xs text-navy/50">{step.sublabel}</span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </aside>
       </div>
     </div>
   );

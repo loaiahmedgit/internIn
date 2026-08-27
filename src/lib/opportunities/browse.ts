@@ -1,5 +1,5 @@
 import { getDb, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { eq, and, isNotNull } from "drizzle-orm";
 import { computeMatchScore } from "@/lib/matching";
 
 /**
@@ -19,6 +19,8 @@ export async function getOpportunitiesWithMatch(studentUserId?: string) {
       location: schema.opportunities.location,
       skills: schema.opportunities.skills,
       companyName: schema.companies.name,
+      companyVerified: schema.companies.verified,
+      createdAt: schema.opportunities.createdAt,
     })
     .from(schema.opportunities)
     .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
@@ -46,4 +48,25 @@ export async function getOpportunitiesWithMatch(studentUserId?: string) {
   if (hasMatchData) withMatch.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
 
   return { opportunities: withMatch, hasMatchData };
+}
+
+/** Plain helper (not a component) so calling Date.now() here never trips the render-purity lint rule. */
+export function countCreatedWithinMs(items: { createdAt: Date }[], windowMs: number): number {
+  const now = Date.now();
+  return items.filter((o) => now - o.createdAt.getTime() < windowMs).length;
+}
+
+/**
+ * Which opportunities actually have a Challenge a student can start —
+ * a company can publish an opportunity before its Challenge is built.
+ * Shared by Home, /student/opportunities, and /student/challenges so a
+ * "Start challenge" CTA never appears for a challenge that doesn't exist.
+ */
+export async function getPublishedChallengeOpportunityIds(): Promise<Set<string>> {
+  const db = getDb();
+  const rows = await db
+    .select({ opportunityId: schema.challenges.opportunityId })
+    .from(schema.challenges)
+    .where(and(eq(schema.challenges.status, "published"), isNotNull(schema.challenges.currentVersionId)));
+  return new Set(rows.map((r) => r.opportunityId));
 }

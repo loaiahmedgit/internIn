@@ -1,17 +1,19 @@
-const STAGES = ["Applied", "Shortlisted", "Invited"] as const;
-
-const STAGE_INDEX: Record<string, number> = {
-  applied: 0,
-  shortlisted: 1,
-  invited: 2,
-};
+import { APPLICATION_STAGES, getApplicationStageIndex } from "@/lib/opportunities/application-stage";
 
 /**
- * The application's real pipeline (applied -> shortlisted -> invited),
- * shown as evidence progressing rather than a status word — the product's
- * actual story is proof accumulating stage by stage, not a static label.
+ * The application's real hiring funnel, shown as named stages rather than a
+ * percentage — percentages are reserved for things with real measurable
+ * completion (challenge tasks, profile fields), not for a hiring pipeline.
  */
-export function StatusRail({ status }: { status: string }) {
+export function StatusRail({
+  status,
+  hasSubmission = false,
+  hasOffer = false,
+}: {
+  status: string;
+  hasSubmission?: boolean;
+  hasOffer?: boolean;
+}) {
   if (status === "declined" || status === "withdrawn") {
     return (
       <span className="rounded-full bg-gray-light px-2.5 py-1 text-xs font-medium capitalize text-navy/50">
@@ -20,11 +22,11 @@ export function StatusRail({ status }: { status: string }) {
     );
   }
 
-  const current = STAGE_INDEX[status] ?? 0;
+  const current = getApplicationStageIndex({ status, hasSubmission, hasOffer });
 
   return (
-    <div className="flex items-center gap-1.5">
-      {STAGES.map((label, i) => (
+    <div className="flex flex-wrap items-center gap-y-1.5">
+      {APPLICATION_STAGES.map((label, i) => (
         <div key={label} className="flex items-center gap-1.5">
           <div className="flex items-center gap-1">
             <span
@@ -35,7 +37,7 @@ export function StatusRail({ status }: { status: string }) {
               {label}
             </span>
           </div>
-          {i < STAGES.length - 1 && <span className="h-px w-4 bg-gray-cool" aria-hidden="true" />}
+          {i < APPLICATION_STAGES.length - 1 && <span className="h-px w-4 bg-gray-cool" aria-hidden="true" />}
         </div>
       ))}
     </div>

@@ -5,7 +5,21 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
 import { signOut } from "@/app/(auth)/actions";
-import { Menu, X, PanelLeftClose, PanelLeftOpen, ClipboardList, User, BadgeCheck, Briefcase, PlusCircle } from "lucide-react";
+import {
+  Menu,
+  X,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Home,
+  Compass,
+  ClipboardList,
+  Zap,
+  Building2,
+  User,
+  BadgeCheck,
+  Briefcase,
+  PlusCircle,
+} from "lucide-react";
 import type { NavItem, IconName } from "@/lib/dashboard-nav";
 
 const STORAGE_KEY = "internin-sidebar-collapsed";
@@ -14,7 +28,11 @@ const STORAGE_KEY = "internin-sidebar-collapsed";
 // can't cross the Server -> Client prop boundary (NavItem carries only a
 // string name for exactly that reason).
 const ICON_MAP: Record<IconName, typeof ClipboardList> = {
+  home: Home,
+  compass: Compass,
   "clipboard-list": ClipboardList,
+  zap: Zap,
+  building: Building2,
   user: User,
   "badge-check": BadgeCheck,
   briefcase: Briefcase,
