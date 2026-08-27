@@ -10,16 +10,7 @@ import {
   getCvUploadUrlAction,
   extractCvAction,
 } from "@/lib/opportunities/student-actions";
-
-type EducationStage = "high_school" | "university" | "graduate" | "vocational" | "other";
-
-export const STAGE_OPTIONS: { value: EducationStage; label: string }[] = [
-  { value: "high_school", label: "High school student" },
-  { value: "university", label: "University / college student" },
-  { value: "graduate", label: "Recent graduate" },
-  { value: "vocational", label: "Diploma / vocational student" },
-  { value: "other", label: "Other" },
-];
+import { STAGE_OPTIONS, type EducationStage } from "@/lib/education-stages";
 
 const STAGE_FIELD_LABELS: Record<EducationStage, { institution: string; program: string; year: string }> = {
   high_school: { institution: "School", program: "", year: "Expected graduation year" },

@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
-import { StudentProfileForm, STAGE_OPTIONS } from "@/components/opportunities/student-profile-form";
+import { StudentProfileForm } from "@/components/opportunities/student-profile-form";
+import { STAGE_OPTIONS } from "@/lib/education-stages";
 
 export default async function StudentProfilePage() {
   const { user } = await requireCurrentStudent();
