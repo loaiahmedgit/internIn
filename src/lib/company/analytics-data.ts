@@ -11,6 +11,7 @@ export interface CompanyAnalytics {
   funnel: { applied: number; submitted: number; shortlisted: number; invited: number; accepted: number };
   challengeTiming: { startedCount: number; completedCount: number; medianCompletionMinutes: number | null };
   reviewTurnaround: { avgDaysToReview: number | null; awaitingReviewCount: number };
+  applicantSource: { direct: number; referral: number; companyWebsite: number; totalWithSource: number };
 }
 
 /**
@@ -39,6 +40,7 @@ export async function getCompanyAnalytics(companyId: string, windowDays: number)
           challengeStartedAt: schema.applications.challengeStartedAt,
           updatedAt: schema.applications.updatedAt,
           createdAt: schema.applications.createdAt,
+          source: schema.applications.source,
         })
         .from(schema.applications)
         .where(inArray(schema.applications.opportunityId, opportunityIds))
@@ -124,6 +126,14 @@ export async function getCompanyAnalytics(companyId: string, windowDays: number)
   }
   const avgDaysToReview = reviewDays.length === 0 ? null : reviewDays.reduce((s, d) => s + d, 0) / reviewDays.length;
 
+  const withSource = applications.filter((a) => a.source);
+  const applicantSource = {
+    direct: withSource.filter((a) => a.source === "direct").length,
+    referral: withSource.filter((a) => a.source === "referral").length,
+    companyWebsite: withSource.filter((a) => a.source === "company_website").length,
+    totalWithSource: withSource.length,
+  };
+
   return {
     openInternships,
     activeInterns: activePrograms.length,
@@ -132,6 +142,7 @@ export async function getCompanyAnalytics(companyId: string, windowDays: number)
     challengeCompletionRate: startedCount > 0 ? completedCount / startedCount : null,
     funnel,
     challengeTiming: { startedCount, completedCount, medianCompletionMinutes },
+    applicantSource,
     reviewTurnaround: { avgDaysToReview, awaitingReviewCount },
   };
 }

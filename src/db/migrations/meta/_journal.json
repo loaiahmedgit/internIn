@@ -43,6 +43,13 @@
       "when": 1787828573631,
       "tag": "0005_bouncy_killraven",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787953142831,
+      "tag": "0006_spooky_xorn",
+      "breakpoints": true
     }
   ]
 }

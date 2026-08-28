@@ -57,21 +57,33 @@ async function main() {
     status: "applied" | "shortlisted" | "invited" | "declined" | "withdrawn";
     withSubmission: boolean;
     tasksCompleted?: string;
+    source: "direct" | "referral" | "company_website";
   }[] = [
-    { name: "Layla Haddad", opportunityId: DATA_ANALYST_OPPORTUNITY_ID, challengeVersionId: DATA_ANALYST_CHALLENGE_VERSION_ID, status: "applied", withSubmission: true, tasksCompleted: "Completed both analysis tasks and the summary write-up." },
-    { name: "Omar Nasser", opportunityId: DATA_ANALYST_OPPORTUNITY_ID, challengeVersionId: DATA_ANALYST_CHALLENGE_VERSION_ID, status: "shortlisted", withSubmission: true, tasksCompleted: "Completed the delay analysis; summary was brief." },
-    { name: "Fatima Al-Sayed", opportunityId: DATA_ANALYST_OPPORTUNITY_ID, challengeVersionId: DATA_ANALYST_CHALLENGE_VERSION_ID, status: "declined", withSubmission: true, tasksCompleted: "Only partially completed the data-cleaning task." },
-    { name: "Youssef Kamal", opportunityId: DATA_ANALYST_OPPORTUNITY_ID, challengeVersionId: DATA_ANALYST_CHALLENGE_VERSION_ID, status: "applied", withSubmission: false },
-    { name: "Hana Farouk", opportunityId: MARKETING_OPPORTUNITY_ID, challengeVersionId: MARKETING_CHALLENGE_VERSION_ID, status: "applied", withSubmission: true, tasksCompleted: "Delivered a full campaign brief with competitor research." },
-    { name: "Karim Aziz", opportunityId: MARKETING_OPPORTUNITY_ID, challengeVersionId: MARKETING_CHALLENGE_VERSION_ID, status: "invited", withSubmission: true, tasksCompleted: "Strong campaign brief, clear channel recommendations." },
-    { name: "Mariam Zaki", opportunityId: MARKETING_OPPORTUNITY_ID, challengeVersionId: MARKETING_CHALLENGE_VERSION_ID, status: "withdrawn", withSubmission: false },
+    { name: "Layla Haddad", opportunityId: DATA_ANALYST_OPPORTUNITY_ID, challengeVersionId: DATA_ANALYST_CHALLENGE_VERSION_ID, status: "applied", withSubmission: true, tasksCompleted: "Completed both analysis tasks and the summary write-up.", source: "direct" },
+    { name: "Omar Nasser", opportunityId: DATA_ANALYST_OPPORTUNITY_ID, challengeVersionId: DATA_ANALYST_CHALLENGE_VERSION_ID, status: "shortlisted", withSubmission: true, tasksCompleted: "Completed the delay analysis; summary was brief.", source: "referral" },
+    { name: "Fatima Al-Sayed", opportunityId: DATA_ANALYST_OPPORTUNITY_ID, challengeVersionId: DATA_ANALYST_CHALLENGE_VERSION_ID, status: "declined", withSubmission: true, tasksCompleted: "Only partially completed the data-cleaning task.", source: "direct" },
+    { name: "Youssef Kamal", opportunityId: DATA_ANALYST_OPPORTUNITY_ID, challengeVersionId: DATA_ANALYST_CHALLENGE_VERSION_ID, status: "applied", withSubmission: false, source: "company_website" },
+    { name: "Hana Farouk", opportunityId: MARKETING_OPPORTUNITY_ID, challengeVersionId: MARKETING_CHALLENGE_VERSION_ID, status: "applied", withSubmission: true, tasksCompleted: "Delivered a full campaign brief with competitor research.", source: "referral" },
+    { name: "Karim Aziz", opportunityId: MARKETING_OPPORTUNITY_ID, challengeVersionId: MARKETING_CHALLENGE_VERSION_ID, status: "invited", withSubmission: true, tasksCompleted: "Strong campaign brief, clear channel recommendations.", source: "direct" },
+    { name: "Mariam Zaki", opportunityId: MARKETING_OPPORTUNITY_ID, challengeVersionId: MARKETING_CHALLENGE_VERSION_ID, status: "withdrawn", withSubmission: false, source: "company_website" },
   ];
 
   for (const spec of candidateSpecs) {
     const student = await makeStudent(db, spec.name);
+    // Real elapsed time for Challenge analytics: started 45-150 minutes before this
+    // seed run, so submittedAt (defaultNow()) minus this is a real, non-zero duration.
+    const challengeStartedAt = spec.withSubmission
+      ? new Date(Date.now() - (45 + Math.round(Math.random() * 105)) * 60 * 1000)
+      : undefined;
     const [application] = await db
       .insert(schema.applications)
-      .values({ opportunityId: spec.opportunityId, studentId: student.id, status: spec.status })
+      .values({
+        opportunityId: spec.opportunityId,
+        studentId: student.id,
+        status: spec.status,
+        source: spec.source,
+        challengeStartedAt,
+      })
       .returning();
 
     if (spec.withSubmission) {

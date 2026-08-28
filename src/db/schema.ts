@@ -215,6 +215,8 @@ export const applications = pgTable(
     status: applicationStatusEnum("status").notNull().default("applied"),
     /** Set only when the student explicitly clicks "Start challenge" — never on page view. Distinguishes "to do" from "in progress" without inventing a completion percentage. */
     challengeStartedAt: timestamp("challenge_started_at", { withTimezone: true }),
+    /** Real, detectable-only signal ("direct" | "referral" | "company_website") — see src/lib/opportunities/application-source.ts. Null for applications from before this column existed. */
+    source: text("source"),
     ...timestamps,
   },
   (t) => [

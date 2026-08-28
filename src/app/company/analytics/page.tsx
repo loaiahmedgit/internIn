@@ -171,17 +171,40 @@ export default async function CompanyAnalyticsPage({
         </CardContent>
       </Card>
 
-      {/* Applicant source: no referrer/source tracking exists in the schema — an honest
-          insufficient-data state instead of the mockup's fabricated Direct/Organic/Referral split. */}
+      {/* Real, detectable-only breakdown (direct / referral / hiring company's own site) —
+          not the mockup's fabricated Direct/Organic/Referral split. Applications from
+          before this column existed have no source and are excluded, not guessed. */}
       <Card className="mt-6 rounded-xl border border-navy/10 shadow-none ring-0">
         <CardContent className="px-5">
           <div className="flex items-center gap-2">
             <Globe className="size-4 text-navy/40" aria-hidden="true" />
             <h2 className="text-sm font-semibold text-navy">Applicant source</h2>
           </div>
-          <p className="mt-2 text-sm text-navy/50">
-            internIn doesn&apos;t track where applicants come from yet, so there&apos;s nothing real to show here.
-          </p>
+          {data.applicantSource.totalWithSource === 0 ? (
+            <p className="mt-2 text-sm text-navy/50">
+              No applications with a known source yet in this window.
+            </p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {[
+                { label: "Direct", value: data.applicantSource.direct },
+                { label: "Referral", value: data.applicantSource.referral },
+                { label: "Company website", value: data.applicantSource.companyWebsite },
+              ].map((row) => {
+                const pct = Math.round((row.value / data.applicantSource.totalWithSource) * 100);
+                return (
+                  <div key={row.label} className="flex items-center gap-3">
+                    <span className="w-32 shrink-0 text-sm text-navy/65">{row.label}</span>
+                    <div className="h-2 min-w-0 flex-1 rounded-full bg-navy/8">
+                      <div className="h-full rounded-full bg-teal" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="w-8 shrink-0 text-right text-sm font-semibold text-navy">{row.value}</span>
+                    <span className="w-10 shrink-0 text-right text-xs text-navy/45">{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
     </CompanyPageContainer>

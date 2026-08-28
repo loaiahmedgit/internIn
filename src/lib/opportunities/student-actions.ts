@@ -5,6 +5,7 @@ import { requireCurrentStudent } from "@/lib/auth";
 import { inngest } from "@/lib/inngest/client";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { classifyApplicationSource } from "@/lib/opportunities/application-source";
 
 async function getCompanyContext(opportunityId: string) {
   const db = getDb();
@@ -27,16 +28,17 @@ async function getCompanyContext(opportunityId: string) {
  * itself, never trusts a client-supplied id alone.
  */
 
-export async function applyToOpportunityAction(opportunityId: string) {
+export async function applyToOpportunityAction(opportunityId: string, referrer?: string) {
   const { user } = await requireCurrentStudent();
   const db = getDb();
 
-  const [opportunity] = await db
-    .select()
+  const [row] = await db
+    .select({ opportunity: schema.opportunities, companyWebsite: schema.companies.website })
     .from(schema.opportunities)
+    .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
     .where(eq(schema.opportunities.id, opportunityId))
     .limit(1);
-  if (!opportunity || opportunity.status !== "published") {
+  if (!row || row.opportunity.status !== "published") {
     throw new Error("This opportunity isn't open for applications.");
   }
 
@@ -49,9 +51,15 @@ export async function applyToOpportunityAction(opportunityId: string) {
     .limit(1);
   if (existing) return existing.id as string;
 
+  const source = classifyApplicationSource({
+    referrer,
+    siteHost: "internin.app",
+    companyWebsite: row.companyWebsite,
+  });
+
   const [application] = await db
     .insert(schema.applications)
-    .values({ opportunityId, studentId: user.id, status: "applied" })
+    .values({ opportunityId, studentId: user.id, status: "applied", source })
     .returning();
 
   await db.insert(schema.eventLog).values({

@@ -14,7 +14,7 @@ export function ApplyButton({ opportunityId }: { opportunityId: string }) {
     setError(null);
     startTransition(async () => {
       try {
-        const applicationId = await applyToOpportunityAction(opportunityId);
+        const applicationId = await applyToOpportunityAction(opportunityId, document.referrer || undefined);
         router.push(`/student/applications/${applicationId}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Couldn't apply. Try again.");
