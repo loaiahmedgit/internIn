@@ -1,4 +1,4 @@
-import { SiZoom, SiGooglecalendar, SiGoogledrive, SiJira, SiLinear, SiTrello, SiNotion, SiAsana } from "@icons-pack/react-simple-icons";
+import { SiZoom, SiGoogledrive, SiJira, SiLinear, SiTrello, SiNotion, SiAsana } from "@icons-pack/react-simple-icons";
 
 /**
  * Real official marks via simple-icons wherever the brand permits redistribution
@@ -17,7 +17,8 @@ export function ZoomIcon() {
   return <SiZoom color="default" size={ICON_SIZE} aria-hidden="true" />;
 }
 export function GoogleCalendarIcon() {
-  return <SiGooglecalendar color="default" size={ICON_SIZE} aria-hidden="true" />;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/brand/google-calendar.svg" alt="" aria-hidden="true" className="size-5" />;
 }
 export function GoogleDriveIcon() {
   return <SiGoogledrive color="default" size={ICON_SIZE} aria-hidden="true" />;
