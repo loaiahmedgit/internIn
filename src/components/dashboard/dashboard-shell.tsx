@@ -19,6 +19,10 @@ import {
   BadgeCheck,
   Briefcase,
   PlusCircle,
+  Users,
+  GraduationCap,
+  BarChart3,
+  Plug,
 } from "lucide-react";
 import type { NavItem, IconName } from "@/lib/dashboard-nav";
 
@@ -37,6 +41,10 @@ const ICON_MAP: Record<IconName, typeof ClipboardList> = {
   "badge-check": BadgeCheck,
   briefcase: Briefcase,
   "plus-circle": PlusCircle,
+  users: Users,
+  "graduation-cap": GraduationCap,
+  "bar-chart-3": BarChart3,
+  plug: Plug,
 };
 
 function isActive(pathname: string, href: string) {

@@ -12,7 +12,11 @@ export type IconName =
   | "user"
   | "badge-check"
   | "briefcase"
-  | "plus-circle";
+  | "plus-circle"
+  | "users"
+  | "graduation-cap"
+  | "bar-chart-3"
+  | "plug";
 
 export type NavItem = { href: string; label: string; icon: IconName };
 
@@ -27,6 +31,10 @@ export const STUDENT_NAV_ITEMS: NavItem[] = [
 ];
 
 export const COMPANY_NAV_ITEMS: NavItem[] = [
-  { href: "/company/dashboard", label: "Internships", icon: "briefcase" },
-  { href: "/company/opportunities/new", label: "Create internship", icon: "plus-circle" },
+  { href: "/company/dashboard", label: "Home", icon: "home" },
+  { href: "/company/internships", label: "Internships", icon: "briefcase" },
+  { href: "/company/candidates", label: "Candidates", icon: "users" },
+  { href: "/company/interns", label: "Interns", icon: "graduation-cap" },
+  { href: "/company/analytics", label: "Analytics", icon: "bar-chart-3" },
+  { href: "/company/integrations", label: "Integrations", icon: "plug" },
 ];
