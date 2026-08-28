@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
-import { signOut } from "@/app/(auth)/actions";
+import { AccountMenu } from "@/components/dashboard/account-menu";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 import {
   Menu,
   X,
@@ -92,11 +93,22 @@ export function DashboardShell({
   navItems,
   eyebrow,
   displayName,
+  accountSubLabel = "Account",
+  personName,
+  personEmail,
+  showTopBar = false,
 }: {
   children: React.ReactNode;
   navItems: NavItem[];
   eyebrow: string;
   displayName: string;
+  /** Sub-label under the sidebar footer name, e.g. "Company account". */
+  accountSubLabel?: string;
+  /** Signed-in person's identity for the top-bar avatar — distinct from the company/workspace name in the sidebar footer. */
+  personName?: string;
+  personEmail?: string;
+  /** Adds the slim bell + avatar bar above the main content — Company only for now. */
+  showTopBar?: boolean;
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -194,14 +206,7 @@ export function DashboardShell({
               </div>
             </div>
           ) : (
-            <>
-              <p className="truncate px-1 text-sm font-medium text-navy">{displayName}</p>
-              <form action={signOut}>
-                <button type="submit" className="mt-1 px-1 text-xs text-navy/40 transition-colors hover:text-navy/70">
-                  Sign out
-                </button>
-              </form>
-            </>
+            <AccountMenu label={displayName} subLabel={accountSubLabel} variant="sidebar" />
           )}
         </div>
       </aside>
@@ -248,19 +253,22 @@ export function DashboardShell({
               ))}
             </nav>
             <div className="mt-auto border-t border-navy/10 px-4 py-4">
-              <p className="truncate px-1 text-sm font-medium text-navy">{displayName}</p>
-              <form action={signOut}>
-                <button type="submit" className="mt-1 px-1 text-xs text-navy/40 hover:text-navy/70">
-                  Sign out
-                </button>
-              </form>
+              <AccountMenu label={displayName} subLabel={accountSubLabel} variant="sidebar" />
             </div>
           </div>
         </div>
       )}
 
       {/* The only scroll container in the authenticated shell */}
-      <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {showTopBar && (
+          <div className="hidden shrink-0 items-center justify-end gap-1 border-b border-navy/10 px-6 py-2.5 sm:flex">
+            <NotificationBell />
+            <AccountMenu label={personName ?? displayName} subLabel={personEmail ?? "Account"} variant="topbar" />
+          </div>
+        )}
+        <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+      </div>
     </div>
   );
 }

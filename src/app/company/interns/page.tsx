@@ -1,24 +1,36 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb, schema } from "@/db";
-import { computeProgramProgress } from "@/lib/company/program-progress";
+import { getCompanyHomeData } from "@/lib/company/home-data";
+import { CompanyPageContainer, CompanyPageHeader } from "@/components/company/page-shell";
+import { MetricCard } from "@/components/company/metric-card";
+import { InternStatusBadge } from "@/components/company/status-badges";
+import { QuerySelect } from "@/components/company/query-select";
+import { ExportCsvButton } from "@/components/company/export-csv-button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, Users, TriangleAlert, ShieldAlert, SearchX } from "lucide-react";
 
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  "On track": "default",
-  "Not started": "secondary",
-  "Behind schedule": "destructive",
-  Completed: "outline",
-};
+const STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "All statuses" },
+  { value: "on_track", label: "On track" },
+  { value: "needs_attention", label: "Needs attention" },
+  { value: "behind_schedule", label: "Behind schedule" },
+  { value: "completed", label: "Completed" },
+];
 
-export default async function CompanyInternsPage() {
+export default async function CompanyInternsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
+  const params = await searchParams;
 
   const db = getDb();
   const [membership] = await db
@@ -30,97 +42,146 @@ export default async function CompanyInternsPage() {
 
   if (!membership) {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-20 text-center text-navy/60">
-        This account isn&apos;t linked to a company yet.
-      </div>
+      <CompanyPageContainer>
+        <p className="text-center text-navy/60">This account isn&apos;t linked to a company yet.</p>
+      </CompanyPageContainer>
     );
   }
 
-  const opportunities = await db
-    .select({ id: schema.opportunities.id })
-    .from(schema.opportunities)
-    .where(eq(schema.opportunities.companyId, membership.company.id));
-  const opportunityIds = opportunities.map((o) => o.id);
+  const data = await getCompanyHomeData(membership.company.id);
+  const q = typeof params.q === "string" ? params.q.trim().toLowerCase() : "";
+  const statusFilter = typeof params.status === "string" ? params.status : "all";
 
-  const applications = opportunityIds.length
-    ? await db
-        .select({ id: schema.applications.id })
-        .from(schema.applications)
-        .where(inArray(schema.applications.opportunityId, opportunityIds))
-    : [];
-  const applicationIds = applications.map((a) => a.id);
+  const rowsWithDisplayStatus = data.allInternRows.map((r) => ({
+    ...r,
+    displayStatus: r.programStatus === "completed" ? ("completed" as const) : r.severity,
+  }));
 
-  const offers = applicationIds.length
-    ? await db.select().from(schema.internshipOffers).where(inArray(schema.internshipOffers.applicationId, applicationIds))
-    : [];
-  const offerIds = offers.map((o) => o.id);
+  const onTrackCount = rowsWithDisplayStatus.filter((r) => r.programStatus === "active" && (r.severity === "on_track" || r.severity === "not_started")).length;
+  const needsAttentionCount = rowsWithDisplayStatus.filter((r) => r.programStatus === "active" && r.severity === "needs_attention").length;
+  const behindCount = rowsWithDisplayStatus.filter((r) => r.programStatus === "active" && r.severity === "behind_schedule").length;
 
-  const programs = offerIds.length
-    ? await db.select().from(schema.internshipPrograms).where(inArray(schema.internshipPrograms.offerId, offerIds))
-    : [];
-  const programIds = programs.map((p) => p.id);
+  let rows = rowsWithDisplayStatus;
+  if (statusFilter !== "all") rows = rows.filter((r) => r.displayStatus === statusFilter);
+  if (q) rows = rows.filter((r) => r.internName.toLowerCase().includes(q) || r.role.toLowerCase().includes(q));
 
-  const weeks = programIds.length
-    ? await db.select().from(schema.internshipWeeks).where(inArray(schema.internshipWeeks.programId, programIds))
-    : [];
-  const weekIds = weeks.map((w) => w.id);
-  const tasks = weekIds.length
-    ? await db.select().from(schema.internshipTasks).where(inArray(schema.internshipTasks.weekId, weekIds))
-    : [];
-
-  const rows = programs
-    .map((program) => {
-      const programWeeks = weeks.filter((w) => w.programId === program.id);
-      const programWeekIds = new Set(programWeeks.map((w) => w.id));
-      const programTasks = tasks.filter((t) => programWeekIds.has(t.weekId));
-      const progress = computeProgramProgress(program, programWeeks, programTasks);
-      return {
-        program,
-        progress,
-        statusLabel: program.status === "completed" ? "Completed" : progress.statusLabel,
-      };
-    })
-    .sort((a, b) => {
-      if (a.program.status !== b.program.status) return a.program.status === "active" ? -1 : 1;
-      return a.statusLabel === "Behind schedule" ? -1 : 1;
-    });
+  const csvRows = rows.map((r) => [
+    r.internName,
+    r.role,
+    `Week ${r.currentWeekNumber} of ${r.durationWeeks}`,
+    `${r.tasksDone}/${r.tasksTotal}`,
+    r.displayStatus,
+  ]);
 
   return (
-    <div className="mx-auto max-w-screen-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
-      <p className="text-xs font-medium uppercase tracking-[0.12em] text-teal-ink">Interns</p>
-      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">All interns</h1>
-      <p className="mt-2 max-w-2xl text-sm text-navy/60">Every internship program, active and completed.</p>
+    <CompanyPageContainer>
+      <CompanyPageHeader
+        eyebrow="Interns"
+        title="All interns"
+        description="Every internship program, active and completed."
+        actions={
+          <ExportCsvButton
+            filename="interns.csv"
+            headers={["Intern", "Role", "Program progress", "Tasks", "Status"]}
+            rows={csvRows}
+          />
+        }
+      />
 
-      {rows.length === 0 ? (
+      {data.allInternRows.length === 0 ? (
         <EmptyState
           icon={GraduationCap}
           title="No interns yet"
           description="Once you invite a candidate and they accept, their internship program will show up here."
         />
       ) : (
-        <Card className="mt-8 rounded-xl border border-navy/10 shadow-none ring-0">
-          <CardContent className="divide-y divide-navy/8 px-6">
-            {rows.map(({ program, progress, statusLabel }) => (
-              <Link
-                key={program.id}
-                href={`/company/offers/${program.offerId}/program`}
-                className="flex items-center justify-between gap-4 py-4"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-navy">{program.internName}</p>
-                    <Badge variant={STATUS_VARIANT[statusLabel]}>{statusLabel}</Badge>
-                  </div>
-                  <p className="mt-0.5 truncate text-xs text-navy/50">
-                    {program.role} · Week {progress.currentWeekNumber} of {program.durationWeeks} · Tasks{" "}
-                    {progress.tasksDone}/{progress.tasksTotal}
-                  </p>
+        <>
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <MetricCard icon={GraduationCap} label="Total interns" value={data.allInternRows.length} />
+            <MetricCard icon={Users} label="On track" value={onTrackCount} />
+            <MetricCard icon={TriangleAlert} label="Needs attention" value={needsAttentionCount} />
+            <MetricCard icon={ShieldAlert} label="Behind schedule" value={behindCount} />
+          </div>
+
+          <Card className="mt-6 rounded-xl border border-navy/10 shadow-none ring-0">
+            <CardContent className="px-0">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                <form method="get">
+                  <label htmlFor="intern-search" className="sr-only">
+                    Search interns or roles
+                  </label>
+                  <input
+                    id="intern-search"
+                    type="text"
+                    name="q"
+                    defaultValue={q}
+                    placeholder="Search interns or roles..."
+                    className="h-8 w-56 rounded-lg border border-navy/15 bg-white px-3 text-sm text-navy placeholder:text-navy/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+                  />
+                </form>
+                <QuerySelect param="status" value={statusFilter} options={STATUS_FILTER_OPTIONS} className="h-8" />
+              </div>
+
+              {rows.length === 0 ? (
+                <div className="px-5 pb-2">
+                  <EmptyState icon={SearchX} title="No interns match" description="Try a different search or status filter." />
                 </div>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-navy/10 hover:bg-transparent">
+                      <TableHead className="pl-5 text-xs uppercase tracking-wide text-navy/45">Intern</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wide text-navy/45">Role</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wide text-navy/45">Program progress</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wide text-navy/45">Tasks</TableHead>
+                      <TableHead className="pr-5 text-xs uppercase tracking-wide text-navy/45">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((row) => {
+                      const weekPct = row.durationWeeks > 0 ? Math.round((row.currentWeekNumber / row.durationWeeks) * 100) : 0;
+                      const taskPct = row.tasksTotal > 0 ? Math.round((row.tasksDone / row.tasksTotal) * 100) : 0;
+                      return (
+                        <TableRow key={row.programId} className="border-navy/8">
+                          <TableCell className="pl-5">
+                            <Link href={`/company/offers/${row.offerId}/program`} className="flex items-center gap-2.5">
+                              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-navy/8 text-xs font-semibold text-navy/60">
+                                {row.internName.charAt(0).toUpperCase()}
+                              </span>
+                              <span className="font-medium text-navy hover:text-teal-ink">{row.internName}</span>
+                            </Link>
+                          </TableCell>
+                          <TableCell className="text-navy/65">{row.role}</TableCell>
+                          <TableCell className="min-w-40">
+                            <p className="text-xs text-navy/55">
+                              Week {row.currentWeekNumber} of {row.durationWeeks}
+                            </p>
+                            <Progress value={weekPct} className="mt-1 w-32" />
+                            <p className="mt-0.5 text-xs text-navy/45">{weekPct}% complete</p>
+                          </TableCell>
+                          <TableCell className="min-w-32">
+                            <p className="text-xs text-navy/55">
+                              {row.tasksDone} of {row.tasksTotal}
+                            </p>
+                            <Progress value={taskPct} className="mt-1 w-24" />
+                            <p className="mt-0.5 text-xs text-navy/45">{taskPct}% complete</p>
+                          </TableCell>
+                          <TableCell className="pr-5">
+                            <InternStatusBadge severity={row.programStatus === "completed" ? "completed" : row.severity} />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+              <p className="px-5 py-3 text-xs text-navy/45">
+                Showing 1 to {rows.length} of {rows.length} intern{rows.length === 1 ? "" : "s"}
+              </p>
+            </CardContent>
+          </Card>
+        </>
       )}
-    </div>
+    </CompanyPageContainer>
   );
 }

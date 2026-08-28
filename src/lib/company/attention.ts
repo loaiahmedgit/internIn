@@ -11,6 +11,7 @@ export interface AttentionItem {
   subLabel: string;
   ctaLabel: string;
   ctaHref: string;
+  icon: "review" | "schedule" | "draft";
   /** Lower sorts first — review queues outrank behind-schedule interns outrank incomplete drafts. */
   priority: 1 | 2 | 3;
 }
@@ -21,10 +22,11 @@ export interface ReviewQueueInput {
   candidatesToReview: number;
 }
 
-export interface BehindProgramInput {
+export interface AttentionProgramInput {
   offerId: string;
   internName: string;
   role: string;
+  severity: "needs_attention" | "behind_schedule";
 }
 
 export interface IncompleteDraftInput {
@@ -34,7 +36,7 @@ export interface IncompleteDraftInput {
 
 export function buildAttentionItems(input: {
   reviewQueues: ReviewQueueInput[];
-  behindPrograms: BehindProgramInput[];
+  attentionPrograms: AttentionProgramInput[];
   incompleteDrafts: IncompleteDraftInput[];
 }): AttentionItem[] {
   const items: AttentionItem[] = [];
@@ -47,17 +49,20 @@ export function buildAttentionItems(input: {
       subLabel: q.role,
       ctaLabel: "Review candidates",
       ctaHref: `/company/opportunities/${q.opportunityId}`,
+      icon: "review",
       priority: 1,
     });
   }
 
-  for (const p of input.behindPrograms) {
+  for (const p of input.attentionPrograms) {
+    const verb = p.severity === "behind_schedule" ? "is behind schedule" : "needs attention";
     items.push({
-      key: `behind-${p.offerId}`,
-      message: `${p.internName}'s program is behind schedule`,
+      key: `program-${p.offerId}`,
+      message: `${p.internName}'s program ${verb}`,
       subLabel: p.role,
       ctaLabel: "View intern",
       ctaHref: `/company/offers/${p.offerId}/program`,
+      icon: "schedule",
       priority: 2,
     });
   }
@@ -69,6 +74,7 @@ export function buildAttentionItems(input: {
       subLabel: "Not yet published",
       ctaLabel: "Continue setup",
       ctaHref: `/company/opportunities/${d.opportunityId}`,
+      icon: "draft",
       priority: 3,
     });
   }

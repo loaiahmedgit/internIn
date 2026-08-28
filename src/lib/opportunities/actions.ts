@@ -228,6 +228,35 @@ export async function shortlistApplicationAction(applicationId: string) {
   });
 }
 
+/** Mirrors shortlistApplicationAction exactly — the other real decision a company can make on an application. */
+export async function declineApplicationAction(applicationId: string) {
+  const validatedApplicationId = IdSchema.parse(applicationId);
+  const { companyId, userId } = await getCompanyIdForCurrentUser();
+  const db = getDb();
+
+  const [application] = await db
+    .select({ id: schema.applications.id, opportunityCompanyId: schema.opportunities.companyId })
+    .from(schema.applications)
+    .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
+    .where(eq(schema.applications.id, validatedApplicationId))
+    .limit(1);
+  if (!application || application.opportunityCompanyId !== companyId) {
+    throw new Error("Not authorized for this application.");
+  }
+
+  await db
+    .update(schema.applications)
+    .set({ status: "declined", updatedAt: new Date() })
+    .where(eq(schema.applications.id, validatedApplicationId));
+
+  await db.insert(schema.eventLog).values({
+    entityType: "application",
+    entityId: validatedApplicationId,
+    eventType: "application_declined",
+    actorUserId: userId,
+  });
+}
+
 /**
  * The defining moment (docs/03 + docs/06): a company converts evidence into
  * an offer. Per the MVP monetization decision, this must visibly trigger the

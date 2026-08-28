@@ -1,45 +1,83 @@
+import { CompanyPageContainer, CompanyPageHeader } from "@/components/company/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Mail, Hash, FileStack, KanbanSquare } from "lucide-react";
+import { ShieldCheck, ArrowRight } from "lucide-react";
+import { TeamsIcon, GoogleIcon, SlackIcon, NotionIcon, JiraIcon } from "@/components/company/brand-icons";
 
-const INTEGRATIONS = [
-  { name: "Microsoft Teams", description: "Get candidate and intern updates in a Teams channel.", icon: MessageSquare },
-  { name: "Google Workspace", description: "Sync internship calendars and shared documents.", icon: Mail },
-  { name: "Slack", description: "Post new submissions and offers to a Slack channel.", icon: Hash },
-  { name: "Notion", description: "Mirror internship programs into a Notion workspace.", icon: FileStack },
-  { name: "Jira", description: "Track internship tasks alongside your engineering board.", icon: KanbanSquare },
+const CATEGORIES: {
+  name: string;
+  integrations: { name: string; description: string; icon: React.ComponentType }[];
+}[] = [
+  {
+    name: "Communication",
+    integrations: [
+      { name: "Microsoft Teams", description: "Send candidate, intern and supervisor updates into selected Teams channels.", icon: TeamsIcon },
+      { name: "Google Workspace", description: "Sync internship calendars and shared documents with your team's Workspace.", icon: GoogleIcon },
+      { name: "Slack", description: "Post new submissions and offers to a Slack channel your team already watches.", icon: SlackIcon },
+    ],
+  },
+  {
+    name: "Productivity",
+    integrations: [
+      { name: "Notion", description: "Use approved Notion pages as internship resources and program documentation.", icon: NotionIcon },
+      { name: "Jira", description: "Sync approved internship tasks with the team's existing Jira workflow.", icon: JiraIcon },
+    ],
+  },
 ];
 
 export default function CompanyIntegrationsPage() {
   return (
-    <div className="mx-auto max-w-screen-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
-      <p className="text-xs font-medium uppercase tracking-[0.12em] text-teal-ink">Integrations</p>
-      <h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.04em] text-navy">Integrations</h1>
-      <p className="mt-2 max-w-2xl text-sm text-navy/60">
-        Connect the tools your team already uses. None of these are wired up yet — this is a preview of what&apos;s
-        coming.
-      </p>
+    <CompanyPageContainer>
+      <CompanyPageHeader
+        eyebrow="Integrations"
+        title="Connect your team's tools"
+        description="Bring your existing tools into internIn so your team can manage internships without unnecessary context switching."
+      />
 
-      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {INTEGRATIONS.map((integration) => (
-          <Card key={integration.name} className="rounded-xl border border-navy/10 shadow-none ring-0">
-            <CardContent className="px-5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex size-9 items-center justify-center rounded-lg bg-teal/10">
-                  <integration.icon className="size-4 text-teal-ink" aria-hidden="true" />
-                </div>
-                <Badge variant="secondary">Coming soon</Badge>
-              </div>
-              <p className="mt-3 text-sm font-medium text-navy">{integration.name}</p>
-              <p className="mt-1 text-xs text-navy/50">{integration.description}</p>
-              <Button variant="outline" size="sm" className="mt-4 w-full" disabled>
-                Connect
-              </Button>
-            </CardContent>
-          </Card>
+      <div className="mt-8 space-y-8">
+        {CATEGORIES.map((category) => (
+          <section key={category.name}>
+            <h2 className="text-sm font-semibold text-navy">{category.name}</h2>
+            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {category.integrations.map((integration) => (
+                <Card key={integration.name} className="rounded-xl border border-navy/10 shadow-none ring-0">
+                  <CardContent className="px-5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex size-9 items-center justify-center rounded-lg border border-navy/10">
+                        <integration.icon />
+                      </div>
+                      <Badge variant="secondary">Coming soon</Badge>
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-navy">{integration.name}</p>
+                    <p className="mt-1 text-xs text-navy/55">{integration.description}</p>
+                    <Button variant="outline" size="sm" className="mt-4 w-full" disabled>
+                      Connect
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
-    </div>
+
+      <Card className="mt-8 rounded-xl border border-navy/10 shadow-none ring-0">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 px-5">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal/10">
+              <ShieldCheck className="size-4 text-teal-ink" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-navy">Secure by design</p>
+              <p className="text-xs text-navy/55">We use industry-standard encryption and follow best practices to keep your data safe.</p>
+            </div>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-navy/40">
+            Learn more <ArrowRight className="size-3.5" aria-hidden="true" />
+          </span>
+        </CardContent>
+      </Card>
+    </CompanyPageContainer>
   );
 }

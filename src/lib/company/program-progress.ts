@@ -1,13 +1,17 @@
 /**
  * Derives an honest progress signal for an internship program from real
  * columns only — there is no due-date, milestone, or check-in schedule in
- * the schema (internship_weeks/internship_tasks carry no dates). "Behind
- * schedule" compares wall-clock weeks elapsed since the program was created
- * against the highest week whose tasks are all done, rather than inventing
- * a blocker/check-in field that doesn't exist yet.
+ * the schema (internship_weeks/internship_tasks carry no dates). Severity
+ * compares wall-clock weeks elapsed since the program was created against
+ * the highest week whose tasks are all done, rather than inventing a
+ * blocker/check-in field that doesn't exist yet. Two thresholds (1 week
+ * behind vs 2+) give the "needs attention" vs "behind schedule" distinction
+ * the UI wants, using the same real numbers at different sensitivity.
  */
 
 const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+export type ProgramSeverity = "not_started" | "on_track" | "needs_attention" | "behind_schedule" | "completed";
 
 export interface ProgramWeekInput {
   id: string;
@@ -25,8 +29,9 @@ export interface ProgramProgress {
   currentWeekTitle: string;
   tasksDone: number;
   tasksTotal: number;
-  behindSchedule: boolean;
-  statusLabel: "On track" | "Behind schedule" | "Not started";
+  /** expectedWeekNumber - (highestCompletedWeekNumber + 1), clamped to >= 0 */
+  gapWeeks: number;
+  severity: Exclude<ProgramSeverity, "completed">;
 }
 
 export function computeProgramProgress(
@@ -58,17 +63,20 @@ export function computeProgramProgress(
 
   const elapsedWeeks = Math.max(0, Math.floor((now.getTime() - program.createdAt.getTime()) / MS_PER_WEEK));
   const expectedWeekNumber = Math.min(elapsedWeeks + 1, program.durationWeeks);
-  const behindSchedule = expectedWeekNumber > highestCompletedWeekNumber + 1 && tasksTotal > 0;
+  const gapWeeks = tasksTotal > 0 ? Math.max(0, expectedWeekNumber - (highestCompletedWeekNumber + 1)) : 0;
 
-  const statusLabel: ProgramProgress["statusLabel"] =
-    tasksDone === 0 ? "Not started" : behindSchedule ? "Behind schedule" : "On track";
+  let severity: ProgramProgress["severity"];
+  if (tasksDone === 0 && gapWeeks === 0) severity = "not_started";
+  else if (gapWeeks === 0) severity = "on_track";
+  else if (gapWeeks === 1) severity = "needs_attention";
+  else severity = "behind_schedule";
 
   return {
     currentWeekNumber: currentWeek?.weekNumber ?? 1,
     currentWeekTitle: currentWeek?.title ?? "",
     tasksDone,
     tasksTotal,
-    behindSchedule,
-    statusLabel,
+    gapWeeks,
+    severity,
   };
 }
