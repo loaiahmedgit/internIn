@@ -20,14 +20,29 @@ const EXAMPLE_PROMPTS = [
   "A software engineering intern who can help fix bugs and write small features, beginner is okay.",
 ];
 
-export function CreateInternshipWizard() {
-  const [step, setStep] = useState<Step>("describe-role");
+/**
+ * `initial` resumes an existing draft instead of starting a fresh wizard —
+ * used by /company/opportunities/[id]/setup. The wizard is otherwise
+ * entirely client-state with no partial save, so a draft with no challenge
+ * yet (or an unpublished challenge already generated) had nowhere to
+ * continue from before this; "Continue setup" just landed on the empty
+ * candidates page.
+ */
+export function CreateInternshipWizard({
+  initial,
+}: {
+  initial?: { opportunityId: string; internship: InternshipDraft; challenge?: Challenge };
+} = {}) {
+  const isResuming = !!initial;
+  const [step, setStep] = useState<Step>(() =>
+    initial?.challenge ? "challenge" : initial ? "describe-work" : "describe-role",
+  );
   const [roleDescription, setRoleDescription] = useState("");
-  const [internship, setInternship] = useState<InternshipDraft | null>(null);
+  const [internship, setInternship] = useState<InternshipDraft | null>(() => initial?.internship ?? null);
   const [workDescription, setWorkDescription] = useState("");
-  const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [challenge, setChallenge] = useState<Challenge | null>(() => initial?.challenge ?? null);
   const [loading, setLoading] = useState(false);
-  const [opportunityId, setOpportunityId] = useState<string | null>(null);
+  const [opportunityId, setOpportunityId] = useState<string | null>(() => initial?.opportunityId ?? null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   async function handleGenerateInternship() {
@@ -212,10 +227,12 @@ export function CreateInternshipWizard() {
               <ThinkingIndicator label="Building a realistic challenge..." />
             </div>
           ) : (
-            <div className="mt-6 flex items-center justify-between">
-              <Button variant="ghost" onClick={() => setStep("review-internship")}>
-                <ArrowLeft className="mr-1.5 size-4" /> Back
-              </Button>
+            <div className={`mt-6 flex items-center ${isResuming ? "justify-end" : "justify-between"}`}>
+              {!isResuming && (
+                <Button variant="ghost" onClick={() => setStep("review-internship")}>
+                  <ArrowLeft className="mr-1.5 size-4" /> Back
+                </Button>
+              )}
               <Button
                 onClick={handleGenerateChallenge}
                 disabled={!workDescription.trim()}

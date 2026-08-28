@@ -170,7 +170,15 @@ export default async function CompanyHomePage() {
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
                           <Button
-                            render={<Link href={`/company/opportunities/${row.opportunityId}`} />}
+                            render={
+                              <Link
+                                href={
+                                  row.status === "draft"
+                                    ? `/company/opportunities/${row.opportunityId}/setup`
+                                    : `/company/opportunities/${row.opportunityId}`
+                                }
+                              />
+                            }
                             nativeButton={false}
                             variant="ghost"
                             size="sm"
@@ -184,8 +192,18 @@ export default async function CompanyHomePage() {
                               <MoreHorizontal className="size-4" aria-hidden="true" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem render={<Link href={`/company/opportunities/${row.opportunityId}`} />}>
-                                Manage internship
+                              <DropdownMenuItem
+                                render={
+                                  <Link
+                                    href={
+                                      row.status === "draft"
+                                        ? `/company/opportunities/${row.opportunityId}/setup`
+                                        : `/company/opportunities/${row.opportunityId}`
+                                    }
+                                  />
+                                }
+                              >
+                                {row.status === "draft" ? "Continue setup" : "Manage internship"}
                               </DropdownMenuItem>
                               {row.status === "published" && (
                                 <DropdownMenuItem render={<Link href={`/opportunities/${row.opportunityId}`} />}>

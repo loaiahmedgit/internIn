@@ -152,7 +152,14 @@ export default async function CompanyInternshipsPage({
                   {rows.map((row) => (
                     <TableRow key={row.opportunityId} className="border-navy/8">
                       <TableCell className="pl-5">
-                        <Link href={`/company/opportunities/${row.opportunityId}`} className="font-medium text-navy hover:text-teal-ink">
+                        <Link
+                          href={
+                            row.status === "draft"
+                              ? `/company/opportunities/${row.opportunityId}/setup`
+                              : `/company/opportunities/${row.opportunityId}`
+                          }
+                          className="font-medium text-navy hover:text-teal-ink"
+                        >
                           {row.role}
                         </Link>
                       </TableCell>
@@ -171,7 +178,17 @@ export default async function CompanyInternshipsPage({
                             <MoreHorizontal className="size-4" aria-hidden="true" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem render={<Link href={`/company/opportunities/${row.opportunityId}`} />}>
+                            <DropdownMenuItem
+                              render={
+                                <Link
+                                  href={
+                                    row.status === "draft"
+                                      ? `/company/opportunities/${row.opportunityId}/setup`
+                                      : `/company/opportunities/${row.opportunityId}`
+                                  }
+                                />
+                              }
+                            >
                               {row.status === "draft" ? "Continue setup" : "View candidates"}
                             </DropdownMenuItem>
                             {row.status === "published" && (

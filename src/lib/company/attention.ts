@@ -73,7 +73,7 @@ export function buildAttentionItems(input: {
       message: `${d.role} draft is incomplete`,
       subLabel: "Not yet published",
       ctaLabel: "Continue setup",
-      ctaHref: `/company/opportunities/${d.opportunityId}`,
+      ctaHref: `/company/opportunities/${d.opportunityId}/setup`,
       icon: "draft",
       priority: 3,
     });
