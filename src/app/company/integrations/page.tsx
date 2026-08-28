@@ -15,6 +15,7 @@ import {
   TrelloIcon,
   NotionIcon,
   AsanaIcon,
+  DropboxIcon,
 } from "@/components/company/brand-icons";
 
 const CATEGORIES: {
@@ -50,6 +51,7 @@ const CATEGORIES: {
     name: "Files",
     integrations: [
       { name: "Google Drive", description: "Keep challenge deliverables and program documents in a shared Drive folder.", icon: GoogleDriveIcon },
+      { name: "Dropbox", description: "Store challenge submissions and program files in a shared Dropbox folder.", icon: DropboxIcon },
     ],
   },
 ];

@@ -55,3 +55,8 @@ export function OutlookIcon() {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src="/brand/outlook.svg" alt="" aria-hidden="true" className="size-5" />;
 }
+
+export function DropboxIcon() {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/brand/dropbox.webp" alt="" aria-hidden="true" className="size-5" />;
+}
