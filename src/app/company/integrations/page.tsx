@@ -6,9 +6,11 @@ import { ShieldCheck, ArrowRight } from "lucide-react";
 import {
   TeamsIcon,
   SlackIcon,
+  LoomIcon,
   ZoomIcon,
   GoogleCalendarIcon,
   OutlookIcon,
+  CalendlyIcon,
   GoogleDriveIcon,
   JiraIcon,
   LinearIcon,
@@ -16,6 +18,7 @@ import {
   NotionIcon,
   AsanaIcon,
   DropboxIcon,
+  StripeIcon,
 } from "@/components/company/brand-icons";
 
 const CATEGORIES: {
@@ -27,6 +30,7 @@ const CATEGORIES: {
     integrations: [
       { name: "Microsoft Teams", description: "Send candidate, intern and supervisor updates into selected Teams channels.", icon: TeamsIcon },
       { name: "Slack", description: "Post new submissions and offers to a Slack channel your team already watches.", icon: SlackIcon },
+      { name: "Loom", description: "Share async video check-ins and feedback with interns instead of another meeting.", icon: LoomIcon },
     ],
   },
   {
@@ -35,6 +39,7 @@ const CATEGORIES: {
       { name: "Zoom", description: "Schedule and join candidate interviews and supervisor check-ins.", icon: ZoomIcon },
       { name: "Google Calendar", description: "Add interview slots and check-in reminders straight to your calendar.", icon: GoogleCalendarIcon },
       { name: "Outlook Calendar", description: "Same scheduling, synced with a Microsoft 365 calendar instead.", icon: OutlookIcon },
+      { name: "Calendly", description: "Let candidates pick an interview slot from your team's availability directly.", icon: CalendlyIcon },
     ],
   },
   {
@@ -52,6 +57,12 @@ const CATEGORIES: {
     integrations: [
       { name: "Google Drive", description: "Keep challenge deliverables and program documents in a shared Drive folder.", icon: GoogleDriveIcon },
       { name: "Dropbox", description: "Store challenge submissions and program files in a shared Dropbox folder.", icon: DropboxIcon },
+    ],
+  },
+  {
+    name: "Payments",
+    integrations: [
+      { name: "Stripe", description: "Pay the internship placement fee directly instead of the current manual step.", icon: StripeIcon },
     ],
   },
 ];

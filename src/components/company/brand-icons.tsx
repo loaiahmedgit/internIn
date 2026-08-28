@@ -1,4 +1,4 @@
-import { SiZoom, SiGoogledrive, SiJira, SiLinear, SiTrello, SiNotion, SiAsana } from "@icons-pack/react-simple-icons";
+import { SiZoom, SiGoogledrive, SiJira, SiLinear, SiTrello, SiNotion, SiAsana, SiStripe, SiCalendly, SiLoom } from "@icons-pack/react-simple-icons";
 
 /**
  * Real official marks via simple-icons wherever the brand permits redistribution
@@ -37,6 +37,15 @@ export function NotionIcon() {
 }
 export function AsanaIcon() {
   return <SiAsana color="default" size={ICON_SIZE} aria-hidden="true" />;
+}
+export function StripeIcon() {
+  return <SiStripe color="default" size={ICON_SIZE} aria-hidden="true" />;
+}
+export function CalendlyIcon() {
+  return <SiCalendly color="default" size={ICON_SIZE} aria-hidden="true" />;
+}
+export function LoomIcon() {
+  return <SiLoom color="default" size={ICON_SIZE} aria-hidden="true" />;
 }
 
 // Official brand SVGs served as static assets — plain <img>, not next/image
