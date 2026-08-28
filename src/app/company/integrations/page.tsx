@@ -1,4 +1,5 @@
 import { CompanyPageContainer, CompanyPageHeader } from "@/components/company/page-shell";
+import { HorizontalScrollRow } from "@/components/company/scroll-row";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -91,9 +92,12 @@ export default function CompanyIntegrationsPage() {
         {CATEGORIES.map((category) => (
           <section key={category.name}>
             <h2 className="text-sm font-semibold text-navy">{category.name}</h2>
-            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <HorizontalScrollRow>
               {category.integrations.map((integration) => (
-                <Card key={integration.name} className="rounded-xl border border-navy/10 shadow-none ring-0">
+                <Card
+                  key={integration.name}
+                  className="w-72 shrink-0 snap-start rounded-xl border border-navy/10 shadow-none ring-0"
+                >
                   <CardContent className="px-5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex size-9 items-center justify-center rounded-lg border border-navy/10">
@@ -109,7 +113,7 @@ export default function CompanyIntegrationsPage() {
                   </CardContent>
                 </Card>
               ))}
-            </div>
+            </HorizontalScrollRow>
           </section>
         ))}
       </div>
