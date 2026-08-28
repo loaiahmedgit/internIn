@@ -21,6 +21,7 @@ import {
   StripeIcon,
   OneDriveIcon,
   SharePointIcon,
+  DocuSignIcon,
 } from "@/components/company/brand-icons";
 
 const CATEGORIES: {
@@ -67,6 +68,12 @@ const CATEGORIES: {
     name: "Payments",
     integrations: [
       { name: "Stripe", description: "Pay the internship placement fee directly instead of the current manual step.", icon: StripeIcon },
+    ],
+  },
+  {
+    name: "Documents & signatures",
+    integrations: [
+      { name: "DocuSign", description: "Send and sign internship offer letters without leaving internIn.", icon: DocuSignIcon },
     ],
   },
 ];

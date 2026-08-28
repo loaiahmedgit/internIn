@@ -79,3 +79,9 @@ export function SharePointIcon() {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src="/brand/sharepoint.svg" alt="" aria-hidden="true" className="size-5" />;
 }
+
+export function DocuSignIcon() {
+  // Wordmark lockup, not a square mark — constrain by height only so it isn't squished.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/brand/docusign.svg" alt="" aria-hidden="true" className="h-5 w-auto" />;
+}
