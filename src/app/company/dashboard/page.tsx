@@ -7,7 +7,7 @@ import { getCompanyHomeData } from "@/lib/company/home-data";
 import { CompanyPageContainer, CompanyPageHeader } from "@/components/company/page-shell";
 import { MetricCard } from "@/components/company/metric-card";
 import { InternshipStatusBadge, InternStatusBadge } from "@/components/company/status-badges";
-import { TeamsIcon, GoogleIcon, SlackIcon, NotionIcon, JiraIcon } from "@/components/company/brand-icons";
+import { TeamsIcon, SlackIcon, ZoomIcon, JiraIcon, NotionIcon } from "@/components/company/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,10 +42,10 @@ const CHALLENGE_LABEL: Record<string, string> = {
 
 const INTEGRATIONS = [
   { name: "Microsoft Teams", icon: TeamsIcon },
-  { name: "Google Workspace", icon: GoogleIcon },
   { name: "Slack", icon: SlackIcon },
-  { name: "Notion", icon: NotionIcon },
+  { name: "Zoom", icon: ZoomIcon },
   { name: "Jira", icon: JiraIcon },
+  { name: "Notion", icon: NotionIcon },
 ];
 
 export default async function CompanyHomePage() {

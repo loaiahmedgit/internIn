@@ -3,7 +3,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, ArrowRight } from "lucide-react";
-import { TeamsIcon, GoogleIcon, SlackIcon, NotionIcon, JiraIcon } from "@/components/company/brand-icons";
+import {
+  TeamsIcon,
+  SlackIcon,
+  ZoomIcon,
+  GoogleCalendarIcon,
+  OutlookIcon,
+  GoogleDriveIcon,
+  JiraIcon,
+  LinearIcon,
+  TrelloIcon,
+  NotionIcon,
+  AsanaIcon,
+} from "@/components/company/brand-icons";
 
 const CATEGORIES: {
   name: string;
@@ -13,15 +25,31 @@ const CATEGORIES: {
     name: "Communication",
     integrations: [
       { name: "Microsoft Teams", description: "Send candidate, intern and supervisor updates into selected Teams channels.", icon: TeamsIcon },
-      { name: "Google Workspace", description: "Sync internship calendars and shared documents with your team's Workspace.", icon: GoogleIcon },
       { name: "Slack", description: "Post new submissions and offers to a Slack channel your team already watches.", icon: SlackIcon },
     ],
   },
   {
-    name: "Productivity",
+    name: "Meetings & calendar",
     integrations: [
-      { name: "Notion", description: "Use approved Notion pages as internship resources and program documentation.", icon: NotionIcon },
+      { name: "Zoom", description: "Schedule and join candidate interviews and supervisor check-ins.", icon: ZoomIcon },
+      { name: "Google Calendar", description: "Add interview slots and check-in reminders straight to your calendar.", icon: GoogleCalendarIcon },
+      { name: "Outlook Calendar", description: "Same scheduling, synced with a Microsoft 365 calendar instead.", icon: OutlookIcon },
+    ],
+  },
+  {
+    name: "Work management",
+    integrations: [
       { name: "Jira", description: "Sync approved internship tasks with the team's existing Jira workflow.", icon: JiraIcon },
+      { name: "Linear", description: "Track internship deliverables alongside your product roadmap in Linear.", icon: LinearIcon },
+      { name: "Trello", description: "Mirror an internship's weekly tasks onto a Trello board your team already uses.", icon: TrelloIcon },
+      { name: "Asana", description: "Assign and track internship tasks inside an existing Asana project.", icon: AsanaIcon },
+      { name: "Notion", description: "Use approved Notion pages as internship resources and program documentation.", icon: NotionIcon },
+    ],
+  },
+  {
+    name: "Files",
+    integrations: [
+      { name: "Google Drive", description: "Keep challenge deliverables and program documents in a shared Drive folder.", icon: GoogleDriveIcon },
     ],
   },
 ];
