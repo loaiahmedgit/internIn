@@ -69,3 +69,13 @@ export function DropboxIcon() {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src="/brand/dropbox.webp" alt="" aria-hidden="true" className="size-5" />;
 }
+
+export function OneDriveIcon() {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/brand/onedrive.svg" alt="" aria-hidden="true" className="size-5" />;
+}
+
+export function SharePointIcon() {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/brand/sharepoint.svg" alt="" aria-hidden="true" className="size-5" />;
+}

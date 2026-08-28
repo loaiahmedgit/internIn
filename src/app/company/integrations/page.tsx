@@ -19,6 +19,8 @@ import {
   AsanaIcon,
   DropboxIcon,
   StripeIcon,
+  OneDriveIcon,
+  SharePointIcon,
 } from "@/components/company/brand-icons";
 
 const CATEGORIES: {
@@ -57,6 +59,8 @@ const CATEGORIES: {
     integrations: [
       { name: "Google Drive", description: "Keep challenge deliverables and program documents in a shared Drive folder.", icon: GoogleDriveIcon },
       { name: "Dropbox", description: "Store challenge submissions and program files in a shared Dropbox folder.", icon: DropboxIcon },
+      { name: "OneDrive", description: "Keep challenge deliverables and program documents in a shared OneDrive folder.", icon: OneDriveIcon },
+      { name: "SharePoint", description: "Publish internship program documentation to a team SharePoint site.", icon: SharePointIcon },
     ],
   },
   {
