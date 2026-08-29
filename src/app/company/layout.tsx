@@ -23,7 +23,7 @@ export default async function CompanyLayout({ children }: { children: React.Reac
     <DashboardShell
       eyebrow="Company workspace"
       displayName={companyName || user?.fullName || ""}
-      accountSubLabel="Company account"
+      accountSubLabel="Company workspace"
       personName={user?.fullName}
       personEmail={user?.email}
       showTopBar

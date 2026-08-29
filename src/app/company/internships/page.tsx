@@ -179,8 +179,8 @@ export default async function CompanyInternshipsPage({
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Duration</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Location</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Mode</TableHead>
-                    <TableHead className="text-right text-xs uppercase tracking-wide text-navy/45">Applicants</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Deadline</TableHead>
+                    <TableHead className="pr-6 text-right text-xs uppercase tracking-wide text-navy/45">Applicants</TableHead>
+                    <TableHead className="pl-6 text-xs uppercase tracking-wide text-navy/45">Deadline</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Challenge</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Status</TableHead>
                     <TableHead className="pr-5 text-right text-xs uppercase tracking-wide text-navy/45">Actions</TableHead>
@@ -204,8 +204,8 @@ export default async function CompanyInternshipsPage({
                       <TableCell className="text-navy/65">{row.duration}</TableCell>
                       <TableCell className="max-w-40 truncate text-navy/65">{row.location}</TableCell>
                       <TableCell className="text-navy/65">{row.workMode ? WORK_MODE_LABEL[row.workMode] : "—"}</TableCell>
-                      <TableCell className="text-right tabular-nums text-navy/65">{row.applicantCount}</TableCell>
-                      <TableCell className="text-navy/65">
+                      <TableCell className="pr-6 text-right tabular-nums text-navy/65">{row.applicantCount}</TableCell>
+                      <TableCell className="pl-6 text-navy/65">
                         {row.applicationDeadline ? formatDeadline(row.applicationDeadline) : "—"}
                       </TableCell>
                       <TableCell>

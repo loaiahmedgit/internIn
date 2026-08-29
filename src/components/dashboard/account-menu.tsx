@@ -12,16 +12,20 @@ import { signOut } from "@/app/(auth)/actions";
 
 /**
  * One dropdown, two visual shells: the sidebar footer row (full label +
- * sub-label + chevron) and the compact top-bar avatar (initials only). Both
- * only ever offer Sign out — there's no company-settings or profile page to
- * link to yet, so the menu doesn't pretend one exists.
+ * optional email + sub-label + chevron) and the compact top-bar avatar
+ * (initials only). Both only ever offer Sign out — there's no
+ * company-settings, profile, or multi-workspace page to link to yet, so the
+ * menu doesn't pretend one exists.
  */
 export function AccountMenu({
   label,
+  email,
   subLabel,
   variant,
 }: {
   label: string;
+  /** Signed-in person's email — shown as a second line in the sidebar footer when provided. */
+  email?: string;
   subLabel: string;
   variant: "sidebar" | "topbar";
 }) {
@@ -42,6 +46,7 @@ export function AccountMenu({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-navy">{label}</span>
+            {email && <span className="block truncate text-xs text-navy/45">{email}</span>}
             <span className="block truncate text-xs text-navy/45">{subLabel}</span>
           </span>
           <ChevronDown className="size-3.5 shrink-0 text-navy/40" aria-hidden="true" />
@@ -63,6 +68,7 @@ export function AccountMenu({
       <DropdownMenuContent align={variant === "sidebar" ? "start" : "end"} className="w-48">
         <div className="px-1.5 py-1">
           <p className="truncate text-sm font-medium text-navy">{label}</p>
+          {email && <p className="truncate text-xs text-navy/45">{email}</p>}
           <p className="truncate text-xs text-navy/45">{subLabel}</p>
         </div>
         <DropdownMenuSeparator />

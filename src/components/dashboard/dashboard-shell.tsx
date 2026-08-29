@@ -199,14 +199,19 @@ export function DashboardShell({
               <div
                 className="flex size-8 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink"
                 role="img"
-                aria-label={displayName}
-                title={displayName}
+                aria-label={personName ?? displayName}
+                title={personName ?? displayName}
               >
-                {displayName.charAt(0).toUpperCase() || "?"}
+                {(personName ?? displayName).charAt(0).toUpperCase() || "?"}
               </div>
             </div>
           ) : (
-            <AccountMenu label={displayName} subLabel={accountSubLabel} variant="sidebar" />
+            <AccountMenu
+              label={personName ?? displayName}
+              email={personName ? personEmail : undefined}
+              subLabel={personName ? `${displayName} · ${accountSubLabel}` : accountSubLabel}
+              variant="sidebar"
+            />
           )}
         </div>
       </aside>
@@ -253,7 +258,12 @@ export function DashboardShell({
               ))}
             </nav>
             <div className="mt-auto border-t border-navy/10 px-4 py-4">
-              <AccountMenu label={displayName} subLabel={accountSubLabel} variant="sidebar" />
+              <AccountMenu
+                label={personName ?? displayName}
+                email={personName ? personEmail : undefined}
+                subLabel={personName ? `${displayName} · ${accountSubLabel}` : accountSubLabel}
+                variant="sidebar"
+              />
             </div>
           </div>
         </div>
@@ -262,9 +272,8 @@ export function DashboardShell({
       {/* The only scroll container in the authenticated shell */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {showTopBar && (
-          <div className="hidden shrink-0 items-center justify-end gap-1 border-b border-navy/10 px-6 py-2.5 sm:flex">
+          <div className="hidden shrink-0 items-center justify-end border-b border-navy/10 px-6 py-1.5 sm:flex">
             <NotificationBell />
-            <AccountMenu label={personName ?? displayName} subLabel={personEmail ?? "Account"} variant="topbar" />
           </div>
         )}
         <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
