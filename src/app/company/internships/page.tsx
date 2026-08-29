@@ -5,7 +5,7 @@ import { getDb, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { getCompanyHomeData } from "@/lib/company/home-data";
 import { CompanyPageContainer, CompanyPageHeader } from "@/components/company/page-shell";
-import { InternshipStatusBadge, ChallengeStatusBadge } from "@/components/company/status-badges";
+import { Badge } from "@/components/ui/badge";
 import { QuerySelect } from "@/components/company/query-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,11 +19,42 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-type TabKey = "all" | "published" | "draft";
+/**
+ * Wording local to this page only — Home still shows "Published" via the
+ * shared InternshipStatusBadge, which is untouched. "Draft/Open/Closed"
+ * matches the company's own internship lifecycle vocabulary; "open" is the
+ * same underlying opportunities.status === "published" value.
+ */
+const INTERNSHIP_STATUS_LABEL: Record<string, string> = { draft: "Draft", published: "Open", closed: "Closed" };
+const INTERNSHIP_STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
+  draft: "secondary",
+  published: "default",
+  closed: "outline",
+};
+
+// Collapses the 5 real challenge statuses (draft/ai_generated/pending_approval/
+// approved/published) plus "no challenge row at all" into the 3 states asked for.
+const CHALLENGE_STATUS_LABEL: Record<string, string> = {
+  none: "No challenge",
+  draft: "Draft",
+  pending_approval: "Draft",
+  approved: "Draft",
+  published: "Live",
+};
+const CHALLENGE_STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
+  none: "secondary",
+  draft: "secondary",
+  pending_approval: "secondary",
+  approved: "secondary",
+  published: "default",
+};
+
+type TabKey = "all" | "published" | "draft" | "closed";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "published", label: "Published" },
+  { key: "published", label: "Open" },
   { key: "draft", label: "Draft" },
+  { key: "closed", label: "Closed" },
 ];
 const SORT_OPTIONS = [
   { value: "newest", label: "Sort: Newest" },
@@ -64,6 +95,7 @@ export default async function CompanyInternshipsPage({
     all: data.internshipActivity.length,
     published: data.internshipActivity.filter((r) => r.status === "published").length,
     draft: data.internshipActivity.filter((r) => r.status === "draft").length,
+    closed: data.internshipActivity.filter((r) => r.status === "closed").length,
   };
 
   let rows = data.internshipActivity;
@@ -78,7 +110,7 @@ export default async function CompanyInternshipsPage({
       <CompanyPageHeader
         eyebrow="Internships"
         title="All internships"
-        description={data.internshipActivity.length > 0 ? `${counts.published} published · ${counts.all} total` : undefined}
+        description={data.internshipActivity.length > 0 ? `${counts.published} open · ${counts.all} total` : undefined}
         actions={
           <Button render={<Link href="/company/opportunities/new" />} nativeButton={false} className="bg-teal text-white hover:bg-teal/90">
             <Sparkles className="size-4" /> Create internship
@@ -167,10 +199,12 @@ export default async function CompanyInternshipsPage({
                       <TableCell className="text-navy/65">{row.location}</TableCell>
                       <TableCell className="text-navy/65">{row.applicantCount || "—"}</TableCell>
                       <TableCell>
-                        <ChallengeStatusBadge status={row.challengeStatus} />
+                        <Badge variant={CHALLENGE_STATUS_VARIANT[row.challengeStatus] ?? "secondary"}>
+                          {CHALLENGE_STATUS_LABEL[row.challengeStatus] ?? row.challengeStatus}
+                        </Badge>
                       </TableCell>
                       <TableCell>
-                        <InternshipStatusBadge status={row.status} />
+                        <Badge variant={INTERNSHIP_STATUS_VARIANT[row.status]}>{INTERNSHIP_STATUS_LABEL[row.status]}</Badge>
                       </TableCell>
                       <TableCell className="pr-5 text-right">
                         <DropdownMenu>
