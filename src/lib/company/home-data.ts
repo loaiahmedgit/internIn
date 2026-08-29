@@ -12,6 +12,9 @@ export interface InternshipActivityRow {
   workMode: "remote" | "onsite" | "hybrid" | null;
   slots: number;
   slotsFilled: number;
+  hoursPerWeek: number;
+  description: string;
+  skills: string[];
   applicantCount: number;
   candidatesToReview: number;
   challengeStatus: string;
@@ -197,6 +200,9 @@ export async function getCompanyHomeData(companyId: string): Promise<CompanyHome
       workMode: o.workMode,
       slots: o.slots,
       slotsFilled: slotsFilledByOpportunity.get(o.id) ?? 0,
+      hoursPerWeek: o.hoursPerWeek,
+      description: o.description,
+      skills: o.skills,
       applicantCount: applicantCountByOpportunity.get(o.id) ?? 0,
       candidatesToReview: reviewCountByOpportunity.get(o.id) ?? 0,
       challengeStatus: CHALLENGE_STATUS_LABEL[challengeByOpportunity.get(o.id)?.status ?? ""] ?? "none",

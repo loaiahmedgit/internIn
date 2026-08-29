@@ -213,7 +213,21 @@ export default async function CompanyInternshipsPage({
                         <Badge variant={INTERNSHIP_STATUS_VARIANT[row.status]}>{INTERNSHIP_STATUS_LABEL[row.status]}</Badge>
                       </TableCell>
                       <TableCell className="pr-5 text-right">
-                        <InternshipRowActions opportunityId={row.opportunityId} status={row.status} role={row.role} />
+                        <InternshipRowActions
+                          opportunityId={row.opportunityId}
+                          status={row.status}
+                          role={row.role}
+                          editDetails={{
+                            role: row.role,
+                            duration: row.duration,
+                            hoursPerWeek: row.hoursPerWeek,
+                            location: row.location,
+                            workMode: row.workMode,
+                            slots: row.slots,
+                            skills: row.skills,
+                            description: row.description,
+                          }}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}

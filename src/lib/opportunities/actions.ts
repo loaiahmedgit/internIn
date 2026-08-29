@@ -250,6 +250,35 @@ export async function duplicateOpportunityAction(opportunityId: string) {
   return copy.id as string;
 }
 
+/**
+ * Lets a company correct its own listing details — the fields captured at
+ * creation time (location, work mode, slots, etc.) — for an internship of
+ * any status. This is the only way location/workMode can be fixed on a
+ * published or closed opportunity; the create wizard has no "edit" mode.
+ */
+export async function updateOpportunityDetailsAction(opportunityId: string, details: InternshipDraft) {
+  const validatedOpportunityId = IdSchema.parse(opportunityId);
+  const validated = InternshipDraftSchema.parse(details);
+  const { companyId } = await getCompanyIdForCurrentUser();
+  await assertOwnsOpportunity(validatedOpportunityId, companyId);
+  const db = getDb();
+
+  await db
+    .update(schema.opportunities)
+    .set({
+      role: validated.role,
+      description: validated.description,
+      duration: validated.duration,
+      hoursPerWeek: validated.hoursPerWeek,
+      location: validated.location,
+      workMode: validated.workMode ?? null,
+      slots: validated.slots,
+      skills: validated.skills,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.opportunities.id, validatedOpportunityId));
+}
+
 export async function shortlistApplicationAction(applicationId: string) {
   const validatedApplicationId = IdSchema.parse(applicationId);
   const { companyId, userId } = await getCompanyIdForCurrentUser();

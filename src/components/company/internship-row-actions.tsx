@@ -11,20 +11,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { closeOpportunityAction, duplicateOpportunityAction } from "@/lib/opportunities/actions";
+import { EditInternshipDialog } from "@/components/company/edit-internship-dialog";
+import type { InternshipDraft } from "@/lib/ai";
 import { MoreHorizontal } from "lucide-react";
 
 export function InternshipRowActions({
   opportunityId,
   status,
   role,
+  editDetails,
 }: {
   opportunityId: string;
   status: "draft" | "published" | "closed";
   role: string;
+  editDetails: InternshipDraft;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   function handleClose() {
     setError(null);
@@ -68,6 +73,9 @@ export function InternshipRowActions({
           {status === "published" && (
             <DropdownMenuItem render={<Link href={`/opportunities/${opportunityId}`} />}>View public listing</DropdownMenuItem>
           )}
+          <DropdownMenuItem onClick={() => setEditOpen(true)} disabled={isPending}>
+            Edit details
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={handleDuplicate} disabled={isPending}>
             Duplicate internship
           </DropdownMenuItem>
@@ -78,6 +86,7 @@ export function InternshipRowActions({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      <EditInternshipDialog opportunityId={opportunityId} initial={editDetails} open={editOpen} onOpenChange={setEditOpen} />
     </div>
   );
 }
