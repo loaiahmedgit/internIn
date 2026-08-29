@@ -145,6 +145,8 @@ export const opportunities = pgTable(
     location: text("location").notNull(),
     /** Separate from `location` (which stays free-text, e.g. "Doha, Qatar") so the two never get conflated into one inconsistent string. Null for opportunities created before this field existed. */
     workMode: workModeEnum("work_mode"),
+    /** Optional — a company sets this when it wants to show a real application deadline. Null renders as "no deadline set", never a guessed date. */
+    applicationDeadline: timestamp("application_deadline", { withTimezone: true }),
     slots: integer("slots").notNull().default(1),
     skills: jsonb("skills").$type<string[]>().notNull().default([]),
     status: opportunityStatusEnum("status").notNull().default("draft"),

@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { eq } from "drizzle-orm";
 import { getCompanyHomeData } from "@/lib/company/home-data";
-import { CompanyPageContainer, CompanyPageHeader } from "@/components/company/page-shell";
+import { CompanyPageContainer } from "@/components/company/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { QuerySelect } from "@/components/company/query-select";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { InternshipRowActions } from "@/components/company/internship-row-actions";
-import { Sparkles, SearchX } from "lucide-react";
+import { formatDeadline } from "@/lib/format-date";
+import { Sparkles, SearchX, ChevronRight } from "lucide-react";
 
 const WORK_MODE_LABEL: Record<string, string> = { remote: "Remote", onsite: "On-site", hybrid: "Hybrid" };
 
@@ -23,10 +24,10 @@ const WORK_MODE_LABEL: Record<string, string> = { remote: "Remote", onsite: "On-
  * same underlying opportunities.status === "published" value.
  */
 const INTERNSHIP_STATUS_LABEL: Record<string, string> = { draft: "Draft", published: "Open", closed: "Closed" };
-const INTERNSHIP_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {
-  draft: "secondary",
-  published: "default",
-  closed: "destructive",
+const INTERNSHIP_STATUS_CLASS: Record<string, string> = {
+  draft: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  published: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  closed: "bg-destructive/10 text-destructive",
 };
 
 // Collapses the 5 real challenge statuses (draft/ai_generated/pending_approval/
@@ -38,12 +39,12 @@ const CHALLENGE_STATUS_LABEL: Record<string, string> = {
   approved: "Draft",
   published: "Live",
 };
-const CHALLENGE_STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
-  none: "secondary",
-  draft: "secondary",
-  pending_approval: "secondary",
-  approved: "secondary",
-  published: "default",
+const CHALLENGE_STATUS_CLASS: Record<string, string> = {
+  none: "",
+  draft: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  pending_approval: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  approved: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  published: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
 
 type TabKey = "all" | "published" | "draft" | "closed";
@@ -104,16 +105,22 @@ export default async function CompanyInternshipsPage({
 
   return (
     <CompanyPageContainer>
-      <CompanyPageHeader
-        eyebrow="Internships"
-        title="All internships"
-        description={data.internshipActivity.length > 0 ? `${counts.published} open · ${counts.all} total` : undefined}
-        actions={
-          <Button render={<Link href="/company/opportunities/new" />} nativeButton={false} className="bg-teal text-white hover:bg-teal/90">
-            <Sparkles className="size-4" /> Create internship
-          </Button>
-        }
-      />
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-navy/45">
+        <Link href="/company/dashboard" className="hover:text-navy">
+          Home
+        </Link>
+        <ChevronRight className="size-3" aria-hidden="true" />
+        <span className="text-navy/70">Internships</span>
+      </nav>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-navy">Internships</h1>
+          <p className="text-sm text-navy/55">Manage all your internship postings and their progress.</p>
+        </div>
+        <Button render={<Link href="/company/opportunities/new" />} nativeButton={false} className="bg-teal text-white hover:bg-teal/90">
+          <Sparkles className="size-4" /> Create internship
+        </Button>
+      </div>
 
       {data.internshipActivity.length === 0 ? (
         <EmptyState
@@ -124,7 +131,7 @@ export default async function CompanyInternshipsPage({
           ctaHref="/company/opportunities/new"
         />
       ) : (
-        <Card className="mt-6 rounded-xl border border-navy/10 shadow-none ring-0">
+        <Card className="mt-4 rounded-xl border border-navy/10 shadow-none ring-0">
           <CardContent className="px-0">
             <div className="flex flex-wrap items-center justify-between gap-3 px-5">
               <div className="flex gap-1 border-b border-transparent">
@@ -170,10 +177,11 @@ export default async function CompanyInternshipsPage({
                   <TableRow className="border-navy/10 hover:bg-transparent">
                     <TableHead className="pl-5 text-xs uppercase tracking-wide text-navy/45">Internship</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Duration</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Location / Mode</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Slots</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Location</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Mode</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Applicants</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Challenge status</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Deadline</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Challenge</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Status</TableHead>
                     <TableHead className="pr-5 text-right text-xs uppercase tracking-wide text-navy/45">Actions</TableHead>
                   </TableRow>
@@ -181,36 +189,34 @@ export default async function CompanyInternshipsPage({
                 <TableBody>
                   {rows.map((row) => (
                     <TableRow key={row.opportunityId} className="border-navy/8">
-                      <TableCell className="pl-5">
+                      <TableCell className="max-w-56 pl-5">
                         <Link
                           href={
                             row.status === "draft"
                               ? `/company/opportunities/${row.opportunityId}/setup`
                               : `/company/opportunities/${row.opportunityId}`
                           }
-                          className="font-medium text-navy hover:text-teal-ink"
+                          className="block truncate font-medium text-navy hover:text-teal-ink"
                         >
                           {row.role}
                         </Link>
                       </TableCell>
                       <TableCell className="text-navy/65">{row.duration}</TableCell>
+                      <TableCell className="max-w-40 truncate text-navy/65">{row.location}</TableCell>
+                      <TableCell className="text-navy/65">{row.workMode ? WORK_MODE_LABEL[row.workMode] : "—"}</TableCell>
+                      <TableCell className="tabular-nums text-navy/65">{row.applicantCount}</TableCell>
                       <TableCell className="text-navy/65">
-                        {row.location}
-                        {row.workMode && row.location.toLowerCase() !== WORK_MODE_LABEL[row.workMode].toLowerCase() && (
-                          <span className="text-navy/40"> · {WORK_MODE_LABEL[row.workMode]}</span>
-                        )}
+                        {row.applicationDeadline ? formatDeadline(row.applicationDeadline) : "—"}
                       </TableCell>
-                      <TableCell className="text-navy/65">
-                        {row.slotsFilled}/{row.slots}
-                      </TableCell>
-                      <TableCell className="text-navy/65">{row.applicantCount || "—"}</TableCell>
                       <TableCell>
-                        <Badge variant={CHALLENGE_STATUS_VARIANT[row.challengeStatus] ?? "secondary"}>
+                        <Badge variant="secondary" className={CHALLENGE_STATUS_CLASS[row.challengeStatus] ?? ""}>
                           {CHALLENGE_STATUS_LABEL[row.challengeStatus] ?? row.challengeStatus}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={INTERNSHIP_STATUS_VARIANT[row.status]}>{INTERNSHIP_STATUS_LABEL[row.status]}</Badge>
+                        <Badge variant="secondary" className={INTERNSHIP_STATUS_CLASS[row.status]}>
+                          {INTERNSHIP_STATUS_LABEL[row.status]}
+                        </Badge>
                       </TableCell>
                       <TableCell className="pr-5 text-right">
                         <InternshipRowActions
@@ -223,6 +229,7 @@ export default async function CompanyInternshipsPage({
                             hoursPerWeek: row.hoursPerWeek,
                             location: row.location,
                             workMode: row.workMode,
+                            applicationDeadline: row.applicationDeadline,
                             slots: row.slots,
                             skills: row.skills,
                             description: row.description,

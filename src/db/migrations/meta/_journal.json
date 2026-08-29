@@ -57,6 +57,13 @@
       "when": 1788027639462,
       "tag": "0007_sour_gorilla_man",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788034224297,
+      "tag": "0008_zippy_wild_child",
+      "breakpoints": true
     }
   ]
 }

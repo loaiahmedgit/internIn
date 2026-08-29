@@ -10,7 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { closeOpportunityAction, duplicateOpportunityAction } from "@/lib/opportunities/actions";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { closeOpportunityAction, duplicateOpportunityAction, deleteOpportunityAction } from "@/lib/opportunities/actions";
 import { EditInternshipDialog } from "@/components/company/edit-internship-dialog";
 import type { InternshipDraft } from "@/lib/ai";
 import { MoreHorizontal } from "lucide-react";
@@ -30,6 +31,7 @@ export function InternshipRowActions({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   function handleClose() {
     setError(null);
@@ -55,6 +57,19 @@ export function InternshipRowActions({
     });
   }
 
+  function handleDelete() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await deleteOpportunityAction(opportunityId);
+        setDeleteOpen(false);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't delete this draft.");
+      }
+    });
+  }
+
   return (
     <div className="flex items-center justify-end gap-1.5">
       {error && <span className="text-xs text-red-600">{error}</span>}
@@ -63,30 +78,63 @@ export function InternshipRowActions({
           <MoreHorizontal className="size-4" aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            render={
-              <Link href={status === "draft" ? `/company/opportunities/${opportunityId}/setup` : `/company/opportunities/${opportunityId}`} />
-            }
-          >
-            {status === "draft" ? "Continue setup" : "View candidates"}
-          </DropdownMenuItem>
-          {status === "published" && (
-            <DropdownMenuItem render={<Link href={`/opportunities/${opportunityId}`} />}>View public listing</DropdownMenuItem>
-          )}
-          <DropdownMenuItem onClick={() => setEditOpen(true)} disabled={isPending}>
-            Edit details
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleDuplicate} disabled={isPending}>
-            Duplicate internship
-          </DropdownMenuItem>
-          {status === "published" && (
-            <DropdownMenuItem onClick={handleClose} disabled={isPending} variant="destructive">
-              Close internship
-            </DropdownMenuItem>
+          {status === "draft" ? (
+            <>
+              <DropdownMenuItem render={<Link href={`/company/opportunities/${opportunityId}/setup`} />}>
+                Continue setup
+              </DropdownMenuItem>
+              <DropdownMenuItem render={<Link href={`/opportunities/${opportunityId}`} />}>Preview</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleDuplicate} disabled={isPending}>
+                Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDeleteOpen(true)} disabled={isPending} variant="destructive">
+                Delete draft
+              </DropdownMenuItem>
+            </>
+          ) : (
+            <>
+              <DropdownMenuItem render={<Link href={`/company/opportunities/${opportunityId}`} />}>View candidates</DropdownMenuItem>
+              <DropdownMenuItem render={<Link href={`/opportunities/${opportunityId}`} />}>
+                {status === "published" ? "View public listing" : "View listing"}
+              </DropdownMenuItem>
+              {status === "published" && (
+                <DropdownMenuItem onClick={() => setEditOpen(true)} disabled={isPending}>
+                  Edit details
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={handleDuplicate} disabled={isPending}>
+                Duplicate
+              </DropdownMenuItem>
+              {status === "published" && (
+                <DropdownMenuItem onClick={handleClose} disabled={isPending} variant="destructive">
+                  Close internship
+                </DropdownMenuItem>
+              )}
+            </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
       <EditInternshipDialog opportunityId={opportunityId} initial={editDetails} open={editOpen} onOpenChange={setEditOpen} />
+
+      <Dialog open={deleteOpen} onOpenChange={(next) => !isPending && setDeleteOpen(next)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete this draft?</DialogTitle>
+            <DialogDescription>
+              &ldquo;{role}&rdquo; will be permanently removed. This can&rsquo;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDelete} disabled={isPending}>
+              {isPending ? "Deleting…" : "Delete draft"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

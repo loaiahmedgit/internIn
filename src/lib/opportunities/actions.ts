@@ -67,6 +67,7 @@ export async function createOpportunityAction(internship: InternshipDraft) {
       hoursPerWeek: validated.hoursPerWeek,
       location: validated.location,
       workMode: validated.workMode ?? null,
+      applicationDeadline: validated.applicationDeadline ?? null,
       slots: validated.slots,
       skills: validated.skills,
       status: "draft",
@@ -272,11 +273,30 @@ export async function updateOpportunityDetailsAction(opportunityId: string, deta
       hoursPerWeek: validated.hoursPerWeek,
       location: validated.location,
       workMode: validated.workMode ?? null,
+      applicationDeadline: validated.applicationDeadline ?? null,
       slots: validated.slots,
       skills: validated.skills,
       updatedAt: new Date(),
     })
     .where(eq(schema.opportunities.id, validatedOpportunityId));
+}
+
+/** Permanently removes a draft that was never published — a published/closed listing keeps its history via close, never delete. */
+export async function deleteOpportunityAction(opportunityId: string) {
+  const validatedOpportunityId = IdSchema.parse(opportunityId);
+  const { companyId, userId } = await getCompanyIdForCurrentUser();
+  const opportunity = await assertOwnsOpportunity(validatedOpportunityId, companyId);
+  if (opportunity.status !== "draft") throw new Error("Only a draft can be deleted.");
+  const db = getDb();
+
+  await db.delete(schema.opportunities).where(eq(schema.opportunities.id, validatedOpportunityId));
+
+  await db.insert(schema.eventLog).values({
+    entityType: "opportunity",
+    entityId: validatedOpportunityId,
+    eventType: "opportunity_deleted",
+    actorUserId: userId,
+  });
 }
 
 export async function shortlistApplicationAction(applicationId: string) {

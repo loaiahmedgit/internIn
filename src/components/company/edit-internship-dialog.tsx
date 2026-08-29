@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { updateOpportunityDetailsAction } from "@/lib/opportunities/actions";
 import type { InternshipDraft } from "@/lib/ai";
+import { toDateInputValue } from "@/lib/format-date";
 
 const WORK_MODE_OPTIONS: { value: "" | "remote" | "onsite" | "hybrid"; label: string }[] = [
   { value: "", label: "Not specified" },
@@ -110,6 +111,18 @@ export function EditInternshipDialog({
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-deadline">Application deadline</Label>
+              <Input
+                id="edit-deadline"
+                type="date"
+                value={form.applicationDeadline ? toDateInputValue(form.applicationDeadline) : ""}
+                onChange={(e) =>
+                  setForm({ ...form, applicationDeadline: e.target.value ? new Date(e.target.value) : null })
+                }
+              />
             </div>
 
             <div className="grid grid-cols-3 gap-3">

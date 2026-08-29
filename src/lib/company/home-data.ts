@@ -10,6 +10,7 @@ export interface InternshipActivityRow {
   duration: string;
   location: string;
   workMode: "remote" | "onsite" | "hybrid" | null;
+  applicationDeadline: Date | null;
   slots: number;
   slotsFilled: number;
   hoursPerWeek: number;
@@ -198,6 +199,7 @@ export async function getCompanyHomeData(companyId: string): Promise<CompanyHome
       duration: o.duration,
       location: o.location,
       workMode: o.workMode,
+      applicationDeadline: o.applicationDeadline,
       slots: o.slots,
       slotsFilled: slotsFilledByOpportunity.get(o.id) ?? 0,
       hoursPerWeek: o.hoursPerWeek,

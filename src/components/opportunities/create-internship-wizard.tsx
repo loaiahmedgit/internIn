@@ -10,6 +10,7 @@ import { ChallengeBuilder } from "@/components/challenges/challenge-builder";
 import type { Challenge, InternshipDraft } from "@/lib/ai";
 import { generateInternshipAction, generateChallengeAction } from "@/lib/ai/actions";
 import { createOpportunityAction, saveChallengeVersionAction } from "@/lib/opportunities/actions";
+import { toDateInputValue } from "@/lib/format-date";
 import { ArrowRight, ArrowLeft, Sparkles, X, Plus } from "lucide-react";
 
 type Step = "describe-role" | "review-internship" | "describe-work" | "challenge";
@@ -179,14 +180,24 @@ export function CreateInternshipWizard({
                 </select>
               </Field>
             </div>
-            <Field label="Slots">
-              <Input
-                type="number"
-                value={internship.slots}
-                onChange={(e) => updateInternship("slots", Number(e.target.value))}
-                className="max-w-32"
-              />
-            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Slots">
+                <Input
+                  type="number"
+                  value={internship.slots}
+                  onChange={(e) => updateInternship("slots", Number(e.target.value))}
+                />
+              </Field>
+              <Field label="Application deadline (optional)">
+                <Input
+                  type="date"
+                  value={internship.applicationDeadline ? toDateInputValue(internship.applicationDeadline) : ""}
+                  onChange={(e) =>
+                    updateInternship("applicationDeadline", e.target.value ? new Date(e.target.value) : null)
+                  }
+                />
+              </Field>
+            </div>
             <Field label="Skills">
               <SkillEditor
                 skills={internship.skills}

@@ -23,6 +23,7 @@ export default async function OpportunityDetailPage({
   const [opportunity] = await db
     .select({
       id: schema.opportunities.id,
+      companyId: schema.opportunities.companyId,
       role: schema.opportunities.role,
       description: schema.opportunities.description,
       duration: schema.opportunities.duration,
@@ -38,7 +39,25 @@ export default async function OpportunityDetailPage({
     .where(eq(schema.opportunities.id, id))
     .limit(1);
 
-  if (!opportunity || opportunity.status !== "published") notFound();
+  if (!opportunity) notFound();
+
+  const currentUser = await getCurrentUser();
+
+  // A draft or closed listing has no public audience — except the owning
+  // company previewing its own, e.g. via the Internships page's
+  // "Preview" / "View listing" actions.
+  let isOwnerPreview = false;
+  if (opportunity.status !== "published") {
+    const [membership] = currentUser?.role === "company"
+      ? await db
+          .select({ id: schema.companyMembers.id })
+          .from(schema.companyMembers)
+          .where(and(eq(schema.companyMembers.userId, currentUser.id), eq(schema.companyMembers.companyId, opportunity.companyId)))
+          .limit(1)
+      : [];
+    if (!membership) notFound();
+    isOwnerPreview = true;
+  }
 
   const [challenge] = await db
     .select({ estimatedMinutes: schema.challengeVersions.estimatedMinutes, taskCount: schema.challengeVersions.tasks })
@@ -46,8 +65,6 @@ export default async function OpportunityDetailPage({
     .innerJoin(schema.challengeVersions, eq(schema.challenges.currentVersionId, schema.challengeVersions.id))
     .where(and(eq(schema.challenges.opportunityId, opportunity.id), eq(schema.challenges.status, "published"), isNotNull(schema.challenges.currentVersionId)))
     .limit(1);
-
-  const currentUser = await getCurrentUser();
 
   let existingApplicationId: string | undefined;
   if (currentUser?.role === "student") {
@@ -61,6 +78,12 @@ export default async function OpportunityDetailPage({
 
   const content = (
     <>
+      {isOwnerPreview && (
+        <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800">
+          Preview only — this listing is {opportunity.status === "draft" ? "still a draft" : "closed"} and isn&apos;t visible to
+          students.
+        </div>
+      )}
       <div className="flex items-center gap-1.5">
         <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">{opportunity.companyName}</p>
         {opportunity.companyVerified && <BadgeCheck className="size-3.5 text-teal-ink" aria-label="Verified company" />}
@@ -113,18 +136,20 @@ export default async function OpportunityDetailPage({
         </>
       )}
 
-      <div className="mt-10">
-        {existingApplicationId ? (
-          <Link
-            href={`/student/applications/${existingApplicationId}`}
-            className="inline-flex rounded-lg bg-teal px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal/90"
-          >
-            View your application
-          </Link>
-        ) : (
-          <ApplyButton opportunityId={opportunity.id} />
-        )}
-      </div>
+      {!isOwnerPreview && (
+        <div className="mt-10">
+          {existingApplicationId ? (
+            <Link
+              href={`/student/applications/${existingApplicationId}`}
+              className="inline-flex rounded-lg bg-teal px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal/90"
+            >
+              View your application
+            </Link>
+          ) : (
+            <ApplyButton opportunityId={opportunity.id} />
+          )}
+        </div>
+      )}
     </>
   );
 
