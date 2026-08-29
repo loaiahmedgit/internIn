@@ -18,6 +18,13 @@ import { Sparkles, SearchX, ChevronRight } from "lucide-react";
 
 const WORK_MODE_LABEL: Record<string, string> = { remote: "Remote", onsite: "On-site", hybrid: "Hybrid" };
 
+// Same class string on <th> and <td> — the only reliable way to put a
+// header and its column's values on one exact axis in an auto-layout table.
+// A width alone (without repeating it on both) lets the browser resize the
+// column to content and drift the two apart.
+const APPLICANTS_COLUMN_CLASS = "w-28 text-center";
+const DEADLINE_COLUMN_CLASS = "w-32 text-center";
+
 /**
  * Wording local to this page only — Home still shows "Published" via the
  * shared InternshipStatusBadge, which is untouched. "Draft/Open/Closed"
@@ -183,8 +190,8 @@ export default async function CompanyInternshipsPage({
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Duration</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Location</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Mode</TableHead>
-                    <TableHead className="w-20 pr-6 text-right text-xs uppercase tracking-wide text-navy/45">Applicants</TableHead>
-                    <TableHead className="min-w-[130px] pl-6 text-xs uppercase tracking-wide text-navy/45">Deadline</TableHead>
+                    <TableHead className={`${APPLICANTS_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/45`}>Applicants</TableHead>
+                    <TableHead className={`${DEADLINE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/45`}>Deadline</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Challenge</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Status</TableHead>
                     <TableHead className="pr-5 text-right text-xs uppercase tracking-wide text-navy/45">Actions</TableHead>
@@ -208,8 +215,8 @@ export default async function CompanyInternshipsPage({
                       <TableCell className="text-navy/65">{row.duration}</TableCell>
                       <TableCell className="max-w-40 truncate text-navy/65">{row.location}</TableCell>
                       <TableCell className="text-navy/65">{row.workMode ? WORK_MODE_LABEL[row.workMode] : "—"}</TableCell>
-                      <TableCell className="w-20 pr-6 text-right tabular-nums text-navy/65">{row.applicantCount}</TableCell>
-                      <TableCell className="min-w-[130px] pl-6 text-navy/65">
+                      <TableCell className={`${APPLICANTS_COLUMN_CLASS} tabular-nums text-navy/65`}>{row.applicantCount}</TableCell>
+                      <TableCell className={`${DEADLINE_COLUMN_CLASS} text-navy/65`}>
                         {row.applicationDeadline ? formatDeadline(row.applicationDeadline) : "—"}
                       </TableCell>
                       <TableCell>

@@ -209,7 +209,7 @@ export function DashboardShell({
               label={personName ?? displayName}
               subLabel={personName ? displayName : accountSubLabel}
               email={personName ? personEmail : undefined}
-              workspaceLabel={personName ? `${displayName} · ${accountSubLabel}` : undefined}
+              workspaceLabel={personName ? displayName : undefined}
               menuLinks={accountMenuLinks}
               variant="sidebar"
             />
@@ -261,8 +261,10 @@ export function DashboardShell({
             <div className="mt-auto border-t border-navy/10 px-4 py-4">
               <AccountMenu
                 label={personName ?? displayName}
+                subLabel={personName ? displayName : accountSubLabel}
                 email={personName ? personEmail : undefined}
-                subLabel={personName ? `${displayName} · ${accountSubLabel}` : accountSubLabel}
+                workspaceLabel={personName ? displayName : undefined}
+                menuLinks={accountMenuLinks}
                 variant="sidebar"
               />
             </div>

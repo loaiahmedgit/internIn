@@ -35,7 +35,7 @@ export function AccountMenu({
   subLabel: string;
   /** Dropdown-header line 2, when the trigger's `subLabel` is a person's email but the trigger itself should stay short. */
   email?: string;
-  /** Dropdown-header line 3, e.g. "Skyline Logistics · Company workspace". Only rendered alongside `email`. */
+  /** Dropdown-header line 3 — the company/workspace name. Only rendered alongside `email`. */
   workspaceLabel?: string;
   /** Real account/workspace pages to link to, shown above the final Sign out separator. Omit rather than link to a page that doesn't exist. */
   menuLinks?: { href: string; label: string; icon: keyof typeof LINK_ICON }[];
@@ -76,11 +76,19 @@ export function AccountMenu({
           <ChevronDown className="size-3.5 shrink-0 text-navy/40" aria-hidden="true" />
         </DropdownMenuTrigger>
       )}
-      <DropdownMenuContent align={variant === "sidebar" ? "start" : "end"} className="w-56">
-        <div className="px-1.5 py-1">
-          <p className="truncate text-sm font-medium text-navy">{label}</p>
-          <p className="truncate text-xs text-navy/45">{email ?? subLabel}</p>
-          {email && workspaceLabel && <p className="truncate text-xs text-navy/45">{workspaceLabel}</p>}
+      <DropdownMenuContent align={variant === "sidebar" ? "start" : "end"} className="w-60">
+        <div className="flex items-center gap-2 px-2 py-1.5">
+          <span
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal/10 text-[11px] font-semibold text-teal-ink"
+            aria-hidden="true"
+          >
+            {initial}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm leading-tight font-medium text-navy">{label}</span>
+            <span className="block truncate text-xs leading-tight text-navy/45">{email ?? subLabel}</span>
+            {email && workspaceLabel && <span className="block truncate text-xs leading-tight text-navy/45">{workspaceLabel}</span>}
+          </span>
         </div>
         {menuLinks && menuLinks.length > 0 && (
           <>
