@@ -164,16 +164,16 @@ export default async function CompanyInternshipsPage({
               </div>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-gray-50">
                   <TableRow className="border-navy/10 hover:bg-transparent">
-                    <TableHead className="pl-4 text-xs uppercase tracking-wide text-navy/55">Internship</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/55">Duration</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/55">Location</TableHead>
-                    <TableHead className={`${MODE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/55`}>Mode</TableHead>
-                    <TableHead className={`${APPLICANTS_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/55`}>Applicants</TableHead>
-                    <TableHead className={`${DEADLINE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/55`}>Deadline</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/55">Status</TableHead>
-                    <TableHead className="pr-4 text-right text-xs uppercase tracking-wide text-navy/55">Actions</TableHead>
+                    <TableHead className="pl-4 text-xs uppercase tracking-wide text-navy/65">Internship</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Duration</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Location</TableHead>
+                    <TableHead className={`${MODE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/65`}>Mode</TableHead>
+                    <TableHead className={`${APPLICANTS_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/65`}>Applicants</TableHead>
+                    <TableHead className={`${DEADLINE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/65`}>Deadline</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Status</TableHead>
+                    <TableHead className="pr-4 text-right text-xs uppercase tracking-wide text-navy/65">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
