@@ -38,23 +38,6 @@ const INTERNSHIP_STATUS_CLASS: Record<string, string> = {
   closed: "bg-red-500/10 text-red-700 dark:text-red-400",
 };
 
-// Collapses the 5 real challenge statuses (draft/ai_generated/pending_approval/
-// approved/published) plus "no challenge row at all" into the 3 states asked for.
-const CHALLENGE_STATUS_LABEL: Record<string, string> = {
-  none: "No challenge",
-  draft: "Draft",
-  pending_approval: "Draft",
-  approved: "Draft",
-  published: "Live",
-};
-const CHALLENGE_STATUS_CLASS: Record<string, string> = {
-  none: "",
-  draft: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  pending_approval: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  approved: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  published: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-};
-
 type TabKey = "all" | "published" | "draft" | "closed";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "All" },
@@ -183,15 +166,14 @@ export default async function CompanyInternshipsPage({
               <Table>
                 <TableHeader>
                   <TableRow className="border-navy/10 hover:bg-transparent">
-                    <TableHead className="pl-4 text-xs uppercase tracking-wide text-navy/45">Internship</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Duration</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Location</TableHead>
-                    <TableHead className={`${MODE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/45`}>Mode</TableHead>
-                    <TableHead className={`${APPLICANTS_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/45`}>Applicants</TableHead>
-                    <TableHead className={`${DEADLINE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/45`}>Deadline</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Challenge</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Status</TableHead>
-                    <TableHead className="pr-4 text-right text-xs uppercase tracking-wide text-navy/45">Actions</TableHead>
+                    <TableHead className="pl-4 text-xs uppercase tracking-wide text-navy/55">Internship</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/55">Duration</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/55">Location</TableHead>
+                    <TableHead className={`${MODE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/55`}>Mode</TableHead>
+                    <TableHead className={`${APPLICANTS_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/55`}>Applicants</TableHead>
+                    <TableHead className={`${DEADLINE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/55`}>Deadline</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/55">Status</TableHead>
+                    <TableHead className="pr-4 text-right text-xs uppercase tracking-wide text-navy/55">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -217,11 +199,6 @@ export default async function CompanyInternshipsPage({
                       <TableCell className={`${APPLICANTS_COLUMN_CLASS} tabular-nums text-navy/65`}>{row.applicantCount}</TableCell>
                       <TableCell className={`${DEADLINE_COLUMN_CLASS} text-navy/65`}>
                         {row.applicationDeadline ? formatDeadline(row.applicationDeadline) : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className={CHALLENGE_STATUS_CLASS[row.challengeStatus] ?? ""}>
-                          {CHALLENGE_STATUS_LABEL[row.challengeStatus] ?? row.challengeStatus}
-                        </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={INTERNSHIP_STATUS_CLASS[row.status]}>
