@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown, LogOut, User, Settings } from "lucide-react";
+import Link from "next/link";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,23 +11,34 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/app/(auth)/actions";
 
+const LINK_ICON = { user: User, settings: Settings } as const;
+
 /**
- * One dropdown, two visual shells: the sidebar footer row (full label +
- * optional email + sub-label + chevron) and the compact top-bar avatar
- * (initials only). Both only ever offer Sign out — there's no
- * company-settings, profile, or multi-workspace page to link to yet, so the
- * menu doesn't pretend one exists.
+ * One dropdown, two visual shells: the sidebar footer row (compact — name +
+ * one context line) and the compact top-bar avatar (initials only). The
+ * dropdown popup carries the fuller identity (name, email, workspace) plus
+ * whatever real account links the caller passes — Student/topbar callers
+ * pass none of the optional fields and get the original plain "Sign out
+ * only" menu, unchanged.
  */
 export function AccountMenu({
   label,
-  email,
   subLabel,
+  email,
+  workspaceLabel,
+  menuLinks,
   variant,
 }: {
+  /** Name shown everywhere — trigger line 1 and dropdown-header line 1. */
   label: string;
-  /** Signed-in person's email — shown as a second line in the sidebar footer when provided. */
-  email?: string;
+  /** Trigger line 2. Also the dropdown-header line 2 when `email` isn't given. */
   subLabel: string;
+  /** Dropdown-header line 2, when the trigger's `subLabel` is a person's email but the trigger itself should stay short. */
+  email?: string;
+  /** Dropdown-header line 3, e.g. "Skyline Logistics · Company workspace". Only rendered alongside `email`. */
+  workspaceLabel?: string;
+  /** Real account/workspace pages to link to, shown above the final Sign out separator. Omit rather than link to a page that doesn't exist. */
+  menuLinks?: { href: string; label: string; icon: keyof typeof LINK_ICON }[];
   variant: "sidebar" | "topbar";
 }) {
   const initial = label.charAt(0).toUpperCase() || "?";
@@ -46,7 +58,6 @@ export function AccountMenu({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-navy">{label}</span>
-            {email && <span className="block truncate text-xs text-navy/45">{email}</span>}
             <span className="block truncate text-xs text-navy/45">{subLabel}</span>
           </span>
           <ChevronDown className="size-3.5 shrink-0 text-navy/40" aria-hidden="true" />
@@ -65,12 +76,26 @@ export function AccountMenu({
           <ChevronDown className="size-3.5 shrink-0 text-navy/40" aria-hidden="true" />
         </DropdownMenuTrigger>
       )}
-      <DropdownMenuContent align={variant === "sidebar" ? "start" : "end"} className="w-48">
+      <DropdownMenuContent align={variant === "sidebar" ? "start" : "end"} className="w-56">
         <div className="px-1.5 py-1">
           <p className="truncate text-sm font-medium text-navy">{label}</p>
-          {email && <p className="truncate text-xs text-navy/45">{email}</p>}
-          <p className="truncate text-xs text-navy/45">{subLabel}</p>
+          <p className="truncate text-xs text-navy/45">{email ?? subLabel}</p>
+          {email && workspaceLabel && <p className="truncate text-xs text-navy/45">{workspaceLabel}</p>}
         </div>
+        {menuLinks && menuLinks.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            {menuLinks.map((link) => {
+              const Icon = LINK_ICON[link.icon];
+              return (
+                <DropdownMenuItem key={link.href} render={<Link href={link.href} />}>
+                  <Icon className="size-4" aria-hidden="true" />
+                  {link.label}
+                </DropdownMenuItem>
+              );
+            })}
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => signOut()} className="text-navy/70">
           <LogOut className="size-4" aria-hidden="true" />

@@ -26,7 +26,10 @@ export default async function CompanyLayout({ children }: { children: React.Reac
       accountSubLabel="Company workspace"
       personName={user?.fullName}
       personEmail={user?.email}
-      showTopBar
+      accountMenuLinks={[
+        { href: "/company/profile", label: "Profile", icon: "user" },
+        { href: "/company/settings", label: "Workspace settings", icon: "settings" },
+      ]}
       navItems={COMPANY_NAV_ITEMS}
     >
       {children}

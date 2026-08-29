@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { InternshipRowActions } from "@/components/company/internship-row-actions";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { formatDeadline } from "@/lib/format-date";
 import { Sparkles, SearchX, ChevronRight } from "lucide-react";
 
@@ -117,9 +118,12 @@ export default async function CompanyInternshipsPage({
           <h1 className="text-xl font-semibold tracking-tight text-navy">Internships</h1>
           <p className="text-sm text-navy/55">Manage all your internship postings and their progress.</p>
         </div>
-        <Button render={<Link href="/company/opportunities/new" />} nativeButton={false} className="bg-teal text-white hover:bg-teal/90">
-          <Sparkles className="size-4" /> Create internship
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <NotificationBell />
+          <Button render={<Link href="/company/opportunities/new" />} nativeButton={false} className="bg-teal text-white hover:bg-teal/90">
+            <Sparkles className="size-4" /> Create internship
+          </Button>
+        </div>
       </div>
 
       {data.internshipActivity.length === 0 ? (
@@ -179,8 +183,8 @@ export default async function CompanyInternshipsPage({
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Duration</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Location</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Mode</TableHead>
-                    <TableHead className="pr-6 text-right text-xs uppercase tracking-wide text-navy/45">Applicants</TableHead>
-                    <TableHead className="pl-6 text-xs uppercase tracking-wide text-navy/45">Deadline</TableHead>
+                    <TableHead className="w-20 pr-6 text-right text-xs uppercase tracking-wide text-navy/45">Applicants</TableHead>
+                    <TableHead className="min-w-[130px] pl-6 text-xs uppercase tracking-wide text-navy/45">Deadline</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Challenge</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Status</TableHead>
                     <TableHead className="pr-5 text-right text-xs uppercase tracking-wide text-navy/45">Actions</TableHead>
@@ -204,8 +208,8 @@ export default async function CompanyInternshipsPage({
                       <TableCell className="text-navy/65">{row.duration}</TableCell>
                       <TableCell className="max-w-40 truncate text-navy/65">{row.location}</TableCell>
                       <TableCell className="text-navy/65">{row.workMode ? WORK_MODE_LABEL[row.workMode] : "—"}</TableCell>
-                      <TableCell className="pr-6 text-right tabular-nums text-navy/65">{row.applicantCount}</TableCell>
-                      <TableCell className="pl-6 text-navy/65">
+                      <TableCell className="w-20 pr-6 text-right tabular-nums text-navy/65">{row.applicantCount}</TableCell>
+                      <TableCell className="min-w-[130px] pl-6 text-navy/65">
                         {row.applicationDeadline ? formatDeadline(row.applicationDeadline) : "—"}
                       </TableCell>
                       <TableCell>

@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
 import { AccountMenu } from "@/components/dashboard/account-menu";
-import { NotificationBell } from "@/components/dashboard/notification-bell";
 import {
   Menu,
   X,
@@ -96,7 +95,7 @@ export function DashboardShell({
   accountSubLabel = "Account",
   personName,
   personEmail,
-  showTopBar = false,
+  accountMenuLinks,
 }: {
   children: React.ReactNode;
   navItems: NavItem[];
@@ -104,11 +103,11 @@ export function DashboardShell({
   displayName: string;
   /** Sub-label under the sidebar footer name, e.g. "Company account". */
   accountSubLabel?: string;
-  /** Signed-in person's identity for the top-bar avatar — distinct from the company/workspace name in the sidebar footer. */
+  /** Signed-in person's identity — distinct from the company/workspace name in the sidebar footer. */
   personName?: string;
   personEmail?: string;
-  /** Adds the slim bell + avatar bar above the main content — Company only for now. */
-  showTopBar?: boolean;
+  /** Real account/workspace pages for the sidebar account dropdown. Omit rather than link to a page that doesn't exist. */
+  accountMenuLinks?: { href: string; label: string; icon: "user" | "settings" }[];
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -208,8 +207,10 @@ export function DashboardShell({
           ) : (
             <AccountMenu
               label={personName ?? displayName}
+              subLabel={personName ? displayName : accountSubLabel}
               email={personName ? personEmail : undefined}
-              subLabel={personName ? `${displayName} · ${accountSubLabel}` : accountSubLabel}
+              workspaceLabel={personName ? `${displayName} · ${accountSubLabel}` : undefined}
+              menuLinks={accountMenuLinks}
               variant="sidebar"
             />
           )}
@@ -271,11 +272,6 @@ export function DashboardShell({
 
       {/* The only scroll container in the authenticated shell */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {showTopBar && (
-          <div className="hidden shrink-0 items-center justify-end border-b border-navy/10 px-6 py-1.5 sm:flex">
-            <NotificationBell />
-          </div>
-        )}
         <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
