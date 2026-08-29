@@ -66,6 +66,7 @@ export async function createOpportunityAction(internship: InternshipDraft) {
       duration: validated.duration,
       hoursPerWeek: validated.hoursPerWeek,
       location: validated.location,
+      workMode: validated.workMode ?? null,
       slots: validated.slots,
       skills: validated.skills,
       status: "draft",
@@ -198,6 +199,55 @@ export async function publishOpportunityAction(opportunityId: string) {
     eventType: "challenge_published",
     actorUserId: userId,
   });
+}
+
+/** Ends the application window. Reversible in the data model (just a status flag), so no confirmation dialog is required. */
+export async function closeOpportunityAction(opportunityId: string) {
+  const validatedOpportunityId = IdSchema.parse(opportunityId);
+  const { companyId, memberRole } = await getCompanyIdForCurrentUser();
+  if (memberRole === "member") throw new Error("Only a company owner or admin can close an internship.");
+  const opportunity = await assertOwnsOpportunity(validatedOpportunityId, companyId);
+  if (opportunity.status !== "published") throw new Error("Only an open internship can be closed.");
+  const db = getDb();
+
+  await db
+    .update(schema.opportunities)
+    .set({ status: "closed", updatedAt: new Date() })
+    .where(eq(schema.opportunities.id, validatedOpportunityId));
+}
+
+/** Copies the listing content into a brand-new draft — never the challenge, applicants, or offers, which stay tied to the original. */
+export async function duplicateOpportunityAction(opportunityId: string) {
+  const validatedOpportunityId = IdSchema.parse(opportunityId);
+  const { companyId, userId } = await getCompanyIdForCurrentUser();
+  const source = await assertOwnsOpportunity(validatedOpportunityId, companyId);
+  const db = getDb();
+
+  const [copy] = await db
+    .insert(schema.opportunities)
+    .values({
+      companyId,
+      role: `${source.role} (copy)`,
+      description: source.description,
+      duration: source.duration,
+      hoursPerWeek: source.hoursPerWeek,
+      location: source.location,
+      workMode: source.workMode,
+      slots: source.slots,
+      skills: source.skills,
+      status: "draft",
+    })
+    .returning();
+
+  await db.insert(schema.eventLog).values({
+    entityType: "opportunity",
+    entityId: copy.id,
+    eventType: "opportunity_created",
+    actorUserId: userId,
+    metadata: { duplicatedFrom: validatedOpportunityId },
+  });
+
+  return copy.id as string;
 }
 
 export async function shortlistApplicationAction(applicationId: string) {

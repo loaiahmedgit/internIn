@@ -11,13 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { Sparkles, SearchX, MoreHorizontal } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { InternshipRowActions } from "@/components/company/internship-row-actions";
+import { Sparkles, SearchX } from "lucide-react";
+
+const WORK_MODE_LABEL: Record<string, string> = { remote: "Remote", onsite: "On-site", hybrid: "Hybrid" };
 
 /**
  * Wording local to this page only — Home still shows "Published" via the
@@ -26,10 +23,10 @@ import {
  * same underlying opportunities.status === "published" value.
  */
 const INTERNSHIP_STATUS_LABEL: Record<string, string> = { draft: "Draft", published: "Open", closed: "Closed" };
-const INTERNSHIP_STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
+const INTERNSHIP_STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {
   draft: "secondary",
   published: "default",
-  closed: "outline",
+  closed: "destructive",
 };
 
 // Collapses the 5 real challenge statuses (draft/ai_generated/pending_approval/
@@ -174,6 +171,7 @@ export default async function CompanyInternshipsPage({
                     <TableHead className="pl-5 text-xs uppercase tracking-wide text-navy/45">Internship</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Duration</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Location / Mode</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Slots</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Applicants</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Challenge status</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Status</TableHead>
@@ -196,7 +194,13 @@ export default async function CompanyInternshipsPage({
                         </Link>
                       </TableCell>
                       <TableCell className="text-navy/65">{row.duration}</TableCell>
-                      <TableCell className="text-navy/65">{row.location}</TableCell>
+                      <TableCell className="text-navy/65">
+                        {row.location}
+                        {row.workMode && <span className="text-navy/40"> · {WORK_MODE_LABEL[row.workMode]}</span>}
+                      </TableCell>
+                      <TableCell className="text-navy/65">
+                        {row.slotsFilled}/{row.slots}
+                      </TableCell>
                       <TableCell className="text-navy/65">{row.applicantCount || "—"}</TableCell>
                       <TableCell>
                         <Badge variant={CHALLENGE_STATUS_VARIANT[row.challengeStatus] ?? "secondary"}>
@@ -207,31 +211,7 @@ export default async function CompanyInternshipsPage({
                         <Badge variant={INTERNSHIP_STATUS_VARIANT[row.status]}>{INTERNSHIP_STATUS_LABEL[row.status]}</Badge>
                       </TableCell>
                       <TableCell className="pr-5 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${row.role}`} />}>
-                            <MoreHorizontal className="size-4" aria-hidden="true" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              render={
-                                <Link
-                                  href={
-                                    row.status === "draft"
-                                      ? `/company/opportunities/${row.opportunityId}/setup`
-                                      : `/company/opportunities/${row.opportunityId}`
-                                  }
-                                />
-                              }
-                            >
-                              {row.status === "draft" ? "Continue setup" : "View candidates"}
-                            </DropdownMenuItem>
-                            {row.status === "published" && (
-                              <DropdownMenuItem render={<Link href={`/opportunities/${row.opportunityId}`} />}>
-                                View public listing
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <InternshipRowActions opportunityId={row.opportunityId} status={row.status} role={row.role} />
                       </TableCell>
                     </TableRow>
                   ))}

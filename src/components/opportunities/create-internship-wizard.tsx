@@ -164,14 +164,29 @@ export function CreateInternshipWizard({
               <Field label="Location">
                 <Input value={internship.location} onChange={(e) => updateInternship("location", e.target.value)} />
               </Field>
-              <Field label="Slots">
-                <Input
-                  type="number"
-                  value={internship.slots}
-                  onChange={(e) => updateInternship("slots", Number(e.target.value))}
-                />
+              <Field label="Work mode">
+                <select
+                  value={internship.workMode ?? ""}
+                  onChange={(e) =>
+                    updateInternship("workMode", (e.target.value || null) as InternshipDraft["workMode"])
+                  }
+                  className="h-9 w-full rounded-lg border border-navy/15 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+                >
+                  <option value="">Not specified</option>
+                  <option value="remote">Remote</option>
+                  <option value="onsite">On-site</option>
+                  <option value="hybrid">Hybrid</option>
+                </select>
               </Field>
             </div>
+            <Field label="Slots">
+              <Input
+                type="number"
+                value={internship.slots}
+                onChange={(e) => updateInternship("slots", Number(e.target.value))}
+                className="max-w-32"
+              />
+            </Field>
             <Field label="Skills">
               <SkillEditor
                 skills={internship.skills}

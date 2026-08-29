@@ -9,6 +9,9 @@ export interface InternshipActivityRow {
   status: "draft" | "published" | "closed";
   duration: string;
   location: string;
+  workMode: "remote" | "onsite" | "hybrid" | null;
+  slots: number;
+  slotsFilled: number;
   applicantCount: number;
   candidatesToReview: number;
   challengeStatus: string;
@@ -176,6 +179,14 @@ export async function getCompanyHomeData(companyId: string): Promise<CompanyHome
   const severityRank: Record<string, number> = { behind_schedule: 0, needs_attention: 1, not_started: 2, on_track: 3 };
   activeInternRows.sort((a, b) => (severityRank[a.severity] ?? 9) - (severityRank[b.severity] ?? 9));
 
+  const slotsFilledByOpportunity = new Map<string, number>();
+  for (const offer of offers) {
+    if (offer.status !== "accepted") continue;
+    const application = applicationById.get(offer.applicationId);
+    if (!application) continue;
+    slotsFilledByOpportunity.set(application.opportunityId, (slotsFilledByOpportunity.get(application.opportunityId) ?? 0) + 1);
+  }
+
   const internshipActivity: InternshipActivityRow[] = opportunities
     .map((o) => ({
       opportunityId: o.id,
@@ -183,6 +194,9 @@ export async function getCompanyHomeData(companyId: string): Promise<CompanyHome
       status: o.status,
       duration: o.duration,
       location: o.location,
+      workMode: o.workMode,
+      slots: o.slots,
+      slotsFilled: slotsFilledByOpportunity.get(o.id) ?? 0,
       applicantCount: applicantCountByOpportunity.get(o.id) ?? 0,
       candidatesToReview: reviewCountByOpportunity.get(o.id) ?? 0,
       challengeStatus: CHALLENGE_STATUS_LABEL[challengeByOpportunity.get(o.id)?.status ?? ""] ?? "none",

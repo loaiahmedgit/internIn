@@ -10,6 +10,7 @@ export const InternshipDraftSchema = z.object({
   duration: z.string().trim().min(2).max(80),
   hoursPerWeek: z.number().int().min(1).max(60),
   location: z.string().trim().min(2).max(120),
+  workMode: z.enum(["remote", "onsite", "hybrid"]).nullable().optional(),
   slots: z.number().int().min(1).max(100),
   skills: z.array(z.string().trim().min(1).max(60)).max(20),
   description: z.string().trim().min(20).max(4000),

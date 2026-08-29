@@ -41,6 +41,7 @@ export const educationStageEnum = pgEnum("education_stage", [
   "other",
 ]);
 export const opportunityStatusEnum = pgEnum("opportunity_status", ["draft", "published", "closed"]);
+export const workModeEnum = pgEnum("work_mode", ["remote", "onsite", "hybrid"]);
 export const challengeStatusEnum = pgEnum("challenge_status", [
   "draft",
   "ai_generated",
@@ -142,6 +143,8 @@ export const opportunities = pgTable(
     duration: text("duration").notNull(),
     hoursPerWeek: integer("hours_per_week").notNull(),
     location: text("location").notNull(),
+    /** Separate from `location` (which stays free-text, e.g. "Doha, Qatar") so the two never get conflated into one inconsistent string. Null for opportunities created before this field existed. */
+    workMode: workModeEnum("work_mode"),
     slots: integer("slots").notNull().default(1),
     skills: jsonb("skills").$type<string[]>().notNull().default([]),
     status: opportunityStatusEnum("status").notNull().default("draft"),
