@@ -196,7 +196,9 @@ export default async function CompanyInternshipsPage({
                       <TableCell className="text-navy/65">{row.duration}</TableCell>
                       <TableCell className="text-navy/65">
                         {row.location}
-                        {row.workMode && <span className="text-navy/40"> · {WORK_MODE_LABEL[row.workMode]}</span>}
+                        {row.workMode && row.location.toLowerCase() !== WORK_MODE_LABEL[row.workMode].toLowerCase() && (
+                          <span className="text-navy/40"> · {WORK_MODE_LABEL[row.workMode]}</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-navy/65">
                         {row.slotsFilled}/{row.slots}
