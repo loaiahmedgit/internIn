@@ -27,7 +27,7 @@ const INTERNSHIP_STATUS_LABEL: Record<string, string> = { draft: "Draft", publis
 const INTERNSHIP_STATUS_CLASS: Record<string, string> = {
   draft: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   published: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  closed: "bg-destructive/10 text-destructive",
+  closed: "bg-red-500/10 text-red-700 dark:text-red-400",
 };
 
 // Collapses the 5 real challenge statuses (draft/ai_generated/pending_approval/
@@ -133,7 +133,7 @@ export default async function CompanyInternshipsPage({
       ) : (
         <Card className="mt-4 rounded-xl border border-navy/10 shadow-none ring-0">
           <CardContent className="px-0">
-            <div className="flex flex-wrap items-center justify-between gap-3 px-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy/8 px-5">
               <div className="flex gap-1 border-b border-transparent">
                 {TABS.map((t) => (
                   <Link
@@ -179,7 +179,7 @@ export default async function CompanyInternshipsPage({
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Duration</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Location</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Mode</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Applicants</TableHead>
+                    <TableHead className="text-right text-xs uppercase tracking-wide text-navy/45">Applicants</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Deadline</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Challenge</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Status</TableHead>
@@ -204,7 +204,7 @@ export default async function CompanyInternshipsPage({
                       <TableCell className="text-navy/65">{row.duration}</TableCell>
                       <TableCell className="max-w-40 truncate text-navy/65">{row.location}</TableCell>
                       <TableCell className="text-navy/65">{row.workMode ? WORK_MODE_LABEL[row.workMode] : "—"}</TableCell>
-                      <TableCell className="tabular-nums text-navy/65">{row.applicantCount}</TableCell>
+                      <TableCell className="text-right tabular-nums text-navy/65">{row.applicantCount}</TableCell>
                       <TableCell className="text-navy/65">
                         {row.applicationDeadline ? formatDeadline(row.applicationDeadline) : "—"}
                       </TableCell>
