@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
 import { AccountMenu } from "@/components/dashboard/account-menu";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 import {
   Menu,
   X,
@@ -274,6 +275,13 @@ export function DashboardShell({
 
       {/* The only scroll container in the authenticated shell */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Global, page-independent — same top-right spot on every Company
+            page, deliberately separate from each page's own header actions. */}
+        {personName && (
+          <div className="hidden shrink-0 items-center justify-end border-b border-navy/10 px-6 py-1.5 sm:flex">
+            <NotificationBell />
+          </div>
+        )}
         <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>

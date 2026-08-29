@@ -12,7 +12,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { InternshipRowActions } from "@/components/company/internship-row-actions";
-import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { formatDeadline } from "@/lib/format-date";
 import { Sparkles, SearchX, ChevronRight } from "lucide-react";
 
@@ -22,6 +21,7 @@ const WORK_MODE_LABEL: Record<string, string> = { remote: "Remote", onsite: "On-
 // header and its column's values on one exact axis in an auto-layout table.
 // A width alone (without repeating it on both) lets the browser resize the
 // column to content and drift the two apart.
+const MODE_COLUMN_CLASS = "w-24 text-center";
 const APPLICANTS_COLUMN_CLASS = "w-28 text-center";
 const DEADLINE_COLUMN_CLASS = "w-32 text-center";
 
@@ -125,12 +125,9 @@ export default async function CompanyInternshipsPage({
           <h1 className="text-xl font-semibold tracking-tight text-navy">Internships</h1>
           <p className="text-sm text-navy/55">Manage all your internship postings and their progress.</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <NotificationBell />
-          <Button render={<Link href="/company/opportunities/new" />} nativeButton={false} className="bg-teal text-white hover:bg-teal/90">
-            <Sparkles className="size-4" /> Create internship
-          </Button>
-        </div>
+        <Button render={<Link href="/company/opportunities/new" />} nativeButton={false} className="bg-teal text-white hover:bg-teal/90">
+          <Sparkles className="size-4" /> Create internship
+        </Button>
       </div>
 
       {data.internshipActivity.length === 0 ? (
@@ -144,7 +141,7 @@ export default async function CompanyInternshipsPage({
       ) : (
         <Card className="mt-4 rounded-xl border border-navy/10 shadow-none ring-0">
           <CardContent className="px-0">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy/8 px-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy/8 px-4">
               <div className="flex gap-1 border-b border-transparent">
                 {TABS.map((t) => (
                   <Link
@@ -179,28 +176,28 @@ export default async function CompanyInternshipsPage({
             </div>
 
             {rows.length === 0 ? (
-              <div className="px-5 pb-2">
+              <div className="px-4 pb-2">
                 <EmptyState icon={SearchX} title="No internships match" description="Try a different search or tab." />
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="border-navy/10 hover:bg-transparent">
-                    <TableHead className="pl-5 text-xs uppercase tracking-wide text-navy/45">Internship</TableHead>
+                    <TableHead className="pl-4 text-xs uppercase tracking-wide text-navy/45">Internship</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Duration</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Location</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Mode</TableHead>
+                    <TableHead className={`${MODE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/45`}>Mode</TableHead>
                     <TableHead className={`${APPLICANTS_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/45`}>Applicants</TableHead>
                     <TableHead className={`${DEADLINE_COLUMN_CLASS} text-xs uppercase tracking-wide text-navy/45`}>Deadline</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Challenge</TableHead>
                     <TableHead className="text-xs uppercase tracking-wide text-navy/45">Status</TableHead>
-                    <TableHead className="pr-5 text-right text-xs uppercase tracking-wide text-navy/45">Actions</TableHead>
+                    <TableHead className="pr-4 text-right text-xs uppercase tracking-wide text-navy/45">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map((row) => (
                     <TableRow key={row.opportunityId} className="border-navy/8">
-                      <TableCell className="max-w-56 pl-5">
+                      <TableCell className="max-w-56 pl-4">
                         <Link
                           href={
                             row.status === "draft"
@@ -214,7 +211,9 @@ export default async function CompanyInternshipsPage({
                       </TableCell>
                       <TableCell className="text-navy/65">{row.duration}</TableCell>
                       <TableCell className="max-w-40 truncate text-navy/65">{row.location}</TableCell>
-                      <TableCell className="text-navy/65">{row.workMode ? WORK_MODE_LABEL[row.workMode] : "—"}</TableCell>
+                      <TableCell className={`${MODE_COLUMN_CLASS} text-navy/65`}>
+                        {row.workMode ? WORK_MODE_LABEL[row.workMode] : "—"}
+                      </TableCell>
                       <TableCell className={`${APPLICANTS_COLUMN_CLASS} tabular-nums text-navy/65`}>{row.applicantCount}</TableCell>
                       <TableCell className={`${DEADLINE_COLUMN_CLASS} text-navy/65`}>
                         {row.applicationDeadline ? formatDeadline(row.applicationDeadline) : "—"}
@@ -229,7 +228,7 @@ export default async function CompanyInternshipsPage({
                           {INTERNSHIP_STATUS_LABEL[row.status]}
                         </Badge>
                       </TableCell>
-                      <TableCell className="pr-5 text-right">
+                      <TableCell className="pr-4 text-right">
                         <InternshipRowActions
                           opportunityId={row.opportunityId}
                           status={row.status}
@@ -252,7 +251,7 @@ export default async function CompanyInternshipsPage({
                 </TableBody>
               </Table>
             )}
-            <p className="px-5 py-3 text-xs text-navy/45">
+            <p className="px-4 py-3 text-xs text-navy/45">
               Showing 1 to {rows.length} of {rows.length} internship{rows.length === 1 ? "" : "s"}
             </p>
           </CardContent>
