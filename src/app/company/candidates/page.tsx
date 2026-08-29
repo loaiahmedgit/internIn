@@ -1,18 +1,19 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb, schema } from "@/db";
-import { getCompanyCandidates, type CandidateRow } from "@/lib/company/candidates-data";
-import { CompanyPageContainer, CompanyPageHeader } from "@/components/company/page-shell";
-import { CandidateStatusBadge, type CandidateStatusKey } from "@/components/company/status-badges";
+import { getCompanyCandidates } from "@/lib/company/candidates-data";
+import { stageKeyOf } from "@/lib/company/candidate-stage";
+import { CompanyPageContainer } from "@/components/company/page-shell";
 import { QuerySelect } from "@/components/company/query-select";
-import { CandidateRowActions } from "@/components/company/candidate-row-actions";
 import { ExportCsvButton } from "@/components/company/export-csv-button";
+import { CandidateTableRow } from "@/components/company/candidate-table-row";
+import { CandidateDrawer } from "@/components/company/candidate-drawer";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { Users, SearchX } from "lucide-react";
-import Link from "next/link";
+import { Users, SearchX, ChevronRight } from "lucide-react";
 
 type TabKey = "to_review" | "shortlisted" | "invited" | "declined" | "all";
 const TABS: { key: TabKey; label: string }[] = [
@@ -22,18 +23,10 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "declined", label: "Passed" },
   { key: "all", label: "All" },
 ];
-
-function candidateStatusKey(row: CandidateRow): CandidateStatusKey {
-  if (row.status === "applied" && row.hasSubmission) return "to_review";
-  return row.status as CandidateStatusKey;
-}
-
-function relativeDate(date: Date): string {
-  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
-  if (days <= 0) return "Today";
-  if (days === 1) return "1 day ago";
-  return `${days} days ago`;
-}
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+];
 
 export default async function CompanyCandidatesPage({
   searchParams,
@@ -61,11 +54,12 @@ export default async function CompanyCandidatesPage({
   }
 
   const { rows, roleOptions } = await getCompanyCandidates(membership.company.id);
+  const q = typeof params.q === "string" ? params.q.trim().toLowerCase() : "";
   const tab: TabKey = TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "to_review";
   const opportunityFilter = typeof params.opportunity === "string" ? params.opportunity : "all";
   const sort = params.sort === "oldest" ? "oldest" : "newest";
 
-  const withKey = rows.map((r) => ({ ...r, key: candidateStatusKey(r) }));
+  const withKey = rows.map((r) => ({ ...r, key: stageKeyOf(r) }));
   const counts = {
     to_review: withKey.filter((r) => r.key === "to_review").length,
     shortlisted: withKey.filter((r) => r.key === "shortlisted").length,
@@ -76,6 +70,11 @@ export default async function CompanyCandidatesPage({
 
   let filtered = tab === "all" ? withKey : withKey.filter((r) => r.key === tab);
   if (opportunityFilter !== "all") filtered = filtered.filter((r) => r.opportunityId === opportunityFilter);
+  if (q) {
+    filtered = filtered.filter(
+      (r) => r.studentName.toLowerCase().includes(q) || r.studentEmail.toLowerCase().includes(q),
+    );
+  }
   filtered = [...filtered].sort((a, b) => {
     const at = a.submittedAt?.getTime() ?? 0;
     const bt = b.submittedAt?.getTime() ?? 0;
@@ -84,28 +83,34 @@ export default async function CompanyCandidatesPage({
 
   return (
     <CompanyPageContainer>
-      <CompanyPageHeader
-        eyebrow="Candidates"
-        title="Candidates to review"
-        description="Challenge submissions waiting for a decision — shortlist, invite, or pass."
-        actions={
-          rows.length > 0 ? (
-            <ExportCsvButton
-              filename="candidates.csv"
-              label="Export candidates"
-              headers={["Candidate", "Email", "Internship", "Status", "Evidence", "Submitted"]}
-              rows={filtered.map((r) => [
-                r.studentName,
-                r.studentEmail,
-                r.role,
-                r.key,
-                r.evidenceSummary ?? "",
-                r.submittedAt ? r.submittedAt.toISOString() : "",
-              ])}
-            />
-          ) : undefined
-        }
-      />
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-navy/45">
+        <Link href="/company/dashboard" className="hover:text-navy">
+          Home
+        </Link>
+        <ChevronRight className="size-3" aria-hidden="true" />
+        <span className="text-navy/70">Candidates</span>
+      </nav>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-navy">Candidates</h1>
+          <p className="text-sm text-navy/55">Review applicants and move the right people forward.</p>
+        </div>
+        {rows.length > 0 && (
+          <ExportCsvButton
+            filename="candidates.csv"
+            label="Export candidates"
+            headers={["Candidate", "Email", "Internship", "Stage", "Evidence", "Submitted"]}
+            rows={filtered.map((r) => [
+              r.studentName,
+              r.studentEmail,
+              r.role,
+              r.key,
+              r.hasSubmission ? `${r.artifacts.length} file(s)` : "Not submitted",
+              r.submittedAt ? r.submittedAt.toISOString() : "",
+            ])}
+          />
+        )}
+      </div>
 
       {rows.length === 0 ? (
         <EmptyState
@@ -114,9 +119,9 @@ export default async function CompanyCandidatesPage({
           description="Once students apply and submit a Challenge, they'll show up here for you to evaluate."
         />
       ) : (
-        <Card className="mt-6 rounded-xl border border-navy/10 shadow-none ring-0">
+        <Card className="mt-4 rounded-xl border border-navy/10 shadow-none ring-0">
           <CardContent className="px-0">
-            <div className="flex flex-wrap items-center justify-between gap-3 px-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy/8 px-4">
               <div className="flex flex-wrap gap-1">
                 {TABS.map((t) => (
                   <Link
@@ -132,81 +137,62 @@ export default async function CompanyCandidatesPage({
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-2 py-2.5">
+                <form method="get" className="flex items-center gap-2">
+                  {tab !== "to_review" && <input type="hidden" name="tab" value={tab} />}
+                  <label htmlFor="candidate-search" className="sr-only">
+                    Search candidates
+                  </label>
+                  <input
+                    id="candidate-search"
+                    type="text"
+                    name="q"
+                    defaultValue={q}
+                    placeholder="Search candidates..."
+                    className="h-8 w-52 rounded-lg border border-navy/15 bg-white px-3 text-sm text-navy placeholder:text-navy/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+                  />
+                </form>
                 <QuerySelect
                   param="opportunity"
                   value={opportunityFilter}
                   options={[{ value: "all", label: "All internships" }, ...roleOptions.map((o) => ({ value: o.id, label: o.role }))]}
                   className="h-8"
                 />
-                <QuerySelect
-                  param="sort"
-                  value={sort}
-                  options={[
-                    { value: "newest", label: "Newest first" },
-                    { value: "oldest", label: "Oldest first" },
-                  ]}
-                  className="h-8"
-                />
+                <QuerySelect param="sort" value={sort} options={SORT_OPTIONS} className="h-8" />
               </div>
             </div>
 
             {filtered.length === 0 ? (
-              <div className="px-5 pb-2">
+              <div className="px-4 pb-2">
                 <EmptyState icon={SearchX} title="Nothing here" description="No candidates match this view." />
               </div>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-gray-50">
                   <TableRow className="border-navy/10 hover:bg-transparent">
-                    <TableHead className="pl-5 text-xs uppercase tracking-wide text-navy/45">Candidate</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Internship</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Status</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Evidence</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/45">Submitted</TableHead>
-                    <TableHead className="pr-5 text-right text-xs uppercase tracking-wide text-navy/45">Actions</TableHead>
+                    <TableHead className="pl-4 text-xs uppercase tracking-wide text-navy/65">Candidate</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Contact</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Internship</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Evidence</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Submitted</TableHead>
+                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Stage</TableHead>
+                    <TableHead className="pr-4 text-right text-xs uppercase tracking-wide text-navy/65">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.map((row) => (
-                    <TableRow key={row.applicationId} className="border-navy/8">
-                      <TableCell className="max-w-44 pl-5">
-                        <div className="flex items-center gap-2">
-                          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-navy/8 text-xs font-semibold text-navy/60">
-                            {row.studentName.charAt(0).toUpperCase()}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="truncate font-medium text-navy">{row.studentName}</p>
-                            <p className="truncate text-xs text-navy/45">{row.studentEmail}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-32 truncate text-navy/65">{row.role}</TableCell>
-                      <TableCell>
-                        <CandidateStatusBadge status={row.key} />
-                      </TableCell>
-                      <TableCell className="max-w-40 truncate text-navy/65">
-                        {row.evidenceSummary ?? (row.hasSubmission ? "Submitted — not yet evaluated" : "No submission yet")}
-                      </TableCell>
-                      <TableCell className="text-navy/65">{row.submittedAt ? relativeDate(row.submittedAt) : "—"}</TableCell>
-                      <TableCell className="pr-5">
-                        <CandidateRowActions
-                          applicationId={row.applicationId}
-                          submissionId={row.submissionId}
-                          status={row.status}
-                          hasOffer={row.hasOffer}
-                        />
-                      </TableCell>
-                    </TableRow>
+                    <CandidateTableRow key={row.applicationId} row={row} />
                   ))}
                 </TableBody>
               </Table>
             )}
-            <p className="px-5 py-3 text-xs text-navy/45">
+            <p className="px-4 py-3 text-xs text-navy/45">
               Showing 1 to {filtered.length} of {filtered.length} candidate{filtered.length === 1 ? "" : "s"}
             </p>
           </CardContent>
         </Card>
       )}
+
+      <CandidateDrawer candidates={rows} />
     </CompanyPageContainer>
   );
 }

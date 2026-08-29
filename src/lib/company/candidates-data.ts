@@ -8,12 +8,22 @@ export interface CandidateRow {
   opportunityId: string;
   role: string;
   status: "applied" | "shortlisted" | "invited" | "declined" | "withdrawn";
+  appliedAt: Date;
   hasSubmission: boolean;
   submissionId: string | null;
   submittedAt: Date | null;
-  /** Real free-text evidence summary — never a numeric fit score. */
-  evidenceSummary: string | null;
-  hasOffer: boolean;
+  submissionNotes: string | null;
+  artifacts: { name: string; url: string }[];
+  aiUsageMode: "open" | "ai_allowed" | "restricted_ai" | "controlled" | null;
+  /** Real generated evidence — never a numeric fit score. Null until a company generates it. */
+  evidence: {
+    tasksCompleted: string;
+    timeSpentMinutes: number;
+    aiSummary: string;
+    strength: string;
+    weakness: string;
+  } | null;
+  offer: { id: string; status: "pending" | "accepted" | "declined" } | null;
 }
 
 /** Company-wide candidate list across every opportunity — the full applicant pool, not just the review queue. */
@@ -34,6 +44,7 @@ export async function getCompanyCandidates(companyId: string): Promise<{ rows: C
       id: schema.applications.id,
       opportunityId: schema.applications.opportunityId,
       status: schema.applications.status,
+      createdAt: schema.applications.createdAt,
       studentName: schema.users.fullName,
       studentEmail: schema.users.email,
     })
@@ -48,12 +59,15 @@ export async function getCompanyCandidates(companyId: string): Promise<{ rows: C
           id: schema.submissions.id,
           applicationId: schema.submissions.applicationId,
           submittedAt: schema.submissions.submittedAt,
+          notes: schema.submissions.notes,
+          artifacts: schema.submissions.artifacts,
+          aiUsageMode: schema.submissions.aiUsageMode,
         })
         .from(schema.submissions)
         .where(inArray(schema.submissions.applicationId, applicationIds))
         .orderBy(desc(schema.submissions.submittedAt))
     : [];
-  const latestSubmissionByApplication = new Map<string, { id: string; submittedAt: Date }>();
+  const latestSubmissionByApplication = new Map<string, (typeof submissions)[number]>();
   for (const s of submissions) {
     if (!latestSubmissionByApplication.has(s.applicationId)) latestSubmissionByApplication.set(s.applicationId, s);
   }
@@ -61,20 +75,31 @@ export async function getCompanyCandidates(companyId: string): Promise<{ rows: C
 
   const evidenceRows = submissionIds.length
     ? await db
-        .select({ submissionId: schema.candidateEvidence.submissionId, tasksCompleted: schema.candidateEvidence.tasksCompleted })
+        .select({
+          submissionId: schema.candidateEvidence.submissionId,
+          tasksCompleted: schema.candidateEvidence.tasksCompleted,
+          timeSpentMinutes: schema.candidateEvidence.timeSpentMinutes,
+          aiSummary: schema.candidateEvidence.aiSummary,
+          strength: schema.candidateEvidence.strength,
+          weakness: schema.candidateEvidence.weakness,
+        })
         .from(schema.candidateEvidence)
         .where(inArray(schema.candidateEvidence.submissionId, submissionIds))
     : [];
-  const evidenceBySubmission = new Map(evidenceRows.map((e) => [e.submissionId, e.tasksCompleted]));
+  const evidenceBySubmission = new Map(evidenceRows.map((e) => [e.submissionId, e]));
 
   const offers = applicationIds.length
-    ? await db.select({ applicationId: schema.internshipOffers.applicationId }).from(schema.internshipOffers).where(inArray(schema.internshipOffers.applicationId, applicationIds))
+    ? await db
+        .select({ id: schema.internshipOffers.id, applicationId: schema.internshipOffers.applicationId, status: schema.internshipOffers.status })
+        .from(schema.internshipOffers)
+        .where(inArray(schema.internshipOffers.applicationId, applicationIds))
     : [];
-  const applicationIdsWithOffer = new Set(offers.map((o) => o.applicationId));
+  const offerByApplication = new Map(offers.map((o) => [o.applicationId, o]));
 
   const rows: CandidateRow[] = applications.map((a) => {
     const submission = latestSubmissionByApplication.get(a.id);
     const evidence = submission ? evidenceBySubmission.get(submission.id) : undefined;
+    const offer = offerByApplication.get(a.id);
     return {
       applicationId: a.id,
       studentName: a.studentName,
@@ -82,11 +107,23 @@ export async function getCompanyCandidates(companyId: string): Promise<{ rows: C
       opportunityId: a.opportunityId,
       role: roleById.get(a.opportunityId) ?? "",
       status: a.status,
+      appliedAt: a.createdAt,
       hasSubmission: !!submission,
       submissionId: submission?.id ?? null,
       submittedAt: submission?.submittedAt ?? null,
-      evidenceSummary: evidence ?? null,
-      hasOffer: applicationIdsWithOffer.has(a.id),
+      submissionNotes: submission?.notes ?? null,
+      artifacts: submission?.artifacts ?? [],
+      aiUsageMode: submission?.aiUsageMode ?? null,
+      evidence: evidence
+        ? {
+            tasksCompleted: evidence.tasksCompleted,
+            timeSpentMinutes: evidence.timeSpentMinutes,
+            aiSummary: evidence.aiSummary,
+            strength: evidence.strength,
+            weakness: evidence.weakness,
+          }
+        : null,
+      offer: offer ? { id: offer.id, status: offer.status } : null,
     };
   });
 
