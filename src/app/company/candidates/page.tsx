@@ -14,7 +14,7 @@ import { Pagination } from "@/components/company/pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { Archive, Users, SearchX, ChevronRight, Clock3, Star, Send, Search } from "lucide-react";
+import { Users, SearchX, ChevronRight, Clock3, Star, Send, Search } from "lucide-react";
 
 type TabKey = "all" | "to_review" | "shortlisted" | "invited";
 const TABS: { key: TabKey; label: string }[] = [
@@ -118,7 +118,7 @@ export default async function CompanyCandidatesPage({
   }
   const internshipOptions = [
     { value: "all", label: "All internships", count: internshipCountRows.length },
-    ...roleOptions.map((option) => ({
+    ...[...roleOptions].sort((a, b) => a.role.localeCompare(b.role)).map((option) => ({
       value: option.id,
       label: option.role,
       count: internshipCountById.get(option.id) ?? 0,
@@ -182,6 +182,10 @@ export default async function CompanyCandidatesPage({
             active={activeForOpportunity.map(toCsvRow)}
             archived={archivedForOpportunity.map(toCsvRow)}
             all={reviewableForOpportunity.map(toCsvRow)}
+            archivedCount={archivedForOpportunity.length}
+            archiveHref={buildHref({ view: "archived", tab: undefined, page: undefined })}
+            activeHref={buildHref({ view: undefined, tab: undefined, page: undefined })}
+            isArchiveView={isArchiveView}
           />
         )}
       </div>
@@ -256,21 +260,6 @@ export default async function CompanyCandidatesPage({
                     />
                   </form>
                   <QuerySelect param="sort" value={sort} resetParam="page" ariaLabel="Sort candidates" options={SORT_OPTIONS} className="h-8" />
-                  {archivedRows.length > 0 && (
-                    <Link
-                      href={buildHref({ view: "archived", tab: undefined, page: undefined })}
-                      aria-current={isArchiveView ? "page" : undefined}
-                      className={`flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
-                        isArchiveView
-                          ? "bg-gray-light text-navy/70"
-                          : "text-navy/45 hover:bg-gray-light/70 hover:text-navy/70"
-                      }`}
-                    >
-                      <Archive className="size-3.5" aria-hidden="true" />
-                      Archived candidates
-                      <span className="tabular-nums">{archivedForOpportunity.length}</span>
-                    </Link>
-                  )}
                 </div>
               </div>
 
