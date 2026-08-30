@@ -18,7 +18,9 @@ export function getDb() {
       "DATABASE_URL is not set. Add it to .env.local (see .env.local.example) to use the database.",
     );
   }
-  const client = postgres(url, { prepare: false });
+  // Each serverless instance owns a pool. The default ten persistent
+  // connections can exhaust Supabase's shared session pool across instances.
+  const client = postgres(url, { prepare: false, max: 2, idle_timeout: 20 });
   _db = drizzle(client, { schema });
   return _db;
 }
