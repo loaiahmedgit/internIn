@@ -13,6 +13,7 @@ export interface CandidateRow {
   submissionId: string | null;
   submittedAt: Date | null;
   submissionNotes: string | null;
+  hasCv: boolean;
   artifacts: { name: string; url: string }[];
   aiUsageMode: "open" | "ai_allowed" | "restricted_ai" | "controlled" | null;
   /** Real generated evidence — never a numeric fit score. Null until a company generates it. */
@@ -47,9 +48,11 @@ export async function getCompanyCandidates(companyId: string): Promise<{ rows: C
       createdAt: schema.applications.createdAt,
       studentName: schema.users.fullName,
       studentEmail: schema.users.email,
+      cvUrl: schema.studentProfiles.cvUrl,
     })
     .from(schema.applications)
     .innerJoin(schema.users, eq(schema.applications.studentId, schema.users.id))
+    .leftJoin(schema.studentProfiles, eq(schema.studentProfiles.userId, schema.users.id))
     .where(inArray(schema.applications.opportunityId, opportunityIds));
   const applicationIds = applications.map((a) => a.id);
 
@@ -112,6 +115,7 @@ export async function getCompanyCandidates(companyId: string): Promise<{ rows: C
       submissionId: submission?.id ?? null,
       submittedAt: submission?.submittedAt ?? null,
       submissionNotes: submission?.notes ?? null,
+      hasCv: !!a.cvUrl,
       artifacts: submission?.artifacts ?? [],
       aiUsageMode: submission?.aiUsageMode ?? null,
       evidence: evidence

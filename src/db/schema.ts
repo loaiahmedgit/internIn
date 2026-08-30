@@ -404,6 +404,23 @@ export const eventLog = pgTable(
   (t) => [index("event_log_entity_idx").on(t.entityType, t.entityId)],
 );
 
+/** Private, internal recruiter notes on one application — never shown to the student. */
+export const candidateNotes = pgTable(
+  "candidate_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    authorUserId: uuid("author_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("candidate_notes_application_idx").on(t.applicationId)],
+);
+
 // ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------

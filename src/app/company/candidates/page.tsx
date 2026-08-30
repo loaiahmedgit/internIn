@@ -9,19 +9,18 @@ import { CompanyPageContainer } from "@/components/company/page-shell";
 import { QuerySelect } from "@/components/company/query-select";
 import { ExportCsvButton } from "@/components/company/export-csv-button";
 import { CandidateTableRow } from "@/components/company/candidate-table-row";
-import { CandidateDrawer } from "@/components/company/candidate-drawer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { Users, SearchX, ChevronRight } from "lucide-react";
+import { Users, SearchX, ChevronRight, Clock, Star, Send, CheckCircle2 } from "lucide-react";
 
-type TabKey = "to_review" | "shortlisted" | "invited" | "declined" | "all";
+type TabKey = "all" | "to_review" | "shortlisted" | "invited" | "declined";
 const TABS: { key: TabKey; label: string }[] = [
+  { key: "all", label: "All" },
   { key: "to_review", label: "To review" },
   { key: "shortlisted", label: "Shortlisted" },
   { key: "invited", label: "Invited" },
   { key: "declined", label: "Passed" },
-  { key: "all", label: "All" },
 ];
 const SORT_OPTIONS = [
   { value: "newest", label: "Newest first" },
@@ -55,17 +54,17 @@ export default async function CompanyCandidatesPage({
 
   const { rows, roleOptions } = await getCompanyCandidates(membership.company.id);
   const q = typeof params.q === "string" ? params.q.trim().toLowerCase() : "";
-  const tab: TabKey = TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "to_review";
+  const tab: TabKey = TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "all";
   const opportunityFilter = typeof params.opportunity === "string" ? params.opportunity : "all";
   const sort = params.sort === "oldest" ? "oldest" : "newest";
 
   const withKey = rows.map((r) => ({ ...r, key: stageKeyOf(r) }));
   const counts = {
+    all: withKey.length,
     to_review: withKey.filter((r) => r.key === "to_review").length,
     shortlisted: withKey.filter((r) => r.key === "shortlisted").length,
     invited: withKey.filter((r) => r.key === "invited").length,
     declined: withKey.filter((r) => r.key === "declined").length,
-    all: withKey.length,
   };
 
   let filtered = tab === "all" ? withKey : withKey.filter((r) => r.key === tab);
@@ -76,10 +75,18 @@ export default async function CompanyCandidatesPage({
     );
   }
   filtered = [...filtered].sort((a, b) => {
-    const at = a.submittedAt?.getTime() ?? 0;
-    const bt = b.submittedAt?.getTime() ?? 0;
+    const at = a.appliedAt.getTime();
+    const bt = b.appliedAt.getTime();
     return sort === "newest" ? bt - at : at - bt;
   });
+
+  const SUMMARY = [
+    { icon: Users, value: counts.all, label: "Total candidates" },
+    { icon: Clock, value: counts.to_review, label: "To review" },
+    { icon: Star, value: counts.shortlisted, label: "Shortlisted" },
+    { icon: Send, value: counts.invited, label: "Invited" },
+    { icon: CheckCircle2, value: counts.declined, label: "Passed" },
+  ];
 
   return (
     <CompanyPageContainer>
@@ -99,14 +106,14 @@ export default async function CompanyCandidatesPage({
           <ExportCsvButton
             filename="candidates.csv"
             label="Export candidates"
-            headers={["Candidate", "Email", "Internship", "Stage", "Evidence", "Submitted"]}
+            headers={["Candidate", "Email", "Internship", "Stage", "Submission", "Applied"]}
             rows={filtered.map((r) => [
               r.studentName,
               r.studentEmail,
               r.role,
               r.key,
-              r.hasSubmission ? `${r.artifacts.length} file(s)` : "Not submitted",
-              r.submittedAt ? r.submittedAt.toISOString() : "",
+              r.hasCv || r.hasSubmission ? "see profile" : "Not submitted",
+              r.appliedAt.toISOString(),
             ])}
           />
         )}
@@ -119,80 +126,92 @@ export default async function CompanyCandidatesPage({
           description="Once students apply and submit a Challenge, they'll show up here for you to evaluate."
         />
       ) : (
-        <Card className="mt-4 rounded-xl border border-navy/10 shadow-none ring-0">
-          <CardContent className="px-0">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy/8 px-4">
-              <div className="flex flex-wrap gap-1">
-                {TABS.map((t) => (
-                  <Link
-                    key={t.key}
-                    href={t.key === "to_review" ? "/company/candidates" : `/company/candidates?tab=${t.key}`}
-                    className={`-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-sm font-medium transition-colors ${
-                      tab === t.key ? "border-teal text-teal-ink" : "border-transparent text-navy/50 hover:text-navy"
-                    }`}
-                  >
-                    {t.label}
-                    <span className="rounded-full bg-gray-light px-1.5 py-0.5 text-xs text-navy/50">{counts[t.key]}</span>
-                  </Link>
-                ))}
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {SUMMARY.map((s) => (
+              <div key={s.label} className="flex items-center gap-2.5 rounded-xl border border-navy/10 bg-white px-4 py-3">
+                <s.icon className="size-4 shrink-0 text-navy/40" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-lg leading-none font-semibold tabular-nums text-navy">{s.value}</p>
+                  <p className="mt-1 truncate text-xs text-navy/50">{s.label}</p>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2 py-2.5">
-                <form method="get" className="flex items-center gap-2">
-                  {tab !== "to_review" && <input type="hidden" name="tab" value={tab} />}
-                  <label htmlFor="candidate-search" className="sr-only">
-                    Search candidates
-                  </label>
-                  <input
-                    id="candidate-search"
-                    type="text"
-                    name="q"
-                    defaultValue={q}
-                    placeholder="Search candidates..."
-                    className="h-8 w-52 rounded-lg border border-navy/15 bg-white px-3 text-sm text-navy placeholder:text-navy/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
-                  />
-                </form>
-                <QuerySelect
-                  param="opportunity"
-                  value={opportunityFilter}
-                  options={[{ value: "all", label: "All internships" }, ...roleOptions.map((o) => ({ value: o.id, label: o.role }))]}
-                  className="h-8"
-                />
-                <QuerySelect param="sort" value={sort} options={SORT_OPTIONS} className="h-8" />
-              </div>
-            </div>
+            ))}
+          </div>
 
-            {filtered.length === 0 ? (
-              <div className="px-4 pb-2">
-                <EmptyState icon={SearchX} title="Nothing here" description="No candidates match this view." />
-              </div>
-            ) : (
-              <Table>
-                <TableHeader className="bg-gray-50">
-                  <TableRow className="border-navy/10 hover:bg-transparent">
-                    <TableHead className="pl-4 text-xs uppercase tracking-wide text-navy/65">Candidate</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Contact</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Internship</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Evidence</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Submitted</TableHead>
-                    <TableHead className="text-xs uppercase tracking-wide text-navy/65">Stage</TableHead>
-                    <TableHead className="pr-4 text-right text-xs uppercase tracking-wide text-navy/65">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((row) => (
-                    <CandidateTableRow key={row.applicationId} row={row} />
+          <Card className="mt-4 rounded-xl border border-navy/10 shadow-none ring-0">
+            <CardContent className="px-0">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-navy/8 px-4">
+                <div className="flex flex-wrap gap-1">
+                  {TABS.map((t) => (
+                    <Link
+                      key={t.key}
+                      href={t.key === "all" ? "/company/candidates" : `/company/candidates?tab=${t.key}`}
+                      className={`-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-sm font-medium transition-colors ${
+                        tab === t.key ? "border-teal text-teal-ink" : "border-transparent text-navy/50 hover:text-navy"
+                      }`}
+                    >
+                      {t.label}
+                      <span className="rounded-full bg-gray-light px-1.5 py-0.5 text-xs text-navy/50">{counts[t.key]}</span>
+                    </Link>
                   ))}
-                </TableBody>
-              </Table>
-            )}
-            <p className="px-4 py-3 text-xs text-navy/45">
-              Showing 1 to {filtered.length} of {filtered.length} candidate{filtered.length === 1 ? "" : "s"}
-            </p>
-          </CardContent>
-        </Card>
-      )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 py-2.5">
+                  <form method="get" className="flex items-center gap-2">
+                    {tab !== "all" && <input type="hidden" name="tab" value={tab} />}
+                    <label htmlFor="candidate-search" className="sr-only">
+                      Search candidates
+                    </label>
+                    <input
+                      id="candidate-search"
+                      type="text"
+                      name="q"
+                      defaultValue={q}
+                      placeholder="Search candidates..."
+                      className="h-8 w-52 rounded-lg border border-navy/15 bg-white px-3 text-sm text-navy placeholder:text-navy/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+                    />
+                  </form>
+                  <QuerySelect
+                    param="opportunity"
+                    value={opportunityFilter}
+                    options={[{ value: "all", label: "All internships" }, ...roleOptions.map((o) => ({ value: o.id, label: o.role }))]}
+                    className="h-8"
+                  />
+                  <QuerySelect param="sort" value={sort} options={SORT_OPTIONS} className="h-8" />
+                </div>
+              </div>
 
-      <CandidateDrawer candidates={rows} />
+              {filtered.length === 0 ? (
+                <div className="px-4 pb-2">
+                  <EmptyState icon={SearchX} title="Nothing here" description="No candidates match this view." />
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader className="bg-gray-50">
+                    <TableRow className="border-navy/10 hover:bg-transparent">
+                      <TableHead className="pl-4 text-xs uppercase tracking-wide text-navy/65">Candidate</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wide text-navy/65">Contact</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wide text-navy/65">Internship</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wide text-navy/65">Submission</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wide text-navy/65">Applied</TableHead>
+                      <TableHead className="text-xs uppercase tracking-wide text-navy/65">Stage</TableHead>
+                      <TableHead className="pr-4 text-right text-xs uppercase tracking-wide text-navy/65">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((row) => (
+                      <CandidateTableRow key={row.applicationId} row={row} />
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              <p className="px-4 py-3 text-xs text-navy/45">
+                Showing 1 to {filtered.length} of {filtered.length} candidate{filtered.length === 1 ? "" : "s"}
+              </p>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </CompanyPageContainer>
   );
 }
