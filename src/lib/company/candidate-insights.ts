@@ -86,12 +86,39 @@ export function candidateInsights(detail: CandidateDetail): CandidateInsight[] {
 export function candidateAssistiveSummary(detail: CandidateDetail): CandidateAssistiveSummary | null {
   if (!detail.submission || !detail.challenge || !detail.evidence) return null;
 
+  const parsedProgress = parsedTaskProgress(detail);
   const progress = verifiedTaskProgress(detail);
   const skills = relevantSkills(detail);
   const fileCount = detail.submission.artifacts.length;
   const hasWrittenNotes = detail.submission.notes.trim().length > 0;
 
-  if (!progress || (fileCount === 0 && !hasWrittenNotes)) return null;
+  if ((parsedProgress && !progress) || (fileCount === 0 && !hasWrittenNotes)) return null;
+
+  if (!progress) {
+    const facts = [
+      fileCount > 0
+        ? `The submission includes ${fileCount} ${pluralize(fileCount, "file")}.`
+        : "The submission contains written notes and no uploaded files.",
+      "Evaluated evidence is recorded, but task completion could not be verified from the available data.",
+    ];
+    if (skills.length > 0) {
+      facts.push(
+        skills.length === 1
+          ? "1 profile skill matches the challenge requirements."
+          : `${skills.length} profile skills match the challenge requirements.`,
+      );
+    }
+
+    return {
+      summary: facts.join(" "),
+      strength: skills.length > 0
+        ? `${skills.join(", ")} ${skills.length === 1 ? "aligns" : "align"} with the challenge requirements.`
+        : fileCount > 0
+          ? `${fileCount} submitted ${pluralize(fileCount, "file")} are available for review.`
+          : "Written submission notes are available for review.",
+      watchFor: "Task completion could not be verified from the evaluated evidence. Review the submission against the challenge rubric.",
+    };
+  }
 
   const facts = [
     `Recorded evidence shows ${progress.completed}/${progress.total} challenge tasks completed.`,
@@ -122,4 +149,21 @@ export function candidateAssistiveSummary(detail: CandidateDetail): CandidateAss
       : "Review the submitted evidence against the challenge rubric before deciding.";
 
   return { summary: facts.join(" "), strength, watchFor };
+}
+
+/** Describe missing or inconsistent evaluation without denying visible evidence. */
+export function candidateSummaryUnavailableMessage(detail: CandidateDetail): string {
+  const fileCount = detail.submission?.artifacts.length ?? 0;
+  const hasWrittenNotes = Boolean(detail.submission?.notes.trim());
+
+  if (fileCount > 0) {
+    return "Submission files are available, but there is not enough evaluated evidence yet to generate a reliable summary.";
+  }
+  if (hasWrittenNotes) {
+    return "A written submission is available, but there is not enough evaluated evidence yet to generate a reliable summary.";
+  }
+  if (detail.submission) {
+    return "A submission record exists, but there is not enough evaluated evidence yet to generate a reliable summary.";
+  }
+  return "Nothing to summarize until a submission comes in.";
 }

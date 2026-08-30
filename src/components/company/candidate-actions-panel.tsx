@@ -24,7 +24,6 @@ import {
   inviteToInternshipAction,
   moveApplicationToReviewAction,
   shortlistApplicationAction,
-  withdrawOfferAction,
 } from "@/lib/opportunities/actions";
 import { generateCandidateEvidenceAction } from "@/lib/opportunities/evidence-actions";
 import { FileSearch, MoreHorizontal, Send, Sparkles, Star, Undo2, XCircle } from "lucide-react";
@@ -52,7 +51,6 @@ export function CandidateActionsPanel({
   const [error, setError] = useState<string | null>(null);
   const [offerOpen, setOfferOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
 
   function run(action: () => Promise<unknown>, onSuccess?: () => void) {
     setError(null);
@@ -104,7 +102,7 @@ export function CandidateActionsPanel({
     );
   }
 
-  function renderMoreActions(items: "review" | "shortlisted" | "offer") {
+  function renderMoreActions(items: "review" | "shortlisted") {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger
@@ -125,22 +123,19 @@ export function CandidateActionsPanel({
               Reject candidate
             </DropdownMenuItem>
           )}
-          {items === "offer" && offerStatus === "pending" && (
-            <DropdownMenuItem variant="destructive" onClick={() => setWithdrawOpen(true)}>
-              <Undo2 className="size-4" aria-hidden="true" />
-              Withdraw offer
-            </DropdownMenuItem>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
     );
   }
 
+  const canGenerateSummary =
+    !hasEvidence && !!submissionId && (status === "applied" || status === "shortlisted");
+
   return (
     <div className="space-y-3">
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
-      {!hasEvidence && submissionId && (
+      {canGenerateSummary && submissionId && (
         <Button
           variant="outline"
           size="sm"
@@ -153,7 +148,7 @@ export function CandidateActionsPanel({
         </Button>
       )}
 
-      <div className="border-t border-navy/10 pt-3">
+      <div className={canGenerateSummary ? "border-t border-navy/10 pt-3" : undefined}>
         {status === "applied" && (
           <div className="flex items-center gap-2">
             <Button
@@ -177,17 +172,14 @@ export function CandidateActionsPanel({
         )}
 
         {status === "invited" && submissionId && (
-          <div className="flex items-center gap-2">
-            <Button
-              className="flex-1 bg-teal text-white hover:bg-teal/90"
-              render={<Link href={`/company/submissions/${submissionId}`} />}
-              nativeButton={false}
-            >
-              <FileSearch className="size-4" aria-hidden="true" />
-              View offer
-            </Button>
-            {offerStatus === "pending" && renderMoreActions("offer")}
-          </div>
+          <Button
+            className="w-full bg-teal text-white hover:bg-teal/90"
+            render={<Link href={`/company/submissions/${submissionId}`} />}
+            nativeButton={false}
+          >
+            <FileSearch className="size-4" aria-hidden="true" />
+            View offer
+          </Button>
         )}
 
         {(status === "declined" || status === "withdrawn") && (offerStatus === null || offerStatus === "declined") && (
@@ -224,26 +216,6 @@ export function CandidateActionsPanel({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Withdraw {candidateName}&apos;s offer?</DialogTitle>
-            <DialogDescription>
-              This revokes the pending offer and returns the candidate to the shortlisted stage.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setWithdrawOpen(false)} disabled={isPending}>Cancel</Button>
-            <Button
-              variant="destructive"
-              disabled={isPending}
-              onClick={() => run(() => withdrawOfferAction(applicationId), () => setWithdrawOpen(false))}
-            >
-              {isPending ? "Withdrawing…" : "Withdraw offer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

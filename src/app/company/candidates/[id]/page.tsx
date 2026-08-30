@@ -4,7 +4,11 @@ import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { getCandidateDetail } from "@/lib/company/candidate-detail-data";
-import { candidateAssistiveSummary, candidateInsights } from "@/lib/company/candidate-insights";
+import {
+  candidateAssistiveSummary,
+  candidateInsights,
+  candidateSummaryUnavailableMessage,
+} from "@/lib/company/candidate-insights";
 import { stageKeyOf, STAGE_LABEL, STAGE_CLASS } from "@/lib/company/candidate-stage";
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { CandidateActionsPanel } from "@/components/company/candidate-actions-panel";
@@ -91,6 +95,7 @@ export default async function CandidateProfilePage({
   const stage = stageKeyOf({ status: candidate.status, hasSubmission: !!candidate.submission });
   const insights = candidateInsights(candidate);
   const assistiveSummary = candidate.evidence ? candidateAssistiveSummary(candidate) : null;
+  const summaryUnavailableMessage = candidateSummaryUnavailableMessage(candidate);
   const files = [
     ...(candidate.profile?.cvUrl ? [{ name: "CV", url: candidate.profile.cvUrl }] : []),
     ...(candidate.submission?.artifacts ?? []),
@@ -405,8 +410,8 @@ export default async function CandidateProfilePage({
           )}
         </div>
 
-        <div className="space-y-4">
-          <section className="rounded-xl border border-navy/10 bg-white p-4">
+        <div className="space-y-5">
+          <section className="rounded-xl border border-navy/10 bg-white p-5">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-navy/45">Decision tools</h2>
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex items-center justify-between">
@@ -427,12 +432,12 @@ export default async function CandidateProfilePage({
           </section>
 
           {insights.length > 0 && (
-            <section className="rounded-xl border border-navy/10 bg-white p-4">
+            <section className="rounded-xl border border-navy/10 bg-white p-5">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-navy/45">Quick insights</h2>
-              <ul className="mt-2 space-y-2 text-sm text-navy/75">
+              <ul className="mt-3 space-y-2.5 text-sm text-navy/75">
                 {insights.map((insight) => (
-                  <li key={`${insight.label}-${insight.value ?? ""}`} className="flex items-start gap-2">
-                    <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
+                  <li key={`${insight.label}-${insight.value ?? ""}`} className="grid grid-cols-[0.875rem_minmax(0,1fr)] items-start gap-x-2">
+                    <CheckCircle2 className="mt-0.5 size-3.5 text-teal-ink" aria-hidden="true" />
                     <span className="min-w-0">
                       <span className="block">{insight.label}</span>
                       {insight.value && <span className="block text-xs text-navy/50">{insight.value}</span>}
@@ -443,7 +448,7 @@ export default async function CandidateProfilePage({
             </section>
           )}
 
-          <section className="rounded-xl border border-teal/20 bg-teal/5 p-4">
+          <section className="rounded-xl border border-teal/20 bg-teal/5 p-5">
             <div className="flex items-center justify-between">
               <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-teal-ink">
                 <Sparkles className="size-3.5" aria-hidden="true" />
@@ -464,25 +469,24 @@ export default async function CandidateProfilePage({
                 </p>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-navy/50">
-                {candidate.evidence
-                  ? "Insufficient evidence to generate a reliable summary."
-                  : candidate.submission
-                    ? "Not generated yet. Use the action below."
-                    : "Nothing to summarize until a submission comes in."}
-              </p>
+              <p className="mt-2 text-sm text-navy/50">{summaryUnavailableMessage}</p>
             )}
           </section>
 
-          <section aria-label="Candidate decision actions" className="rounded-xl border border-navy/10 bg-white p-4">
-            <CandidateActionsPanel
-              applicationId={candidate.applicationId}
-              candidateName={candidate.studentName}
-              submissionId={candidate.submission?.id ?? null}
-              status={candidate.status}
-              offerStatus={candidate.offer?.status ?? null}
-              hasEvidence={!!candidate.evidence}
-            />
+          <section aria-labelledby="candidate-decision-actions" className="rounded-xl border border-navy/10 bg-white p-5">
+            <h2 id="candidate-decision-actions" className="text-xs font-semibold uppercase tracking-wide text-navy/45">
+              Decision actions
+            </h2>
+            <div className="mt-3">
+              <CandidateActionsPanel
+                applicationId={candidate.applicationId}
+                candidateName={candidate.studentName}
+                submissionId={candidate.submission?.id ?? null}
+                status={candidate.status}
+                offerStatus={candidate.offer?.status ?? null}
+                hasEvidence={!!candidate.evidence}
+              />
+            </div>
           </section>
         </div>
       </div>

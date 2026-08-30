@@ -9,6 +9,7 @@ import { CompanyPageContainer } from "@/components/company/page-shell";
 import { QuerySelect } from "@/components/company/query-select";
 import { ExportCandidatesMenu } from "@/components/company/export-candidates-menu";
 import { CandidateTableRow } from "@/components/company/candidate-table-row";
+import { CandidateSummaryCard } from "@/components/company/candidate-summary-card";
 import { Pagination } from "@/components/company/pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -173,13 +174,13 @@ export default async function CompanyCandidatesPage({
         <>
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {SUMMARY_META.map((s) => (
-              <div key={s.key} className="flex min-h-20 items-center gap-4 rounded-xl border border-navy/10 bg-white px-5 py-4">
-                <s.icon className={`size-6 shrink-0 stroke-[1.75] ${s.iconColor}`} aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="text-2xl leading-none font-semibold tabular-nums tracking-tight text-navy">{counts[s.key]}</p>
-                  <p className="mt-1 truncate text-xs text-navy/50">{s.label}</p>
-                </div>
-              </div>
+              <CandidateSummaryCard
+                key={s.key}
+                icon={s.icon}
+                iconColor={s.iconColor}
+                label={s.label}
+                value={counts[s.key]}
+              />
             ))}
           </div>
 

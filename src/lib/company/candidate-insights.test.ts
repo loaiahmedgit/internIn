@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { CandidateDetail } from "@/lib/company/candidate-detail-data";
-import { candidateAssistiveSummary, candidateInsights } from "@/lib/company/candidate-insights";
+import {
+  candidateAssistiveSummary,
+  candidateInsights,
+  candidateSummaryUnavailableMessage,
+} from "@/lib/company/candidate-insights";
 
 function candidate(overrides: Partial<CandidateDetail> = {}): CandidateDetail {
   return {
@@ -130,5 +134,26 @@ describe("candidateInsights", () => {
 
     expect(candidateAssistiveSummary(detail)).toBeNull();
     expect(candidateInsights(detail)).not.toContainEqual(expect.objectContaining({ label: expect.stringContaining("Completed") }));
+    expect(candidateSummaryUnavailableMessage(detail)).toBe(
+      "Submission files are available, but there is not enough evaluated evidence yet to generate a reliable summary.",
+    );
+  });
+
+  it("summarizes available evaluated material cautiously when task progress is not machine-verifiable", () => {
+    const detail = candidate({
+      evidence: {
+        tasksCompleted: "Candidate discussed the three required tasks in the submission.",
+        timeSpentMinutes: 30,
+        aiSummary: "Unsupported assessment",
+        strength: "Unsupported assessment",
+        weakness: "Unsupported assessment",
+      },
+    });
+
+    const summary = candidateAssistiveSummary(detail);
+    expect(summary?.summary).toContain("2 files");
+    expect(summary?.summary).toContain("task completion could not be verified");
+    expect(summary?.strength).toBe("SQL, Python, Power BI align with the challenge requirements.");
+    expect(summary?.watchFor).toContain("Review the submission against the challenge rubric");
   });
 });
