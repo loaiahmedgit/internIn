@@ -14,14 +14,16 @@ export const STAGE_LABEL: Record<string, string> = {
   applied: "Awaiting submission",
   to_review: "To review",
   shortlisted: "Shortlisted",
-  invited: "Invited",
-  declined: "Passed",
+  invited: "Offer sent",
+  declined: "Not selected",
   withdrawn: "Withdrawn",
 };
 
 // Neutral gray (no override, secondary variant's own color) for anything
-// pre-review or terminal; blue for shortlisted; teal for invited — matches
-// the "soft blue / soft green-teal / neutral gray" spec exactly.
+// pre-review or terminal; blue for shortlisted; teal for offer sent — matches
+// the "soft blue / soft green-teal / neutral gray" spec exactly, and must
+// stay identical everywhere a stage is shown (summary cards, table badge,
+// profile badge) — see candidates/page.tsx's SUMMARY array.
 export const STAGE_CLASS: Record<string, string> = {
   shortlisted: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   invited: "bg-teal/10 text-teal-ink",

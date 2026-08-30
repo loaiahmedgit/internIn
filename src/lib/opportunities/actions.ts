@@ -430,6 +430,82 @@ export async function inviteToInternshipAction(applicationId: string) {
   return offer.id as string;
 }
 
+/** Undoes a Shortlist/Not-selected decision — puts the application back in the review queue. Refuses while a real offer exists; withdraw that first. */
+export async function moveApplicationToReviewAction(applicationId: string) {
+  const validatedApplicationId = IdSchema.parse(applicationId);
+  const { companyId, userId } = await getCompanyIdForCurrentUser();
+  const db = getDb();
+
+  const [application] = await db
+    .select({ id: schema.applications.id, opportunityCompanyId: schema.opportunities.companyId })
+    .from(schema.applications)
+    .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
+    .where(eq(schema.applications.id, validatedApplicationId))
+    .limit(1);
+  if (!application || application.opportunityCompanyId !== companyId) {
+    throw new Error("Not authorized for this application.");
+  }
+
+  const [existingOffer] = await db
+    .select({ id: schema.internshipOffers.id })
+    .from(schema.internshipOffers)
+    .where(eq(schema.internshipOffers.applicationId, validatedApplicationId))
+    .limit(1);
+  if (existingOffer) throw new Error("Withdraw the offer before moving this candidate back to review.");
+
+  await db
+    .update(schema.applications)
+    .set({ status: "applied", updatedAt: new Date() })
+    .where(eq(schema.applications.id, validatedApplicationId));
+
+  await db.insert(schema.eventLog).values({
+    entityType: "application",
+    entityId: validatedApplicationId,
+    eventType: "application_moved_to_review",
+    actorUserId: userId,
+  });
+}
+
+/** Withdraws a pending offer — the company changed its mind before the student accepted. Never touches an already-accepted offer (that's a real placement, not reversible here). */
+export async function withdrawOfferAction(applicationId: string) {
+  const validatedApplicationId = IdSchema.parse(applicationId);
+  const { companyId, memberRole, userId } = await getCompanyIdForCurrentUser();
+  if (memberRole === "member") throw new Error("Only a company owner or admin can withdraw an offer.");
+  const db = getDb();
+
+  const [application] = await db
+    .select({ id: schema.applications.id, opportunityCompanyId: schema.opportunities.companyId })
+    .from(schema.applications)
+    .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
+    .where(eq(schema.applications.id, validatedApplicationId))
+    .limit(1);
+  if (!application || application.opportunityCompanyId !== companyId) {
+    throw new Error("Not authorized for this application.");
+  }
+
+  const [offer] = await db
+    .select()
+    .from(schema.internshipOffers)
+    .where(eq(schema.internshipOffers.applicationId, validatedApplicationId))
+    .limit(1);
+  if (!offer) throw new Error("There's no offer to withdraw.");
+  if (offer.status !== "pending") throw new Error("Only a pending offer can be withdrawn.");
+
+  await db.update(schema.internshipOffers).set({ status: "declined", updatedAt: new Date() }).where(eq(schema.internshipOffers.id, offer.id));
+
+  await db
+    .update(schema.applications)
+    .set({ status: "shortlisted", updatedAt: new Date() })
+    .where(eq(schema.applications.id, validatedApplicationId));
+
+  await db.insert(schema.eventLog).values({
+    entityType: "application",
+    entityId: validatedApplicationId,
+    eventType: "internship_offer_withdrawn",
+    actorUserId: userId,
+  });
+}
+
 async function assertOwnsOffer(offerId: string, companyId: string) {
   const db = getDb();
   const [offer] = await db

@@ -33,8 +33,10 @@ const TABS: { key: TabKey; label: string }[] = [
 
 const EVENT_LABEL: Record<string, string> = {
   application_shortlisted: "Shortlisted",
-  application_declined: "Passed",
-  internship_offer_created: "Invited",
+  application_declined: "Not selected",
+  application_moved_to_review: "Moved back to review",
+  internship_offer_created: "Offer sent",
+  internship_offer_withdrawn: "Offer withdrawn",
   evidence_generated: "AI summary generated",
 };
 
@@ -355,7 +357,7 @@ export default async function CandidateProfilePage({
                 applicationId={candidate.applicationId}
                 submissionId={candidate.submission?.id ?? null}
                 status={candidate.status}
-                hasOffer={!!candidate.offer}
+                offerStatus={candidate.offer?.status ?? null}
                 hasEvidence={!!candidate.evidence}
               />
             </div>

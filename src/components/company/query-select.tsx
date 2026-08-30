@@ -14,11 +14,14 @@ export function QuerySelect({
   value,
   options,
   className,
+  resetParam,
 }: {
   param: string;
   value: string;
   options: { value: string; label: string }[];
   className?: string;
+  /** Another param to drop whenever this one changes — e.g. "page", so picking a new filter/sort always lands back on page 1. */
+  resetParam?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -28,6 +31,7 @@ export function QuerySelect({
     const params = new URLSearchParams(searchParams.toString());
     if (next) params.set(param, next);
     else params.delete(param);
+    if (resetParam) params.delete(resetParam);
     router.push(`${pathname}?${params.toString()}`);
   }
 

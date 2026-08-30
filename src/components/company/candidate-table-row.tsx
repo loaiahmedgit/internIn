@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { CandidateRow } from "@/lib/company/candidates-data";
 import { stageKeyOf, STAGE_LABEL, STAGE_CLASS } from "@/lib/company/candidate-stage";
-import { summarizeSubmission } from "@/lib/company/candidate-submission";
 import { formatRecentDate } from "@/lib/format-date";
 import { MoreHorizontal, User, FileSearch } from "lucide-react";
 
@@ -38,9 +37,6 @@ export function CandidateTableRow({ row }: { row: CandidateRow }) {
         </a>
       </TableCell>
       <TableCell className="max-w-36 truncate text-navy/65">{row.role}</TableCell>
-      <TableCell className="text-navy/65">
-        {summarizeSubmission({ hasCv: row.hasCv, hasSubmission: row.hasSubmission, artifactCount: row.artifacts.length })}
-      </TableCell>
       <TableCell className="text-navy/65">{formatRecentDate(row.appliedAt)}</TableCell>
       <TableCell>
         <Badge variant="secondary" className={STAGE_CLASS[stage] ?? ""}>

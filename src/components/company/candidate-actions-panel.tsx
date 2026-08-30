@@ -2,38 +2,36 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { shortlistApplicationAction, declineApplicationAction, inviteToInternshipAction } from "@/lib/opportunities/actions";
+import {
+  shortlistApplicationAction,
+  declineApplicationAction,
+  inviteToInternshipAction,
+  moveApplicationToReviewAction,
+  withdrawOfferAction,
+} from "@/lib/opportunities/actions";
 import { generateCandidateEvidenceAction } from "@/lib/opportunities/evidence-actions";
-import { Sparkles, Star, Send, XCircle } from "lucide-react";
+import { Sparkles, Star, Send, XCircle, Undo2, FileSearch } from "lucide-react";
 
 type Status = "applied" | "shortlisted" | "invited" | "declined" | "withdrawn";
 
-const STAGE_OPTION_LABEL: Record<Status, string> = {
-  applied: "To review",
-  shortlisted: "Shortlisted",
-  invited: "Invited",
-  declined: "Passed",
-  withdrawn: "Withdrawn",
-};
-
 /**
- * The one place every real status transition lives on this page — the Stage
- * select and the three decision buttons below both call the exact same
- * shortlist/decline/invite server actions, so they can never disagree with
- * each other or attempt a transition the backend doesn't actually support.
+ * The one place every real status transition lives on this page — the
+ * decision buttons below all call the exact same real server actions, so
+ * they can never attempt a transition the backend doesn't actually support.
  */
 export function CandidateActionsPanel({
   applicationId,
   submissionId,
   status,
-  hasOffer,
+  offerStatus,
   hasEvidence,
 }: {
   applicationId: string;
   submissionId: string | null;
   status: Status;
-  hasOffer: boolean;
+  offerStatus: "pending" | "accepted" | "declined" | null;
   hasEvidence: boolean;
 }) {
   const router = useRouter();
@@ -52,43 +50,8 @@ export function CandidateActionsPanel({
     });
   }
 
-  const stageOptions: Status[] =
-    status === "applied" || status === "shortlisted"
-      ? [status, ...(hasOffer ? [] : (["invited"] as Status[])), "declined" as Status].filter(
-          (v, i, arr) => arr.indexOf(v) === i,
-        )
-      : [status];
-
-  function handleStageChange(next: string) {
-    if (next === status) return;
-    if (next === "shortlisted") run(() => shortlistApplicationAction(applicationId));
-    else if (next === "invited") run(() => inviteToInternshipAction(applicationId));
-    else if (next === "declined") run(() => declineApplicationAction(applicationId));
-  }
-
-  const canDecide = status === "applied" || status === "shortlisted";
-
   return (
     <div className="space-y-3">
-      <div>
-        <label htmlFor="stage-select" className="mb-1 block text-xs text-navy/45">
-          Stage
-        </label>
-        <select
-          id="stage-select"
-          value={status}
-          disabled={isPending || stageOptions.length <= 1}
-          onChange={(e) => handleStageChange(e.target.value)}
-          className="h-8 w-full rounded-lg border border-navy/15 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 disabled:opacity-60"
-        >
-          {stageOptions.map((s) => (
-            <option key={s} value={s}>
-              {STAGE_OPTION_LABEL[s]}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {!hasEvidence && submissionId && (
@@ -104,35 +67,70 @@ export function CandidateActionsPanel({
         </Button>
       )}
 
-      {canDecide && (
-        <div className="space-y-2 border-t border-navy/10 pt-3">
-          {status === "applied" && (
-            <Button variant="outline" className="w-full" disabled={isPending} onClick={() => run(() => shortlistApplicationAction(applicationId))}>
-              <Star className="size-4" aria-hidden="true" />
-              Shortlist
-            </Button>
-          )}
-          {!hasOffer && (
+      <div className="space-y-2 border-t border-navy/10 pt-3">
+        {(status === "applied" || status === "shortlisted") && !offerStatus && (
+          <>
+            {status === "applied" && (
+              <Button variant="outline" className="w-full" disabled={isPending} onClick={() => run(() => shortlistApplicationAction(applicationId))}>
+                <Star className="size-4" aria-hidden="true" />
+                Shortlist
+              </Button>
+            )}
             <Button
               className="w-full bg-teal text-white hover:bg-teal/90"
               disabled={isPending}
               onClick={() => run(() => inviteToInternshipAction(applicationId))}
             >
               <Send className="size-4" aria-hidden="true" />
-              Invite
+              Send offer
             </Button>
-          )}
-          <Button
-            variant="outline"
-            className="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
-            disabled={isPending}
-            onClick={() => run(() => declineApplicationAction(applicationId))}
-          >
-            <XCircle className="size-4" aria-hidden="true" />
-            Pass
+            {status === "shortlisted" && (
+              <Button variant="outline" className="w-full" disabled={isPending} onClick={() => run(() => moveApplicationToReviewAction(applicationId))}>
+                <Undo2 className="size-4" aria-hidden="true" />
+                Move back to review
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
+              disabled={isPending}
+              onClick={() => run(() => declineApplicationAction(applicationId))}
+            >
+              <XCircle className="size-4" aria-hidden="true" />
+              Not selected
+            </Button>
+          </>
+        )}
+
+        {status === "invited" && (
+          <>
+            {submissionId && (
+              <Button variant="outline" className="w-full" render={<Link href={`/company/submissions/${submissionId}`} />} nativeButton={false}>
+                <FileSearch className="size-4" aria-hidden="true" />
+                View offer
+              </Button>
+            )}
+            {offerStatus === "pending" && (
+              <Button
+                variant="outline"
+                className="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
+                disabled={isPending}
+                onClick={() => run(() => withdrawOfferAction(applicationId))}
+              >
+                <XCircle className="size-4" aria-hidden="true" />
+                Withdraw offer
+              </Button>
+            )}
+          </>
+        )}
+
+        {(status === "declined" || status === "withdrawn") && (
+          <Button variant="outline" className="w-full" disabled={isPending} onClick={() => run(() => moveApplicationToReviewAction(applicationId))}>
+            <Undo2 className="size-4" aria-hidden="true" />
+            Restore to review
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
