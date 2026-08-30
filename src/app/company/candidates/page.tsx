@@ -13,15 +13,14 @@ import { Pagination } from "@/components/company/pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { Users, SearchX, ChevronRight, Clock3, Star, Send, Search } from "lucide-react";
+import { Archive, Users, SearchX, ChevronRight, Clock3, Star, Send, Search } from "lucide-react";
 
-type TabKey = "all" | "to_review" | "shortlisted" | "invited" | "not_selected";
+type TabKey = "all" | "to_review" | "shortlisted" | "invited";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "All" },
   { key: "to_review", label: STAGE_LABEL.to_review },
   { key: "shortlisted", label: STAGE_LABEL.shortlisted },
   { key: "invited", label: STAGE_LABEL.invited },
-  { key: "not_selected", label: STAGE_LABEL.not_selected },
 ];
 const SORT_OPTIONS = [
   { value: "newest", label: "Newest first" },
@@ -29,13 +28,13 @@ const SORT_OPTIONS = [
 ];
 const PAGE_SIZE = 10;
 
-// Icon + color pairing per stage — the same hue STAGE_ICON_COLOR/STAGE_CLASS
+// Icon + color pairing per stage. The same hue STAGE_ICON_COLOR/STAGE_CLASS
 // use for the table badge and the profile badge, so a summary card, a table
 // row, and the candidate profile can never show three different colors for
-// the same real stage. Icons are colored text only — no filled chip behind
+// the same real stage. Icons are colored text only, with no filled chip behind
 // them, per the summary-card rule.
 const SUMMARY_META: { key: "all" | "to_review" | "shortlisted" | "invited"; label: string; icon: typeof Users; iconColor: string }[] = [
-  { key: "all", label: "Total candidates", icon: Users, iconColor: "text-navy/40" },
+  { key: "all", label: "Active candidates", icon: Users, iconColor: "text-navy/40" },
   { key: "to_review", label: STAGE_LABEL.to_review, icon: Clock3, iconColor: STAGE_ICON_COLOR.to_review },
   { key: "shortlisted", label: STAGE_LABEL.shortlisted, icon: Star, iconColor: STAGE_ICON_COLOR.shortlisted },
   { key: "invited", label: STAGE_LABEL.invited, icon: Send, iconColor: STAGE_ICON_COLOR.invited },
@@ -43,6 +42,10 @@ const SUMMARY_META: { key: "all" | "to_review" | "shortlisted" | "invited"; labe
 
 function isPrePipeline(row: CandidateRow): boolean {
   return row.status === "applied" && !row.hasSubmission;
+}
+
+function isArchived(row: CandidateRow): boolean {
+  return row.status === "declined" || row.status === "withdrawn";
 }
 
 const TABLE_HEAD_CLASS = "text-xs uppercase tracking-wide text-navy/65";
@@ -74,27 +77,35 @@ export default async function CompanyCandidatesPage({
 
   const { rows, roleOptions } = await getCompanyCandidates(membership.company.id);
   const q = typeof params.q === "string" ? params.q.trim().toLowerCase() : "";
-  const tab: TabKey = TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "all";
+  // Keep old archived URLs working while using a clearer query parameter for
+  // new links. Archived candidates are history, not an active pipeline stage.
+  const isArchiveView = params.view === "archived" || params.tab === "archive" || params.tab === "not_selected";
+  const tab: TabKey = !isArchiveView && TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "all";
   const opportunityFilter = typeof params.opportunity === "string" ? params.opportunity : "all";
   const sort = params.sort === "oldest" ? "oldest" : "newest";
   const requestedPage = Math.max(1, Number(params.page) || 1);
 
-  // Pre-submission "applied" rows aren't ready for evaluation and never show
-  // up here at all. Every other real status (including declined/withdrawn,
-  // collapsed into "not_selected") is a normal, filterable tab — no separate
-  // archive view to keep track of.
-  const pipelineRows = rows.filter((r) => !isPrePipeline(r));
-  const withKey = pipelineRows.map((r) => ({ ...r, key: stageKeyOf(r) }));
+  // Pre-submission applications are not ready for evaluation. Declined and
+  // withdrawn applications stay available for audit/export in the archive,
+  // but never inflate the active pipeline or its summary counts.
+  const reviewableRows = rows.filter((r) => !isPrePipeline(r));
+  const activeRows = reviewableRows.filter((r) => !isArchived(r));
+  const archivedRows = reviewableRows.filter(isArchived);
+  const activeWithKey = activeRows.map((r) => ({ ...r, key: stageKeyOf(r) }));
+  const archivedWithKey = archivedRows.map((r) => ({ ...r, key: stageKeyOf(r) }));
 
   const counts = {
-    all: withKey.length,
-    to_review: withKey.filter((r) => r.key === "to_review").length,
-    shortlisted: withKey.filter((r) => r.key === "shortlisted").length,
-    invited: withKey.filter((r) => r.key === "invited").length,
-    not_selected: withKey.filter((r) => r.key === "not_selected").length,
+    all: activeWithKey.length,
+    to_review: activeWithKey.filter((r) => r.key === "to_review").length,
+    shortlisted: activeWithKey.filter((r) => r.key === "shortlisted").length,
+    invited: activeWithKey.filter((r) => r.key === "invited").length,
   };
 
-  let filtered = tab === "all" ? withKey : withKey.filter((r) => r.key === tab);
+  let filtered = isArchiveView
+    ? archivedWithKey
+    : tab === "all"
+      ? activeWithKey
+      : activeWithKey.filter((r) => r.key === tab);
   if (opportunityFilter !== "all") filtered = filtered.filter((r) => r.opportunityId === opportunityFilter);
   if (q) {
     filtered = filtered.filter(
@@ -109,7 +120,15 @@ export default async function CompanyCandidatesPage({
 
   function buildHref(overrides: Record<string, string | number | undefined>) {
     const next = new URLSearchParams();
-    const merged = { tab: tab === "all" ? undefined : tab, q: q || undefined, opportunity: opportunityFilter === "all" ? undefined : opportunityFilter, sort: sort === "newest" ? undefined : sort, page: page === 1 ? undefined : String(page), ...overrides };
+    const merged = {
+      view: isArchiveView ? "archived" : undefined,
+      tab: !isArchiveView && tab !== "all" ? tab : undefined,
+      q: q || undefined,
+      opportunity: opportunityFilter === "all" ? undefined : opportunityFilter,
+      sort: sort === "newest" ? undefined : sort,
+      page: page === 1 ? undefined : String(page),
+      ...overrides,
+    };
     for (const [k, v] of Object.entries(merged)) {
       if (v !== undefined && v !== "") next.set(k, String(v));
     }
@@ -137,9 +156,9 @@ export default async function CompanyCandidatesPage({
         {rows.length > 0 && (
           <ExportCandidatesMenu
             headers={csvHeaders}
-            active={withKey.filter((r) => r.key !== "not_selected").map(toCsvRow)}
-            notSelected={withKey.filter((r) => r.key === "not_selected").map(toCsvRow)}
-            all={withKey.map(toCsvRow)}
+            active={activeRows.map(toCsvRow)}
+            rejected={archivedRows.map(toCsvRow)}
+            all={reviewableRows.map(toCsvRow)}
           />
         )}
       </div>
@@ -171,19 +190,36 @@ export default async function CompanyCandidatesPage({
                   {TABS.map((t) => (
                     <Link
                       key={t.key}
-                      href={buildHref({ tab: t.key === "all" ? undefined : t.key, page: undefined })}
+                      href={buildHref({ view: undefined, tab: t.key === "all" ? undefined : t.key, page: undefined })}
                       className={`-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
-                        tab === t.key ? "border-teal text-teal-ink" : "border-transparent text-navy/50 hover:text-navy"
+                        !isArchiveView && tab === t.key ? "border-teal text-teal-ink" : "border-transparent text-navy/50 hover:text-navy"
                       }`}
                     >
                       {t.label}
                       <span className="rounded-full bg-gray-light px-1.5 py-0.5 text-xs tabular-nums text-navy/50">{counts[t.key]}</span>
                     </Link>
                   ))}
+                  {archivedRows.length > 0 && (
+                    <Link
+                      href={buildHref({ view: "archived", tab: undefined, page: undefined })}
+                      aria-current={isArchiveView ? "page" : undefined}
+                      className={`ml-2 flex items-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
+                        isArchiveView ? "text-teal-ink" : "text-navy/40 hover:text-navy/65"
+                      }`}
+                    >
+                      <Archive className="size-3.5" aria-hidden="true" />
+                      Rejected candidates
+                      <span className="tabular-nums">({archivedRows.length})</span>
+                    </Link>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 py-2.5">
                   <form method="get" className="relative flex items-center">
-                    {tab !== "all" && <input type="hidden" name="tab" value={tab} />}
+                    {isArchiveView ? (
+                      <input type="hidden" name="view" value="archived" />
+                    ) : (
+                      tab !== "all" && <input type="hidden" name="tab" value={tab} />
+                    )}
                     {opportunityFilter !== "all" && <input type="hidden" name="opportunity" value={opportunityFilter} />}
                     {sort !== "newest" && <input type="hidden" name="sort" value={sort} />}
                     <label htmlFor="candidate-search" className="sr-only">
@@ -215,7 +251,11 @@ export default async function CompanyCandidatesPage({
 
               {filtered.length === 0 ? (
                 <div className="px-4 pb-2">
-                  <EmptyState icon={SearchX} title="Nothing here" description="No candidates match this view." />
+                  <EmptyState
+                    icon={SearchX}
+                    title="Nothing here"
+                    description={isArchiveView ? "No rejected candidates match this view." : "No candidates match this view."}
+                  />
                 </div>
               ) : (
                 <>

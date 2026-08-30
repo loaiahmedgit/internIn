@@ -5,7 +5,7 @@ import type { CandidateRow } from "@/lib/company/candidates-data";
  * candidate in" — used by the tab counts, the summary cards, the table's
  * Stage badge, and the profile page, so they can never drift into
  * disagreeing with each other. Declined and withdrawn are deliberately
- * collapsed into one "not_selected" bucket — two negative-outcome stages
+ * collapsed into one archived "not_selected" bucket — two negative-outcome stages
  * in the tab bar is exactly the confusing extra-stage clutter product
  * wants gone; the underlying status stays distinct in the database for
  * anything (like Restore to review) that needs it.
@@ -21,7 +21,7 @@ export const STAGE_LABEL: Record<string, string> = {
   to_review: "To review",
   shortlisted: "Shortlisted",
   invited: "Offer sent",
-  not_selected: "Not selected",
+  not_selected: "Rejected",
 };
 
 // One hue per stage, reused verbatim for the stage badge (table + profile)

@@ -13,12 +13,12 @@ import { ChevronDown, Download } from "lucide-react";
 export function ExportCandidatesMenu({
   headers,
   active,
-  notSelected,
+  rejected,
   all,
 }: {
   headers: string[];
   active: (string | number)[][];
-  notSelected: (string | number)[][];
+  rejected: (string | number)[][];
   all: (string | number)[][];
 }) {
   return (
@@ -32,8 +32,8 @@ export function ExportCandidatesMenu({
         <DropdownMenuItem disabled={active.length === 0} onClick={() => downloadCsv("candidates-active.csv", headers, active)}>
           Export active candidates
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={notSelected.length === 0} onClick={() => downloadCsv("candidates-not-selected.csv", headers, notSelected)}>
-          Export not selected
+        <DropdownMenuItem disabled={rejected.length === 0} onClick={() => downloadCsv("candidates-rejected.csv", headers, rejected)}>
+          Export rejected candidates
         </DropdownMenuItem>
         <DropdownMenuItem disabled={all.length === 0} onClick={() => downloadCsv("candidates-all.csv", headers, all)}>
           Export all candidates

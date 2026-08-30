@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,22 +14,24 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  shortlistApplicationAction,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   declineApplicationAction,
   inviteToInternshipAction,
   moveApplicationToReviewAction,
+  shortlistApplicationAction,
   withdrawOfferAction,
 } from "@/lib/opportunities/actions";
 import { generateCandidateEvidenceAction } from "@/lib/opportunities/evidence-actions";
-import { Sparkles, Star, Send, XCircle, Undo2, FileSearch } from "lucide-react";
+import { FileSearch, MoreHorizontal, Send, Sparkles, Star, Undo2, XCircle } from "lucide-react";
 
 type Status = "applied" | "shortlisted" | "invited" | "declined" | "withdrawn";
 
-/**
- * The one place every real status transition lives on this page — the
- * decision buttons below all call the exact same real server actions, so
- * they can never attempt a transition the backend doesn't actually support.
- */
+/** The single UI for real candidate-stage transitions on the profile page. */
 export function CandidateActionsPanel({
   applicationId,
   candidateName,
@@ -49,7 +51,7 @@ export function CandidateActionsPanel({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [offerOpen, setOfferOpen] = useState(false);
-  const [declineOpen, setDeclineOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
   function run(action: () => Promise<unknown>, onSuccess?: () => void) {
@@ -63,6 +65,75 @@ export function CandidateActionsPanel({
         setError(e instanceof Error ? e.message : "Something went wrong.");
       }
     });
+  }
+
+  function renderSendOffer(primary: boolean) {
+    return (
+      <Dialog open={offerOpen} onOpenChange={setOfferOpen}>
+        <DialogTrigger
+          render={
+            <Button
+              variant={primary ? "default" : "outline"}
+              className={primary ? "flex-1 bg-teal text-white hover:bg-teal/90" : "flex-1"}
+              disabled={isPending}
+            />
+          }
+        >
+          <Send className="size-4" aria-hidden="true" />
+          Send offer
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send an offer to {candidateName}?</DialogTitle>
+            <DialogDescription>
+              This creates the internship offer and unlocks the program workflow. The QAR 499 placement fee is recorded for this successful hire.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOfferOpen(false)} disabled={isPending}>Cancel</Button>
+            <Button
+              className="bg-teal text-white hover:bg-teal/90"
+              disabled={isPending}
+              onClick={() => run(() => inviteToInternshipAction(applicationId), () => setOfferOpen(false))}
+            >
+              {isPending ? "Sending…" : "Send offer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  function renderMoreActions(items: "review" | "shortlisted" | "offer") {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="icon" aria-label="More decision actions" disabled={isPending} />}
+        >
+          <MoreHorizontal className="size-4" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44">
+          {items === "shortlisted" && (
+            <DropdownMenuItem onClick={() => run(() => moveApplicationToReviewAction(applicationId))}>
+              <Undo2 className="size-4" aria-hidden="true" />
+              Move back to review
+            </DropdownMenuItem>
+          )}
+          {(items === "review" || items === "shortlisted") && (
+            <DropdownMenuItem variant="destructive" onClick={() => setRejectOpen(true)}>
+              <XCircle className="size-4" aria-hidden="true" />
+              Reject candidate
+            </DropdownMenuItem>
+          )}
+          {items === "offer" && offerStatus === "pending" && (
+            <DropdownMenuItem variant="destructive" onClick={() => setWithdrawOpen(true)}>
+              <Undo2 className="size-4" aria-hidden="true" />
+              Withdraw offer
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
   }
 
   return (
@@ -83,152 +154,96 @@ export function CandidateActionsPanel({
       )}
 
       <div className="border-t border-navy/10 pt-3">
-        {(status === "applied" || status === "shortlisted") && (
-          <div className="grid grid-cols-1 gap-2 xl:grid-cols-3">
+        {status === "applied" && (
+          <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              disabled={isPending || status === "shortlisted"}
+              className="flex-1 bg-teal text-white hover:bg-teal/90"
+              disabled={isPending}
               onClick={() => run(() => shortlistApplicationAction(applicationId))}
             >
               <Star className="size-4" aria-hidden="true" />
-              {status === "shortlisted" ? "Shortlisted" : "Shortlist"}
+              Shortlist
             </Button>
-
-            {offerStatus ? (
-              <Button className="bg-teal text-white hover:bg-teal/90" disabled>
-                <Send className="size-4" aria-hidden="true" />
-                Offer closed
-              </Button>
-            ) : (
-              <Dialog open={offerOpen} onOpenChange={setOfferOpen}>
-                <DialogTrigger render={<Button className="bg-teal text-white hover:bg-teal/90" disabled={isPending} />}>
-                  <Send className="size-4" aria-hidden="true" />
-                  Offer
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Send an offer to {candidateName}?</DialogTitle>
-                    <DialogDescription>
-                      This creates the internship offer and unlocks the program workflow. The QAR 499 placement fee is recorded for this successful hire.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setOfferOpen(false)} disabled={isPending}>Cancel</Button>
-                    <Button
-                      className="bg-teal text-white hover:bg-teal/90"
-                      disabled={isPending}
-                      onClick={() => run(() => inviteToInternshipAction(applicationId), () => setOfferOpen(false))}
-                    >
-                      {isPending ? "Sending…" : "Send offer"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-
-            <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
-              <DialogTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    className="border-destructive/30 text-destructive hover:bg-destructive/10"
-                    disabled={isPending}
-                  />
-                }
-              >
-                <XCircle className="size-4" aria-hidden="true" />
-                Not selected
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Mark {candidateName} as not selected?</DialogTitle>
-                  <DialogDescription>
-                    The candidate will leave the active pipeline. You can restore them to review later.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setDeclineOpen(false)} disabled={isPending}>Cancel</Button>
-                  <Button
-                    variant="destructive"
-                    disabled={isPending}
-                    onClick={() => run(() => declineApplicationAction(applicationId), () => setDeclineOpen(false))}
-                  >
-                    {isPending ? "Updating…" : "Mark as not selected"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            {renderSendOffer(false)}
+            {renderMoreActions("review")}
           </div>
         )}
 
-        {status === "shortlisted" && !offerStatus && (
+        {status === "shortlisted" && offerStatus !== "pending" && offerStatus !== "accepted" && (
+          <div className="flex items-center gap-2">
+            {renderSendOffer(true)}
+            {renderMoreActions("shortlisted")}
+          </div>
+        )}
+
+        {status === "invited" && submissionId && (
+          <div className="flex items-center gap-2">
+            <Button
+              className="flex-1 bg-teal text-white hover:bg-teal/90"
+              render={<Link href={`/company/submissions/${submissionId}`} />}
+              nativeButton={false}
+            >
+              <FileSearch className="size-4" aria-hidden="true" />
+              View offer
+            </Button>
+            {offerStatus === "pending" && renderMoreActions("offer")}
+          </div>
+        )}
+
+        {(status === "declined" || status === "withdrawn") && (offerStatus === null || offerStatus === "declined") && (
           <Button
-            variant="ghost"
-            size="sm"
-            className="mt-2 w-full text-navy/55"
+            variant="outline"
+            className="w-full"
             disabled={isPending}
             onClick={() => run(() => moveApplicationToReviewAction(applicationId))}
           >
             <Undo2 className="size-4" aria-hidden="true" />
-            Move back to review
-          </Button>
-        )}
-
-        {status === "invited" && (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {submissionId ? (
-              <Button className="bg-teal text-white hover:bg-teal/90" render={<Link href={`/company/submissions/${submissionId}`} />} nativeButton={false}>
-                <FileSearch className="size-4" aria-hidden="true" />
-                View offer
-              </Button>
-            ) : (
-              <Button className="bg-teal text-white" disabled>
-                <Send className="size-4" aria-hidden="true" />
-                Offer sent
-              </Button>
-            )}
-            {offerStatus === "pending" && (
-              <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
-                <DialogTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      className="border-destructive/30 text-destructive hover:bg-destructive/10"
-                      disabled={isPending}
-                    />
-                  }
-                >
-                  <XCircle className="size-4" aria-hidden="true" />
-                  Withdraw offer
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Withdraw {candidateName}&apos;s offer?</DialogTitle>
-                    <DialogDescription>The candidate will return to the shortlisted stage.</DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setWithdrawOpen(false)} disabled={isPending}>Cancel</Button>
-                    <Button
-                      variant="destructive"
-                      disabled={isPending}
-                      onClick={() => run(() => withdrawOfferAction(applicationId), () => setWithdrawOpen(false))}
-                    >
-                      {isPending ? "Withdrawing…" : "Withdraw offer"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
-        )}
-
-        {(status === "declined" || status === "withdrawn") && (
-          <Button variant="outline" className="w-full" disabled={isPending || !!offerStatus} onClick={() => run(() => moveApplicationToReviewAction(applicationId))}>
-            <Undo2 className="size-4" aria-hidden="true" />
-            {offerStatus ? "Offer history prevents restore" : "Restore to review"}
+            Restore to review
           </Button>
         )}
       </div>
+
+      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject {candidateName}?</DialogTitle>
+            <DialogDescription>
+              The candidate will move to rejected records and leave the active pipeline. You can restore them to review later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectOpen(false)} disabled={isPending}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={isPending}
+              onClick={() => run(() => declineApplicationAction(applicationId), () => setRejectOpen(false))}
+            >
+              {isPending ? "Rejecting…" : "Reject candidate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Withdraw {candidateName}&apos;s offer?</DialogTitle>
+            <DialogDescription>
+              This revokes the pending offer and returns the candidate to the shortlisted stage.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWithdrawOpen(false)} disabled={isPending}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={isPending}
+              onClick={() => run(() => withdrawOfferAction(applicationId), () => setWithdrawOpen(false))}
+            >
+              {isPending ? "Withdrawing…" : "Withdraw offer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

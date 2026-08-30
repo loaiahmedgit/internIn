@@ -392,16 +392,26 @@ export async function inviteToInternshipAction(applicationId: string) {
     .from(schema.internshipOffers)
     .where(eq(schema.internshipOffers.applicationId, validatedApplicationId))
     .limit(1);
-  if (existingOffer) return existingOffer.id as string;
+  if (existingOffer && existingOffer.status !== "declined") return existingOffer.id as string;
 
-  const [offer] = await db
-    .insert(schema.internshipOffers)
-    .values({
-      applicationId: validatedApplicationId,
-      status: "pending",
-      placementFeeStatus: "stubbed_paid",
-    })
-    .returning();
+  const offer = existingOffer
+    ? (
+        await db
+          .update(schema.internshipOffers)
+          .set({ status: "pending", updatedAt: new Date() })
+          .where(eq(schema.internshipOffers.id, existingOffer.id))
+          .returning()
+      )[0]
+    : (
+        await db
+          .insert(schema.internshipOffers)
+          .values({
+            applicationId: validatedApplicationId,
+            status: "pending",
+            placementFeeStatus: "stubbed_paid",
+          })
+          .returning()
+      )[0];
 
   await db
     .update(schema.applications)
@@ -413,7 +423,9 @@ export async function inviteToInternshipAction(applicationId: string) {
     entityId: validatedApplicationId,
     eventType: "internship_offer_created",
     actorUserId: userId,
-    metadata: { placementFeeStatus: "stubbed_paid", placementFeeQar: 499 },
+    metadata: existingOffer
+      ? { reopened: true }
+      : { placementFeeStatus: offer.placementFeeStatus, placementFeeQar: 499 },
   });
 
   await inngest.send({
@@ -430,7 +442,7 @@ export async function inviteToInternshipAction(applicationId: string) {
   return offer.id as string;
 }
 
-/** Undoes a Shortlist/Not-selected decision — puts the application back in the review queue. Refuses while a real offer exists; withdraw that first. */
+/** Restores a shortlisted or rejected application while keeping closed offer history for audit. */
 export async function moveApplicationToReviewAction(applicationId: string) {
   const validatedApplicationId = IdSchema.parse(applicationId);
   const { companyId, userId } = await getCompanyIdForCurrentUser();
@@ -447,11 +459,13 @@ export async function moveApplicationToReviewAction(applicationId: string) {
   }
 
   const [existingOffer] = await db
-    .select({ id: schema.internshipOffers.id })
+    .select({ id: schema.internshipOffers.id, status: schema.internshipOffers.status })
     .from(schema.internshipOffers)
     .where(eq(schema.internshipOffers.applicationId, validatedApplicationId))
     .limit(1);
-  if (existingOffer) throw new Error("Withdraw the offer before moving this candidate back to review.");
+  if (existingOffer?.status === "pending" || existingOffer?.status === "accepted") {
+    throw new Error("Withdraw the active offer before moving this candidate back to review.");
+  }
 
   await db
     .update(schema.applications)

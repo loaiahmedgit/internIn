@@ -35,6 +35,7 @@ export interface CandidateDetail {
     title: string;
     scenario: string;
     skills: string[];
+    tasks: { id: string; title: string; description: string }[];
     deliverables: string[];
     rubric: { criterion: string; description: string }[];
   } | null;
@@ -110,6 +111,7 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
         title: challengeVersion.title,
         scenario: challengeVersion.scenario,
         skills: challengeVersion.skills,
+        tasks: challengeVersion.tasks,
         deliverables: challengeVersion.deliverables,
         rubric: challengeVersion.rubric,
       };

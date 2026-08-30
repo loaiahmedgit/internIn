@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { getCandidateDetail } from "@/lib/company/candidate-detail-data";
-import { candidateInsights } from "@/lib/company/candidate-insights";
+import { candidateAssistiveSummary, candidateInsights } from "@/lib/company/candidate-insights";
 import { stageKeyOf, STAGE_LABEL, STAGE_CLASS } from "@/lib/company/candidate-stage";
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { CandidateActionsPanel } from "@/components/company/candidate-actions-panel";
@@ -43,7 +43,7 @@ const TABS: { key: TabKey; label: string }[] = [
 
 const EVENT_LABEL: Record<string, string> = {
   application_shortlisted: "Shortlisted",
-  application_declined: "Not selected",
+  application_declined: "Rejected",
   application_moved_to_review: "Moved back to review",
   internship_offer_created: "Offer sent",
   internship_offer_withdrawn: "Offer withdrawn",
@@ -90,6 +90,7 @@ export default async function CandidateProfilePage({
 
   const stage = stageKeyOf({ status: candidate.status, hasSubmission: !!candidate.submission });
   const insights = candidateInsights(candidate);
+  const assistiveSummary = candidate.evidence ? candidateAssistiveSummary(candidate) : null;
   const files = [
     ...(candidate.profile?.cvUrl ? [{ name: "CV", url: candidate.profile.cvUrl }] : []),
     ...(candidate.submission?.artifacts ?? []),
@@ -172,9 +173,17 @@ export default async function CandidateProfilePage({
               <section className="rounded-xl border border-navy/10 bg-white p-5">
                 <h2 className="text-sm font-semibold text-navy">Candidate summary</h2>
                 <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-                  <div>
+                  <div className="min-w-0 sm:col-span-2">
                     <dt className="text-xs text-navy/45">Email</dt>
-                    <dd className="break-words text-navy">{candidate.studentEmail}</dd>
+                    <dd className="min-w-0">
+                      <a
+                        href={`mailto:${candidate.studentEmail}`}
+                        title={candidate.studentEmail}
+                        className="block truncate rounded-sm text-navy hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+                      >
+                        {candidate.studentEmail}
+                      </a>
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-navy/45">Phone</dt>
@@ -191,12 +200,6 @@ export default async function CandidateProfilePage({
                   <div>
                     <dt className="text-xs text-navy/45">Availability</dt>
                     <dd className="text-navy">{candidate.profile?.availability ?? "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-navy/45">Opportunity type</dt>
-                    <dd className="text-navy">
-                      {candidate.profile?.opportunityTypes.length ? candidate.profile.opportunityTypes.join(", ") : "Not provided"}
-                    </dd>
                   </div>
                 </dl>
                 {candidate.profile && candidate.profile.skills.length > 0 && (
@@ -278,9 +281,9 @@ export default async function CandidateProfilePage({
                   <p className="text-lg font-semibold tracking-tight text-navy">{candidate.studentName}</p>
                   <p className="text-sm text-navy/60">{candidate.profile?.major ?? candidate.role}</p>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-navy/50">
-                    <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="flex min-w-0 max-w-full items-center gap-1.5 sm:max-w-[70%]">
                       <Mail className="size-3.5 shrink-0" aria-hidden="true" />
-                      <span className="break-all">{candidate.studentEmail}</span>
+                      <span className="truncate" title={candidate.studentEmail}>{candidate.studentEmail}</span>
                     </span>
                     {candidate.profile?.location && (
                       <span className="flex items-center gap-1.5">
@@ -414,10 +417,6 @@ export default async function CandidateProfilePage({
                 <dt className="text-navy/50">Submitted</dt>
                 <dd className="text-navy">{candidate.submission ? formatDeadline(candidate.submission.submittedAt) : "Not yet"}</dd>
               </div>
-              <div className="flex items-center justify-between">
-                <dt className="text-navy/50">Recruiter</dt>
-                <dd className="text-navy">Unassigned</dd>
-              </div>
               {candidate.submission && (
                 <div className="flex items-center justify-between">
                   <dt className="text-navy/50">AI usage policy</dt>
@@ -425,29 +424,19 @@ export default async function CandidateProfilePage({
                 </div>
               )}
             </dl>
-            {candidate.offer && candidate.submission && (
-              <div className="mt-4 border-t border-navy/10 pt-3">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  render={<Link href={`/company/submissions/${candidate.submission.id}`} />}
-                  nativeButton={false}
-                >
-                  <FileSearch className="size-4" aria-hidden="true" />
-                  View offer
-                </Button>
-              </div>
-            )}
           </section>
 
           {insights.length > 0 && (
             <section className="rounded-xl border border-navy/10 bg-white p-4">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-navy/45">Quick insights</h2>
               <ul className="mt-2 space-y-2 text-sm text-navy/75">
-                {insights.map((i) => (
-                  <li key={i} className="flex items-start gap-2">
+                {insights.map((insight) => (
+                  <li key={`${insight.label}-${insight.value ?? ""}`} className="flex items-start gap-2">
                     <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
-                    <span>{i}</span>
+                    <span className="min-w-0">
+                      <span className="block">{insight.label}</span>
+                      {insight.value && <span className="block text-xs text-navy/50">{insight.value}</span>}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -462,21 +451,25 @@ export default async function CandidateProfilePage({
               </h2>
               <span className="text-xs text-navy/40">Assistive only</span>
             </div>
-            {candidate.evidence ? (
+            {assistiveSummary ? (
               <div className="mt-2 space-y-2">
-                <p className="text-sm text-navy/80">{candidate.evidence.aiSummary}</p>
+                <p className="text-sm text-navy/80">{assistiveSummary.summary}</p>
                 <p className="text-xs text-navy/60">
                   <span className="font-medium text-teal-ink">Strength: </span>
-                  {candidate.evidence.strength}
+                  {assistiveSummary.strength}
                 </p>
                 <p className="text-xs text-navy/60">
                   <span className="font-medium text-navy/70">Watch for: </span>
-                  {candidate.evidence.weakness}
+                  {assistiveSummary.watchFor}
                 </p>
               </div>
             ) : (
               <p className="mt-2 text-sm text-navy/50">
-                {candidate.submission ? "Not generated yet. Use the action below." : "Nothing to summarize until a submission comes in."}
+                {candidate.evidence
+                  ? "Insufficient evidence to generate a reliable summary."
+                  : candidate.submission
+                    ? "Not generated yet. Use the action below."
+                    : "Nothing to summarize until a submission comes in."}
               </p>
             )}
           </section>
