@@ -3,6 +3,7 @@ import { Briefcase, Users, Clock3, Star, Download } from "lucide-react";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { getHiringData } from "@/lib/company/hiring-data";
 import {
+  DAY_MS,
   hiringCohort,
   hiringMetrics,
   hiringActivity,
@@ -36,6 +37,27 @@ export default async function CompanyAnalyticsPage({
   const now = new Date();
   const cohort = hiringCohort(data.applications, days, now);
   const m = hiringMetrics(cohort);
+
+  // Real period-over-period comparisons — the previous equal-length window,
+  // never a made-up baseline. Omitted (not "0%") whenever there's nothing
+  // real to compare against.
+  const windowStart = new Date(now.getTime() - days * DAY_MS);
+  const prevWindowStart = new Date(now.getTime() - 2 * days * DAY_MS);
+  const prevCohort = data.applications.filter((a) => a.appliedAt >= prevWindowStart && a.appliedAt < windowStart);
+  const prevMetrics = hiringMetrics(prevCohort);
+  const pctDelta = (curr: number, prev: number) => (prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null);
+  const signed = (n: number) => `${n >= 0 ? "+" : ""}${n}`;
+  const applicantsDeltaPct = pctDelta(m.applicants, prevCohort.length);
+  const acceptanceDeltaPts =
+    m.acceptance !== null && prevMetrics.acceptance !== null
+      ? Math.round((m.acceptance - prevMetrics.acceptance) * 100)
+      : null;
+  const timeToHireDeltaDays =
+    m.timeToHire !== null && prevMetrics.timeToHire !== null ? m.timeToHire - prevMetrics.timeToHire : null;
+  const newPostingsThisWindow = data.postings.filter((p) => p.createdAt >= windowStart).length;
+  const newPostingsPrevWindow = data.postings.filter((p) => p.createdAt >= prevWindowStart && p.createdAt < windowStart).length;
+  const postingsDelta = newPostingsThisWindow - newPostingsPrevWindow;
+
   const roles = data.postings
     .map((p) => ({
       ...p,
@@ -84,7 +106,9 @@ export default async function CompanyAnalyticsPage({
           color="text-teal-ink"
           label="Applicants"
           value={m.applicants}
-          detail={`Applications received in the last ${days} days`}
+          detail={`Received in the last ${days} days`}
+          delta={applicantsDeltaPct !== null ? `${signed(applicantsDeltaPct)}% from previous ${days} days` : undefined}
+          deltaTone={applicantsDeltaPct !== null && applicantsDeltaPct >= 0 ? "positive" : "negative"}
         />
         <HiringMetric
           icon={Clock3}
@@ -100,6 +124,8 @@ export default async function CompanyAnalyticsPage({
               ? `Application to acceptance · ${m.timedHires} recorded hires`
               : "No recorded acceptance timestamps"
           }
+          delta={timeToHireDeltaDays !== null ? `${signed(Number(timeToHireDeltaDays.toFixed(1)))} days from previous ${days} days` : undefined}
+          deltaTone={timeToHireDeltaDays !== null ? (timeToHireDeltaDays <= 0 ? "positive" : "negative") : "neutral"}
         />
         <HiringMetric
           icon={Star}
@@ -111,20 +137,24 @@ export default async function CompanyAnalyticsPage({
               : `${(m.acceptance * 100).toFixed(1)}%`
           }
           detail="Accepted / responded offers in this cohort"
+          delta={acceptanceDeltaPts !== null ? `${signed(acceptanceDeltaPts)}pts from previous ${days} days` : undefined}
+          deltaTone={acceptanceDeltaPts !== null && acceptanceDeltaPts >= 0 ? "positive" : "negative"}
         />
         <HiringMetric
           icon={Briefcase}
-          color="text-teal-ink"
+          color="text-rose-600"
           label="Active internships"
           value={data.postings.filter((p) => p.status === "published").length}
           detail="Currently published · all dates"
+          delta={postingsDelta !== 0 ? `${signed(postingsDelta)} from previous ${days} days` : undefined}
+          deltaTone={postingsDelta >= 0 ? "positive" : "negative"}
         />
       </div>
       <p className="mt-3 text-xs text-navy/60">
         Charts follow applications received in the selected period, including
         archived records. Outcomes reflect their current status.
       </p>
-      <div className="mt-5 grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
+      <div className="mt-5 grid gap-4 lg:grid-cols-3">
         <HiringPanel
           title="Hiring funnel conversion"
           subtitle="Offers may be sent without shortlisting"

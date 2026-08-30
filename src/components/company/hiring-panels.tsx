@@ -23,32 +23,51 @@ export function HiringHeader({
     </header>
   );
 }
+// Icon tint (soft circular background) keyed off the same text-color class
+// passed as `color` — one lookup, so every metric card's icon circle and
+// icon color always come from the same hue instead of two hand-picked
+// values that can drift apart.
+const ICON_TINT: Record<string, string> = {
+  "text-teal-ink": "bg-teal/10",
+  "text-blue-600": "bg-blue-500/10",
+  "text-amber-600": "bg-amber-500/10",
+  "text-emerald-600": "bg-emerald-500/10",
+  "text-rose-600": "bg-rose-500/10",
+};
+
 export function HiringMetric({
   icon: Icon,
   color,
   label,
   value,
   detail,
+  delta,
+  deltaTone = "neutral",
 }: {
   icon: LucideIcon;
   color: string;
   label: string;
   value: string | number;
-  detail: string;
+  /** Plain muted caption — for a fact with no meaningful trend (e.g. "Awaiting response"). */
+  detail?: string;
+  /** A real period-over-period comparison — takes over from `detail` when present. */
+  delta?: string;
+  deltaTone?: "positive" | "negative" | "neutral";
 }) {
+  const deltaColor =
+    deltaTone === "positive" ? "text-emerald-600" : deltaTone === "negative" ? "text-red-600" : "text-navy/55";
   return (
-    <div className="flex min-h-28 items-center gap-4 rounded-xl border border-navy/10 bg-white p-5">
-      <Icon
-        aria-hidden="true"
-        className={`size-6 shrink-0 stroke-[1.8] ${color}`}
-      />
-      <div className="min-w-0">
-        <p className="text-2xl font-semibold tracking-tight text-navy tabular-nums">
-          {value}
-        </p>
-        <p className="text-xs font-medium text-navy">{label}</p>
-        <p className="mt-1 text-xs text-navy/60">{detail}</p>
+    <div className="rounded-xl border border-navy/10 bg-white p-4">
+      <div className="flex items-center gap-3">
+        <span className={`flex size-9 shrink-0 items-center justify-center rounded-full ${ICON_TINT[color] ?? "bg-navy/8"}`}>
+          <Icon aria-hidden="true" className={`size-4 ${color}`} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xl leading-tight font-semibold tracking-tight text-navy tabular-nums">{value}</p>
+          <p className="text-xs font-medium text-navy/70">{label}</p>
+        </div>
       </div>
+      {(delta ?? detail) && <p className={`mt-2 text-[11px] ${delta ? deltaColor : "text-navy/55"}`}>{delta ?? detail}</p>}
     </div>
   );
 }
@@ -67,9 +86,9 @@ export function HiringPanel({
 }) {
   return (
     <section
-      className={`min-w-0 rounded-xl border border-navy/10 bg-white p-5 ${className}`}
+      className={`min-w-0 rounded-xl border border-navy/10 bg-white p-4 ${className}`}
     >
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-navy">{title}</h2>
           {subtitle && <p className="mt-1 text-xs text-navy/60">{subtitle}</p>}
@@ -180,7 +199,7 @@ export function ApplicantBars({
         style={{ minWidth: Math.max(260, rows.length * 66 + 28) }}
       >
         <div
-          className="relative h-44 w-6 shrink-0 text-right text-[10px] text-navy/60"
+          className="relative h-36 w-6 shrink-0 text-right text-[10px] text-navy/60"
           aria-hidden="true"
         >
           {[4, 3, 2, 1, 0].map((step) => (
@@ -195,7 +214,7 @@ export function ApplicantBars({
         </div>
         <div className="relative min-w-0 flex-1">
           <div
-            className="pointer-events-none absolute inset-x-0 top-0 h-44"
+            className="pointer-events-none absolute inset-x-0 top-0 h-36"
             aria-hidden="true"
           >
             {[0, 25, 50, 75, 100].map((top) => (
@@ -214,7 +233,7 @@ export function ApplicantBars({
           >
             {rows.map((r) => (
               <div key={r.id} className="min-w-0 text-center">
-                <div className="flex h-44 items-end justify-center px-2">
+                <div className="flex h-36 items-end justify-center px-2">
                   <div
                     className="relative w-full max-w-10 rounded-t-sm bg-teal-ink"
                     style={{ height: `${(r.count / max) * 100}%` }}

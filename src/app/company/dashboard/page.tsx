@@ -23,6 +23,17 @@ import {
   HiringFunnel,
 } from "@/components/company/hiring-panels";
 import { QuerySelect } from "@/components/company/query-select";
+import { formatDeadline } from "@/lib/format-date";
+
+/** Furthest real stage any candidate on this posting has reached — a single qualitative read of "how far along is this internship," not a fabricated health score. */
+const PIPELINE_STAGES = ["Applicants", "Screening", "Interviews", "Offers", "Hired"] as const;
+function furthestStage(m: ReturnType<typeof hiringMetrics>): { label: (typeof PIPELINE_STAGES)[number]; index: number } {
+  if (m.accepted > 0) return { label: "Hired", index: 4 };
+  if (m.offerSent > 0) return { label: "Offers", index: 3 };
+  if (m.shortlisted > 0) return { label: "Interviews", index: 2 };
+  if (m.toReview > 0) return { label: "Screening", index: 1 };
+  return { label: "Applicants", index: 0 };
+}
 
 const linkStyle =
   "text-xs font-medium text-teal-ink hover:underline focus-visible:outline-2 focus-visible:outline-teal";
@@ -39,6 +50,16 @@ export default async function CompanyHomePage({
   const now = new Date();
   const metrics = hiringMetrics(data.applications);
   const published = data.postings.filter((p) => p.status === "published");
+
+  // Real period-over-period deltas — omitted (not "0%") when the prior
+  // period has nothing to compare against, per the no-fabrication rule.
+  const newThisMonth = data.postings.filter((p) => now.getTime() - p.createdAt.getTime() <= 30 * DAY_MS).length;
+  const applicantsThisWeek = hiringCohort(data.applications, 7, now).length;
+  const applicantsPriorWeek = hiringCohort(data.applications, 14, now).length - applicantsThisWeek;
+  const applicantsDelta =
+    applicantsPriorWeek > 0
+      ? `${Math.round(((applicantsThisWeek - applicantsPriorWeek) / applicantsPriorWeek) * 100) >= 0 ? "+" : ""}${Math.round(((applicantsThisWeek - applicantsPriorWeek) / applicantsPriorWeek) * 100)}% vs previous 7 days`
+      : null;
   const selected =
     typeof params.opportunity === "string" &&
     data.postings.some((p) => p.id === params.opportunity)
@@ -117,20 +138,24 @@ export default async function CompanyHomePage({
           label="Active internships"
           value={published.length}
           detail="Published postings"
+          delta={newThisMonth > 0 ? `${newThisMonth} new this month` : undefined}
+          deltaTone="positive"
         />
         <HiringMetric
           icon={Users}
           color="text-blue-600"
           label="New applicants"
-          value={hiringCohort(data.applications, 7, now).length}
+          value={applicantsThisWeek}
           detail="Received in the last 7 days"
+          delta={applicantsDelta ?? undefined}
+          deltaTone={applicantsDelta?.startsWith("-") ? "negative" : "positive"}
         />
         <HiringMetric
           icon={Clock3}
-          color="text-blue-600"
+          color="text-amber-600"
           label="Needs review"
           value={metrics.toReview}
-          detail="Submitted and awaiting review"
+          detail="Across all internships"
         />
         <HiringMetric
           icon={Send}
@@ -173,6 +198,8 @@ export default async function CompanyHomePage({
               const m = hiringMetrics(
                 data.applications.filter((a) => a.opportunityId === p.id),
               );
+              const stage = furthestStage(m);
+              const workMode = p.workMode ? p.workMode[0].toUpperCase() + p.workMode.slice(1) : null;
               return (
                 <Link
                   key={p.id}
@@ -190,7 +217,7 @@ export default async function CompanyHomePage({
                     <p className="text-xs font-medium text-navy">{p.role}</p>
                     <p className="mt-1 text-xs text-navy/60">
                       {p.location}
-                      {p.workMode ? ` · ${p.workMode}` : ""}
+                      {workMode ? ` · ${workMode}` : ""}
                     </p>
                   </div>
                   <div className="text-xs">
@@ -199,14 +226,20 @@ export default async function CompanyHomePage({
                     </p>
                     <p className="mt-1 text-navy/60">Applicants</p>
                   </div>
-                  <div className="text-xs">
-                    <p className="font-semibold tabular-nums text-blue-700">
-                      {m.toReview}
-                    </p>
-                    <p className="mt-1 text-navy/60">To review</p>
+                  <div className="w-24 text-xs">
+                    <p className="font-medium text-navy">{stage.label}</p>
+                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-navy/8">
+                      <div
+                        className="h-full rounded-full bg-teal-ink"
+                        style={{ width: `${(stage.index / (PIPELINE_STAGES.length - 1)) * 100}%` }}
+                      />
+                    </div>
                   </div>
+                  <p className="w-16 shrink-0 text-right text-xs text-navy/60">
+                    {p.applicationDeadline ? formatDeadline(p.applicationDeadline) : "No deadline"}
+                  </p>
                   <ChevronRight
-                    className="size-4 text-navy/40"
+                    className="size-4 shrink-0 text-navy/40"
                     aria-hidden="true"
                   />
                 </Link>
@@ -232,7 +265,7 @@ export default async function CompanyHomePage({
                 icon: Users,
               },
               {
-                label: "Upcoming deadlines",
+                label: "Expiring deadlines",
                 detail: "Internships closing in the next 7 days",
                 count: upcoming.length,
                 href: "/company/internships",
