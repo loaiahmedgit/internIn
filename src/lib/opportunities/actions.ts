@@ -2,6 +2,7 @@
 
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
+import { canManagePublication, type WorkspacePermission } from "@/lib/company/permissions";
 import { inngest } from "@/lib/inngest/client";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -22,9 +23,9 @@ const VersionSourceSchema = z.enum(["ai_generated", "human_edited", "approved"])
  * every write below goes through this, so a missing/invalid session or a
  * cross-company id can never silently succeed.
  */
-async function getCompanyIdForCurrentUser() {
-  const { user, membership } = await requireCurrentCompanyMember();
-  return { companyId: membership.companyId, userId: user.id, memberRole: membership.role };
+async function getCompanyIdForCurrentUser(permission: WorkspacePermission = "hiring_access") {
+  const { user, membership } = await requireCurrentCompanyMember(permission);
+  return { companyId: membership.companyId, userId: user.id, memberRole: membership.role, canPublish: canManagePublication(membership) };
 }
 
 async function assertCompanyVerified(companyId: string) {
@@ -106,10 +107,8 @@ export async function saveChallengeVersionAction(
     throw new Error("An approved version must have approved status.");
   }
 
-  const { companyId, userId, memberRole } = await getCompanyIdForCurrentUser();
-  if (validatedSource === "approved" && memberRole === "member") {
-    throw new Error("Only a company owner or admin can approve a challenge.");
-  }
+  const { companyId, userId, canPublish } = await getCompanyIdForCurrentUser();
+  if (validatedSource === "approved" && !canPublish) throw new Error("Ask a Workspace Admin to grant Hiring Access before approving a challenge.");
   await assertOwnsOpportunity(validatedOpportunityId, companyId);
   const db = getDb();
 
@@ -169,8 +168,8 @@ export async function saveChallengeVersionAction(
 
 export async function publishOpportunityAction(opportunityId: string) {
   const validatedOpportunityId = IdSchema.parse(opportunityId);
-  const { companyId, userId, memberRole } = await getCompanyIdForCurrentUser();
-  if (memberRole === "member") throw new Error("Only a company owner or admin can publish a challenge.");
+  const { companyId, userId, canPublish } = await getCompanyIdForCurrentUser();
+  if (!canPublish) throw new Error("Ask a Workspace Admin to grant Hiring Access before publishing.");
   await assertCompanyVerified(companyId);
   await assertOwnsOpportunity(validatedOpportunityId, companyId);
   const db = getDb();
@@ -205,8 +204,8 @@ export async function publishOpportunityAction(opportunityId: string) {
 /** Ends the application window. Reversible in the data model (just a status flag), so no confirmation dialog is required. */
 export async function closeOpportunityAction(opportunityId: string) {
   const validatedOpportunityId = IdSchema.parse(opportunityId);
-  const { companyId, memberRole } = await getCompanyIdForCurrentUser();
-  if (memberRole === "member") throw new Error("Only a company owner or admin can close an internship.");
+  const { companyId, canPublish } = await getCompanyIdForCurrentUser();
+  if (!canPublish) throw new Error("Ask a Workspace Admin to grant Hiring Access before closing an internship.");
   const opportunity = await assertOwnsOpportunity(validatedOpportunityId, companyId);
   if (opportunity.status !== "published") throw new Error("Only an open internship can be closed.");
   const db = getDb();
@@ -301,7 +300,7 @@ export async function deleteOpportunityAction(opportunityId: string) {
 
 export async function shortlistApplicationAction(applicationId: string) {
   const validatedApplicationId = IdSchema.parse(applicationId);
-  const { companyId, userId } = await getCompanyIdForCurrentUser();
+  const { companyId, userId } = await getCompanyIdForCurrentUser("hiring_reviewer");
   const db = getDb();
 
   const [application] = await db
@@ -330,7 +329,7 @@ export async function shortlistApplicationAction(applicationId: string) {
 /** Mirrors shortlistApplicationAction exactly — the other real decision a company can make on an application. */
 export async function declineApplicationAction(applicationId: string) {
   const validatedApplicationId = IdSchema.parse(applicationId);
-  const { companyId, userId } = await getCompanyIdForCurrentUser();
+  const { companyId, userId } = await getCompanyIdForCurrentUser("hiring_reviewer");
   const db = getDb();
 
   const [application] = await db
@@ -364,7 +363,7 @@ export async function declineApplicationAction(applicationId: string) {
  */
 export async function inviteToInternshipAction(applicationId: string) {
   const validatedApplicationId = IdSchema.parse(applicationId);
-  const { companyId, userId } = await getCompanyIdForCurrentUser();
+  const { companyId, userId } = await getCompanyIdForCurrentUser("hiring_reviewer");
   await assertCompanyVerified(companyId);
   const db = getDb();
 
@@ -445,7 +444,7 @@ export async function inviteToInternshipAction(applicationId: string) {
 /** Restores a shortlisted or rejected application while keeping closed offer history for audit. */
 export async function moveApplicationToReviewAction(applicationId: string) {
   const validatedApplicationId = IdSchema.parse(applicationId);
-  const { companyId, userId } = await getCompanyIdForCurrentUser();
+  const { companyId, userId } = await getCompanyIdForCurrentUser("hiring_reviewer");
   const db = getDb();
 
   const [application] = await db
@@ -544,7 +543,7 @@ async function assertOwnsOffer(offerId: string, companyId: string) {
 export async function createInternshipProgramAction(offerId: string, program: InternshipProgram) {
   const validatedOfferId = IdSchema.parse(offerId);
   const validatedProgram = InternshipProgramSchema.parse(program);
-  const { companyId, userId } = await getCompanyIdForCurrentUser();
+  const { companyId, userId } = await getCompanyIdForCurrentUser("program_supervisor");
   const offer = await assertOwnsOffer(validatedOfferId, companyId);
 
   if (offer.status !== "accepted") {

@@ -11,6 +11,7 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import type { EvidenceSummary } from "@/lib/company/evidence-summary";
 
 /**
  * Cross-cutting conventions (see docs/ and the approved Phase 1 plan):
@@ -107,6 +108,9 @@ export const companies = pgTable("companies", {
   industry: text("industry"),
   size: text("size"),
   verified: boolean("verified").notNull().default(false),
+  officeLocations: text("office_locations"),
+  contactEmail: text("contact_email"),
+  evidenceAiEnabled: boolean("evidence_ai_enabled").notNull().default(true),
   ...timestamps,
 });
 
@@ -122,6 +126,9 @@ export const companyMembers = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     role: companyMemberRoleEnum("role").notNull().default("member"),
     jobTitle: text("job_title"),
+    permissions: jsonb("permissions").$type<string[] | null>(),
+    submissionNotifications: boolean("submission_notifications").notNull().default(true),
+    offerNotifications: boolean("offer_notifications").notNull().default(true),
     ...timestamps,
   },
   (t) => [uniqueIndex("company_members_company_user_uidx").on(t.companyId, t.userId)],
@@ -269,6 +276,7 @@ export const candidateEvidence = pgTable("candidate_evidence", {
   aiSummary: text("ai_summary").notNull(),
   strength: text("strength").notNull(),
   weakness: text("weakness").notNull(),
+  evidenceSummary: jsonb("evidence_summary").$type<EvidenceSummary | null>(),
   ...timestamps,
 });
 

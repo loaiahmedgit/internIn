@@ -152,6 +152,9 @@ function extractWeeks(text: string): string {
 }
 
 export class MockAIProvider implements AIProvider {
+  async organizeEvidence(): Promise<never> {
+    throw new Error("Evidence evaluation is unavailable until the AI provider is configured. Submitted files remain available for human review.");
+  }
   async generateInternship(input: { description: string }): Promise<InternshipDraft> {
     await wait(900);
     const t = pickTemplate(input.description);

@@ -1,6 +1,9 @@
 import { Resend } from "resend";
 import { z } from "zod";
 import { inngest } from "./client";
+import { eq } from "drizzle-orm";
+import { getDb, schema } from "@/db";
+import { hiringNotificationRecipients } from "@/lib/company/notification-recipients";
 
 const appUrl = () => process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -51,12 +54,15 @@ export const sendSubmissionReceivedEmail = inngest.createFunction(
   { id: "send-submission-received-email", triggers: [{ event: "submission/received" }] },
   async ({ event }) => {
     const data = SubmissionReceivedDataSchema.parse(event.data);
+    const [application] = await getDb().select({ opportunityId: schema.applications.opportunityId }).from(schema.submissions).innerJoin(schema.applications, eq(schema.applications.id, schema.submissions.applicationId)).where(eq(schema.submissions.id, data.submissionId));
+    const recipients = application ? await hiringNotificationRecipients(application.opportunityId, "submission") : [];
+    if (!recipients.length) return { skipped: "No subscribed hiring members" };
     const resend = getResend();
     if (!resend) return { skipped: "RESEND_API_KEY not set" };
 
     await resend.emails.send({
       from: "internIn <noreply@internin.app>",
-      to: data.companyEmails,
+      to: recipients,
       subject: `New submission for ${data.role}`,
       text: `${data.studentName} just submitted their Challenge for ${data.role}.\n\nReview it here: ${appUrl()}/company/submissions/${data.submissionId}\n\n— internIn`,
     });
@@ -77,12 +83,14 @@ export const sendOfferRespondedEmail = inngest.createFunction(
   { id: "send-offer-responded-email", triggers: [{ event: "internship_offer/responded" }] },
   async ({ event }) => {
     const data = OfferRespondedDataSchema.parse(event.data);
+    const recipients = await hiringNotificationRecipients(data.opportunityId, "offer");
+    if (!recipients.length) return { skipped: "No subscribed hiring members" };
     const resend = getResend();
     if (!resend) return { skipped: "RESEND_API_KEY not set" };
 
     await resend.emails.send({
       from: "internIn <noreply@internin.app>",
-      to: data.companyEmails,
+      to: recipients,
       subject: `${data.studentName} ${data.decision} your internship offer`,
       text: `${data.studentName} has ${data.decision} the internship offer for ${data.role}.\n\nView the opportunity here: ${appUrl()}/company/opportunities/${data.opportunityId}\n\n— internIn`,
     });

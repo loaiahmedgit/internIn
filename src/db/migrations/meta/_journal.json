@@ -71,6 +71,20 @@
       "when": 1788047584466,
       "tag": "0009_dear_mentallo",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788128228713,
+      "tag": "0010_misty_sage",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788128637082,
+      "tag": "0011_chubby_lethal_legion",
+      "breakpoints": true
     }
   ]
 }

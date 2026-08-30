@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { eq } from "drizzle-orm";
-import { getCompanyHomeData } from "@/lib/company/home-data";
+import { getHiringInternships } from "@/lib/company/internships-data";
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { QuerySelect } from "@/components/company/query-select";
@@ -75,7 +75,7 @@ export default async function CompanyInternshipsPage({
     );
   }
 
-  const data = await getCompanyHomeData(membership.company.id);
+  const data = await getHiringInternships(membership.company.id);
   const q = typeof params.q === "string" ? params.q.trim().toLowerCase() : "";
   const tab: TabKey = TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "all";
   const sort = params.sort === "oldest" ? "oldest" : "newest";

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CandidateDetail } from "@/lib/company/candidate-detail-data";
 import {
-  candidateAssistiveSummary,
   candidateInsights,
   candidateSummaryUnavailableMessage,
 } from "@/lib/company/candidate-insights";
@@ -14,6 +13,7 @@ function candidate(overrides: Partial<CandidateDetail> = {}): CandidateDetail {
     studentEmail: "james@example.com",
     status: "applied",
     appliedAt: new Date("2026-08-30T10:00:00.000Z"),
+    challengeStartedAt: new Date("2026-08-30T10:00:00.000Z"),
     opportunityId: "opportunity-1",
     role: "Data Analyst Intern",
     companyId: "company-1",
@@ -67,22 +67,17 @@ function candidate(overrides: Partial<CandidateDetail> = {}): CandidateDetail {
 describe("candidateInsights", () => {
   it("derives factual insights from current application and submission data", () => {
     expect(candidateInsights(candidate())).toEqual([
-      { label: "Relevant skills", value: "SQL · Python · Power BI" },
-      { label: "Completed 3/3 tasks" },
+      { label: "Relevant skills", value: "SQL · Python · Power BI (profile)" },
       { label: "Submitted in 1h 14m" },
       { label: "15 hours/week availability" },
-      { label: "3 challenge deliverables" },
+      { label: "2 submitted files" },
     ]);
   });
 
   it("builds the assistive summary from current facts instead of stale free-form AI text", () => {
-    const summary = candidateAssistiveSummary(candidate());
-
-    expect(summary?.summary).toContain("2 files");
-    expect(summary?.summary).toContain("3/3 challenge tasks completed");
-    expect(summary?.strength).toBe("SQL, Python, Power BI align with the challenge requirements.");
-    expect(summary?.watchFor).toBe("Review the submitted evidence against the challenge rubric before deciding.");
-    expect(JSON.stringify(summary)).not.toContain("no work was submitted");
+    const insights = candidateInsights(candidate());
+    expect(JSON.stringify(insights)).not.toContain("Completed");
+    expect(JSON.stringify(insights)).not.toContain("no work was submitted");
   });
 
   it("reports incomplete work without inventing a fit judgment", () => {
@@ -103,8 +98,8 @@ describe("candidateInsights", () => {
       },
     });
 
-    expect(candidateInsights(detail)).toContainEqual({ label: "Completed 1/3 tasks" });
-    expect(candidateAssistiveSummary(detail)?.watchFor).toBe("Recorded evidence shows 1/3 challenge tasks completed.");
+    expect(JSON.stringify(candidateInsights(detail))).not.toContain("Completed");
+    expect(candidateSummaryUnavailableMessage(detail)).toContain("written submission is available");
   });
 
   it("describes a same-minute submission without showing a misleading zero duration", () => {
@@ -132,7 +127,6 @@ describe("candidateInsights", () => {
       },
     });
 
-    expect(candidateAssistiveSummary(detail)).toBeNull();
     expect(candidateInsights(detail)).not.toContainEqual(expect.objectContaining({ label: expect.stringContaining("Completed") }));
     expect(candidateSummaryUnavailableMessage(detail)).toBe(
       "Submission files are available, but there is not enough evaluated evidence yet to generate a reliable summary.",
@@ -150,10 +144,10 @@ describe("candidateInsights", () => {
       },
     });
 
-    const summary = candidateAssistiveSummary(detail);
-    expect(summary?.summary).toContain("2 files");
-    expect(summary?.summary).toContain("task completion could not be verified");
-    expect(summary?.strength).toBe("SQL, Python, Power BI align with the challenge requirements.");
-    expect(summary?.watchFor).toContain("Review the submission against the challenge rubric");
+    expect(candidateInsights(detail)).toContainEqual({ label: "2 submitted files" });
+    expect(JSON.stringify(candidateInsights(detail))).not.toContain("Completed");
+  });
+  it("does not substitute application time for challenge start time", () => {
+    expect(candidateInsights(candidate({ challengeStartedAt: null })).some((i) => i.label.startsWith("Submitted in"))).toBe(false);
   });
 });

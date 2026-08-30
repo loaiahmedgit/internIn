@@ -77,7 +77,7 @@ export async function addInternshipTaskAction(weekId: string, title: string, des
   const validatedWeekId = IdSchema.parse(weekId);
   const validatedTitle = TaskTitleSchema.parse(title);
   const validatedDescription = description ? TaskDescriptionSchema.parse(description) : undefined;
-  const { user, membership } = await requireCurrentCompanyMember();
+  const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
   const week = await assertOwnsWeek(validatedWeekId, membership.companyId);
 
   const [task] = await getDb()
@@ -98,7 +98,7 @@ export async function addInternshipTaskAction(weekId: string, title: string, des
 export async function updateInternshipTaskStatusAction(taskId: string, status: "pending" | "in_progress" | "done") {
   const validatedTaskId = IdSchema.parse(taskId);
   const validatedStatus = TaskStatusSchema.parse(status);
-  const { user, membership } = await requireCurrentCompanyMember();
+  const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
   const task = await assertOwnsTask(validatedTaskId, membership.companyId);
 
   const db = getDb();
@@ -120,7 +120,7 @@ export async function addSupervisorFeedbackAction(programId: string, feedback: s
   const validatedProgramId = IdSchema.parse(programId);
   const validatedFeedback = FeedbackSchema.parse(feedback);
   const validatedWeekId = weekId ? IdSchema.parse(weekId) : undefined;
-  const { user, membership } = await requireCurrentCompanyMember();
+  const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
   const { program, companyName, applicationId, studentEmail, studentName } = await assertOwnsProgram(
     validatedProgramId,
     membership.companyId,
@@ -163,7 +163,7 @@ export async function addSupervisorFeedbackAction(programId: string, feedback: s
  */
 export async function completeInternshipProgramAction(programId: string) {
   const validatedProgramId = IdSchema.parse(programId);
-  const { user, membership } = await requireCurrentCompanyMember();
+  const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
   const { program, opportunitySkills } = await assertOwnsProgram(validatedProgramId, membership.companyId);
   if (program.status === "completed") throw new Error("This program is already completed.");
 

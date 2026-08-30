@@ -2,10 +2,12 @@
 
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
-import { summarizeCandidateAction, compareCandidatesAction } from "@/lib/ai/actions";
+import { compareCandidatesAction } from "@/lib/ai/actions";
+import { evaluateCandidateEvidence } from "@/lib/company/evidence-evaluation";
+import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import type { Challenge, CandidateEvidence } from "@/lib/ai";
+import type { CandidateEvidence } from "@/lib/ai";
 
 const IdSchema = z.string().uuid();
 
@@ -41,40 +43,21 @@ async function loadOwnedSubmission(submissionId: string) {
 }
 
 /**
- * Generates (or regenerates) descriptive candidate evidence for one
- * submission and persists it. Factual fields (task count, time spent) are
- * computed here from real data, never taken from the AI's output — only the
- * descriptive summary/strength/weakness text comes from the model, and it's
- * grounded in the student's actual submission notes.
+ * Evaluates the exact, owner-checked submission and persists source excerpts.
+ * No seeded task counts or model-generated hiring decisions are treated as facts.
  */
 export async function generateCandidateEvidenceAction(submissionId: string) {
   const validatedId = IdSchema.parse(submissionId);
   const { user } = await requireCurrentCompanyMember();
-  const { submission, application, studentName, challengeVersion } = await loadOwnedSubmission(validatedId);
-
-  const challenge: Challenge = {
-    title: challengeVersion.title,
-    scenario: challengeVersion.scenario,
-    estimatedMinutes: challengeVersion.estimatedMinutes,
-    skills: challengeVersion.skills,
-    tasks: challengeVersion.tasks,
-    deliverables: challengeVersion.deliverables,
-    files: challengeVersion.files,
-    rubric: challengeVersion.rubric,
-    status: "published",
+  const { submission, application, challengeVersion, opportunityCompanyId } = await loadOwnedSubmission(validatedId);
+  const evidenceSummary = await evaluateCandidateEvidence(application.id, opportunityCompanyId, submission.id);
+  const timeSpentMinutes = application.challengeStartedAt ? Math.max(0, Math.round((submission.submittedAt.getTime() - application.challengeStartedAt.getTime()) / 60000)) : 0;
+  const tasksCompleted = "Not verified";
+  const result = {
+    aiSummary: evidenceSummary.highlights.length ? "Source-linked evidence is available on the candidate profile." : "Submission materials are available, but no reliable evidence highlights have been evaluated yet.",
+    strength: "Review the source-linked evidence highlights.",
+    weakness: "Task completion and deliverable quality require human review.",
   };
-
-  const result = await summarizeCandidateAction({
-    candidateName: studentName,
-    challenge,
-    submissionNotes: submission.notes,
-  });
-
-  const timeSpentMinutes = Math.max(
-    1,
-    Math.round((submission.submittedAt.getTime() - application.createdAt.getTime()) / 60000),
-  );
-  const tasksCompleted = `${challenge.tasks.length}/${challenge.tasks.length}`;
 
   const db = getDb();
   const [evidence] = await db
@@ -87,6 +70,7 @@ export async function generateCandidateEvidenceAction(submissionId: string) {
       aiSummary: result.aiSummary,
       strength: result.strength,
       weakness: result.weakness,
+      evidenceSummary,
     })
     .onConflictDoUpdate({
       target: schema.candidateEvidence.submissionId,
@@ -97,6 +81,7 @@ export async function generateCandidateEvidenceAction(submissionId: string) {
         aiSummary: result.aiSummary,
         strength: result.strength,
         weakness: result.weakness,
+        evidenceSummary,
         updatedAt: new Date(),
       },
     })
@@ -108,7 +93,8 @@ export async function generateCandidateEvidenceAction(submissionId: string) {
     eventType: "evidence_generated",
     actorUserId: user.id,
   });
-
+  revalidatePath(`/company/candidates/${application.id}`);
+  revalidatePath(`/company/submissions/${submission.id}`);
   return evidence.id as string;
 }
 
@@ -125,8 +111,11 @@ export async function compareCandidateSubmissionsAction(submissionIds: string[])
   const db = getDb();
 
   const candidates: CandidateEvidence[] = [];
+  let opportunityId: string | null = null;
   for (const submissionId of validatedIds) {
-    const { submission, studentName } = await loadOwnedSubmission(submissionId);
+    const { submission, studentName, application } = await loadOwnedSubmission(submissionId);
+    if (opportunityId && opportunityId !== application.opportunityId) throw new Error("Compare evidence within one internship only.");
+    opportunityId = application.opportunityId;
     const [evidence] = await db
       .select()
       .from(schema.candidateEvidence)

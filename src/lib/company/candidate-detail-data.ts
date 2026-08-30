@@ -1,5 +1,7 @@
-import { eq, or, and, inArray, asc } from "drizzle-orm";
+import { eq, or, and, inArray, asc, desc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { requireCompanyMember } from "@/lib/auth";
+import type { EvidenceSummary } from "./evidence-summary";
 
 export interface CandidateDetail {
   applicationId: string;
@@ -8,9 +10,12 @@ export interface CandidateDetail {
   studentEmail: string;
   status: "applied" | "shortlisted" | "invited" | "declined" | "withdrawn";
   appliedAt: Date;
+  challengeStartedAt?: Date | null;
   opportunityId: string;
   role: string;
   companyId: string;
+  requirements?: { description: string; skills: string[]; hoursPerWeek: number; location: string; workMode: string | null };
+  evaluatedSummary?: EvidenceSummary | null;
   // Real student profile fields only — anything the schema doesn't collect (phone,
   // nationality, languages, GPA, a bio) is simply absent, never guessed.
   profile: {
@@ -23,6 +28,7 @@ export interface CandidateDetail {
     opportunityTypes: string[];
     availability: string | null;
     cvUrl: string | null;
+    cvFileKey?: string | null;
   } | null;
   submission: {
     id: string;
@@ -52,7 +58,8 @@ export interface CandidateDetail {
 }
 
 /** Everything the candidate profile page needs, in one owner-checked read. Returns null if the application doesn't exist or belongs to a different company. */
-export async function getCandidateDetail(applicationId: string, companyId: string): Promise<CandidateDetail | null> {
+export async function getCandidateDetail(applicationId: string, companyId: string, submissionId?: string): Promise<CandidateDetail | null> {
+  await requireCompanyMember(companyId);
   const db = getDb();
 
   const [row] = await db
@@ -61,6 +68,8 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
       studentId: schema.applications.studentId,
       status: schema.applications.status,
       appliedAt: schema.applications.createdAt,
+      challengeStartedAt: schema.applications.challengeStartedAt,
+      requirements: { description: schema.opportunities.description, skills: schema.opportunities.skills, hoursPerWeek: schema.opportunities.hoursPerWeek, location: schema.opportunities.location, workMode: schema.opportunities.workMode },
       opportunityId: schema.applications.opportunityId,
       opportunityCompanyId: schema.opportunities.companyId,
       role: schema.opportunities.role,
@@ -86,6 +95,7 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
       opportunityTypes: schema.studentProfiles.opportunityTypes,
       availability: schema.studentProfiles.availability,
       cvUrl: schema.studentProfiles.cvUrl,
+      cvFileKey: schema.studentProfiles.cvFileKey,
     })
     .from(schema.studentProfiles)
     .where(eq(schema.studentProfiles.userId, row.studentId))
@@ -94,12 +104,13 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
   const [submission] = await db
     .select()
     .from(schema.submissions)
-    .where(eq(schema.submissions.applicationId, applicationId))
-    .orderBy(schema.submissions.submittedAt)
+    .where(and(eq(schema.submissions.applicationId, applicationId), submissionId ? eq(schema.submissions.id, submissionId) : undefined))
+    .orderBy(desc(schema.submissions.submittedAt))
     .limit(1);
 
   let challenge: CandidateDetail["challenge"] = null;
   let evidence: CandidateDetail["evidence"] = null;
+  let evaluatedSummary: EvidenceSummary | null = null;
   if (submission) {
     const [challengeVersion] = await db
       .select()
@@ -123,6 +134,7 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
       .where(eq(schema.candidateEvidence.submissionId, submission.id))
       .limit(1);
     if (evidenceRow) {
+      evaluatedSummary = evidenceRow.evidenceSummary;
       evidence = {
         tasksCompleted: evidenceRow.tasksCompleted,
         timeSpentMinutes: evidenceRow.timeSpentMinutes,
@@ -170,6 +182,9 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
     studentEmail: row.studentEmail,
     status: row.status,
     appliedAt: row.appliedAt,
+    challengeStartedAt: row.challengeStartedAt,
+    requirements: row.requirements,
+    evaluatedSummary,
     opportunityId: row.opportunityId,
     role: row.role,
     companyId,

@@ -1,5 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { requireCompanyMember } from "@/lib/auth";
 import { computeProgramProgress, type ProgramSeverity } from "./program-progress";
 import { buildAttentionItems, type AttentionItem } from "./attention";
 
@@ -54,6 +55,7 @@ export interface CompanyHomeData {
 }
 
 async function loadCompanyRawData(companyId: string) {
+  await requireCompanyMember(companyId, "program_supervisor");
   const db = getDb();
 
   const opportunities = await db

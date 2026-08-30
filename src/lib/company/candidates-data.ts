@@ -1,5 +1,6 @@
 import { eq, inArray, desc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { requireCompanyMember } from "@/lib/auth";
 
 export interface CandidateRow {
   applicationId: string;
@@ -29,6 +30,7 @@ export interface CandidateRow {
 
 /** Company-wide candidate list across every opportunity — the full applicant pool, not just the review queue. */
 export async function getCompanyCandidates(companyId: string): Promise<{ rows: CandidateRow[]; roleOptions: { id: string; role: string }[] }> {
+  await requireCompanyMember(companyId);
   const db = getDb();
 
   const opportunities = await db

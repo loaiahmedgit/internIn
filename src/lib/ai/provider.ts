@@ -8,6 +8,8 @@ import type {
   RubricCriterion,
   Scenario,
 } from "./schemas";
+import type { EvidenceSource, EvidenceQuotesSchema } from "@/lib/company/evidence-summary";
+import type { z } from "zod";
 
 /**
  * The only surface application code is allowed to call for AI generation.
@@ -19,6 +21,7 @@ import type {
  * AI_MODEL env var, never a hardcoded model string in application code.
  */
 export interface AIProvider {
+  organizeEvidence(input: { sources: EvidenceSource[]; requirements: string }): Promise<z.infer<typeof EvidenceQuotesSchema>>;
   /** Manager's freeform description -> a structured internship listing draft. */
   generateInternship(input: { description: string }): Promise<InternshipDraft>;
 

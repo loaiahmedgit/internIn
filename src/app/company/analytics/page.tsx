@@ -1,212 +1,284 @@
-import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
-import { getCurrentUser } from "@/lib/auth";
-import { getDb, schema } from "@/db";
-import { getCompanyAnalytics } from "@/lib/company/analytics-data";
-import { CompanyPageContainer, CompanyPageHeader } from "@/components/company/page-shell";
-import { MetricCard } from "@/components/company/metric-card";
+import Link from "next/link";
+import { Briefcase, Users, Clock3, Star, Download } from "lucide-react";
+import { requireCurrentCompanyMember } from "@/lib/auth";
+import { getHiringData } from "@/lib/company/hiring-data";
+import {
+  hiringCohort,
+  hiringMetrics,
+  hiringActivity,
+  percent,
+} from "@/lib/company/hiring-metrics";
+import { CompanyPageContainer } from "@/components/company/page-shell";
+import {
+  HiringHeader,
+  HiringMetric,
+  HiringPanel,
+  HiringFunnel,
+  ApplicantBars,
+  StageDistribution,
+  HiringTrend,
+} from "@/components/company/hiring-panels";
 import { QuerySelect } from "@/components/company/query-select";
-import { Card, CardContent } from "@/components/ui/card";
-import { Briefcase, Users, GraduationCap, PieChart, Globe } from "lucide-react";
-
-const WINDOW_OPTIONS = [
-  { value: "7", label: "Last 7 days" },
-  { value: "30", label: "Last 30 days" },
-  { value: "90", label: "Last 90 days" },
-];
-
-function formatMinutes(minutes: number | null): string {
-  if (minutes === null) return "—";
-  if (minutes < 60) return `${Math.round(minutes)} min`;
-  return `${(minutes / 60).toFixed(1)} hr`;
-}
 
 export default async function CompanyAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/signin");
-  const params = await searchParams;
-
-  const db = getDb();
-  const [membership] = await db
-    .select({ company: schema.companies })
-    .from(schema.companyMembers)
-    .innerJoin(schema.companies, eq(schema.companyMembers.companyId, schema.companies.id))
-    .where(eq(schema.companyMembers.userId, user.id))
-    .limit(1);
-
-  if (!membership) {
-    return (
-      <CompanyPageContainer>
-        <p className="text-center text-navy/60">This account isn&apos;t linked to a company yet.</p>
-      </CompanyPageContainer>
+  const { membership } = await requireCurrentCompanyMember();
+  const [data, params] = await Promise.all([
+    getHiringData(membership.companyId),
+    searchParams,
+  ]);
+  const days = [7, 30, 90].includes(Number(params.window))
+    ? Number(params.window)
+    : 30;
+  const now = new Date();
+  const cohort = hiringCohort(data.applications, days, now);
+  const m = hiringMetrics(cohort);
+  const roles = data.postings
+    .map((p) => ({
+      ...p,
+      metrics: hiringMetrics(cohort.filter((a) => a.opportunityId === p.id)),
+    }))
+    .filter((p) => p.metrics.applicants || p.status === "published")
+    .sort(
+      (a, b) =>
+        b.metrics.applicants - a.metrics.applicants ||
+        a.role.localeCompare(b.role),
     );
-  }
-
-  const windowDays = [7, 30, 90].includes(Number(params.window)) ? Number(params.window) : 30;
-  const data = await getCompanyAnalytics(membership.company.id, windowDays);
-
-  const funnelSteps: { label: string; value: number }[] = [
-    { label: "Applied", value: data.funnel.applied },
-    { label: "Challenge submitted", value: data.funnel.submitted },
-    { label: "Shortlisted", value: data.funnel.shortlisted },
-    { label: "Invited", value: data.funnel.invited },
-    { label: "Accepted", value: data.funnel.accepted },
-  ];
-  const conversionRate = data.funnel.applied > 0 ? Math.round((data.funnel.accepted / data.funnel.applied) * 100) : null;
-
+  const sources = [...new Set(cohort.map((a) => a.source ?? "unknown"))]
+    .map((source) => ({
+      source,
+      metrics: hiringMetrics(
+        cohort.filter((a) => (a.source ?? "unknown") === source),
+      ),
+    }))
+    .sort((a, b) => b.metrics.applicants - a.metrics.applicants);
+  const sourceLabels: Record<string, string> = {
+    direct: "Direct",
+    referral: "Referral",
+    company_website: "Company website",
+    unknown: "Not recorded",
+  };
   return (
     <CompanyPageContainer>
-      <CompanyPageHeader
-        eyebrow="Analytics"
+      <HiringHeader
         title="Analytics"
-        description="A first look at how candidates move through your internships."
-        actions={<QuerySelect param="window" value={String(windowDays)} options={WINDOW_OPTIONS} className="h-9" />}
+        description="Understand hiring performance across your internships."
+        actions={
+          <QuerySelect
+            ariaLabel="Analytics date range"
+            param="window"
+            value={String(days)}
+            options={[7, 30, 90].map((d) => ({
+              value: String(d),
+              label: `Last ${d} days`,
+            }))}
+          />
+        }
       />
-
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard icon={Briefcase} label="Open internships" value={data.openInternships} />
-        <MetricCard icon={Users} label="Applicants" value={data.applicants} />
-        <MetricCard
-          icon={PieChart}
-          label="Challenge completion rate"
-          value={data.challengeCompletionRate === null ? 0 : Math.round(data.challengeCompletionRate * 100)}
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <HiringMetric
+          icon={Users}
+          color="text-teal-ink"
+          label="Applicants"
+          value={m.applicants}
+          detail={`Applications received in the last ${days} days`}
         />
-        <MetricCard icon={GraduationCap} label="Active interns" value={data.activeInterns} />
+        <HiringMetric
+          icon={Clock3}
+          color="text-blue-600"
+          label="Time to hire"
+          value={
+            m.timeToHire === null
+              ? "Not available"
+              : `${m.timeToHire.toFixed(1)} days`
+          }
+          detail={
+            m.timedHires
+              ? `Application to acceptance · ${m.timedHires} recorded hires`
+              : "No recorded acceptance timestamps"
+          }
+        />
+        <HiringMetric
+          icon={Star}
+          color="text-amber-600"
+          label="Offer acceptance"
+          value={
+            m.acceptance === null
+              ? "Not available"
+              : `${(m.acceptance * 100).toFixed(1)}%`
+          }
+          detail="Accepted / responded offers in this cohort"
+        />
+        <HiringMetric
+          icon={Briefcase}
+          color="text-teal-ink"
+          label="Active internships"
+          value={data.postings.filter((p) => p.status === "published").length}
+          detail="Currently published · all dates"
+        />
       </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Card className="rounded-xl border border-navy/10 shadow-none ring-0">
-          <CardContent className="px-5">
-            <h2 className="text-sm font-semibold text-navy">Hiring funnel</h2>
-            <div className="mt-4 space-y-3">
-              {funnelSteps.map((step) => {
-                const pct = data.funnel.applied > 0 ? Math.round((step.value / data.funnel.applied) * 100) : 0;
-                return (
-                  <div key={step.label} className="flex items-center gap-3">
-                    <span className="w-40 shrink-0 truncate text-sm text-navy/65">{step.label}</span>
-                    <div className="h-2 min-w-0 flex-1 rounded-full bg-navy/8">
-                      <div className="h-full rounded-full bg-teal" style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="w-8 shrink-0 text-right text-sm font-semibold text-navy">{step.value}</span>
-                    <span className="w-10 shrink-0 text-right text-xs text-navy/45">{pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
-            {conversionRate !== null && (
-              <div className="mt-4 flex items-center justify-between rounded-lg bg-teal/5 px-3 py-2 text-sm">
-                <span className="text-navy/70">Conversion from applied to accepted</span>
-                <span className="font-semibold text-teal-ink">{conversionRate}%</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-xl border border-navy/10 shadow-none ring-0">
-          <CardContent className="px-5">
-            <h2 className="text-sm font-semibold text-navy">Program health</h2>
-            <div className="mt-4 grid grid-cols-3 gap-4">
-              <div>
-                <p className="text-2xl font-semibold text-navy">{data.activeInterns}</p>
-                <p className="text-xs text-navy/50">Active interns</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold text-navy">{data.needsAttentionCount}</p>
-                <p className="text-xs text-navy/50">Needing attention</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold text-navy">{data.openInternships}</p>
-                <p className="text-xs text-navy/50">Open internships</p>
-              </div>
-            </div>
-
-            <div className="mt-6 border-t border-navy/8 pt-4">
-              <h3 className="text-sm font-semibold text-navy">Review turnaround</h3>
-              {data.reviewTurnaround.avgDaysToReview === null ? (
-                <p className="mt-2 text-sm text-navy/50">Not enough reviewed submissions yet to compute this.</p>
-              ) : (
-                <div className="mt-2 grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-2xl font-semibold text-navy">{data.reviewTurnaround.avgDaysToReview.toFixed(1)}</p>
-                    <p className="text-xs text-navy/50">Avg. days to review</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-semibold text-navy">{data.reviewTurnaround.awaitingReviewCount}</p>
-                    <p className="text-xs text-navy/50">Awaiting review</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="mt-6 rounded-xl border border-navy/10 shadow-none ring-0">
-        <CardContent className="px-5">
-          <h2 className="text-sm font-semibold text-navy">Challenge analytics</h2>
-          {data.challengeTiming.startedCount === 0 ? (
-            <p className="mt-2 text-sm text-navy/50">No challenges have been started yet in this window.</p>
-          ) : (
-            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <div>
-                <p className="text-2xl font-semibold text-navy">{data.challengeTiming.startedCount}</p>
-                <p className="text-xs text-navy/50">Challenges started</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold text-navy">
-                  {data.challengeCompletionRate === null ? "—" : `${Math.round(data.challengeCompletionRate * 100)}%`}
-                </p>
-                <p className="text-xs text-navy/50">Completion rate</p>
-              </div>
-              <div>
-                <p className="text-2xl font-semibold text-navy">{formatMinutes(data.challengeTiming.medianCompletionMinutes)}</p>
-                <p className="text-xs text-navy/50">Median completion time</p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Real, detectable-only breakdown (direct / referral / hiring company's own site) —
-          not the mockup's fabricated Direct/Organic/Referral split. Applications from
-          before this column existed have no source and are excluded, not guessed. */}
-      <Card className="mt-6 rounded-xl border border-navy/10 shadow-none ring-0">
-        <CardContent className="px-5">
-          <div className="flex items-center gap-2">
-            <Globe className="size-4 text-navy/40" aria-hidden="true" />
-            <h2 className="text-sm font-semibold text-navy">Applicant source</h2>
-          </div>
-          {data.applicantSource.totalWithSource === 0 ? (
-            <p className="mt-2 text-sm text-navy/50">
-              No applications with a known source yet in this window.
+      <p className="mt-3 text-xs text-navy/60">
+        Charts follow applications received in the selected period, including
+        archived records. Outcomes reflect their current status.
+      </p>
+      <div className="mt-5 grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
+        <HiringPanel
+          title="Hiring funnel conversion"
+          subtitle="Offers may be sent without shortlisting"
+        >
+          <HiringFunnel metrics={m} />
+        </HiringPanel>
+        <HiringPanel title="Applicants by internship">
+          <ApplicantBars
+            rows={roles.map((p) => ({
+              id: p.id,
+              role: p.role,
+              count: p.metrics.applicants,
+            }))}
+          />
+        </HiringPanel>
+        <HiringPanel
+          title="Stage distribution"
+          subtitle="Current stages, including historical applications"
+        >
+          <StageDistribution
+            rows={[
+              {
+                label: "Awaiting submission",
+                value: m.awaitingSubmission,
+                color: "#94A3B8",
+              },
+              { label: "To review", value: m.toReview, color: "#2563EB" },
+              { label: "Shortlisted", value: m.shortlisted, color: "#D97706" },
+              { label: "Offer sent", value: m.offerSent, color: "#059669" },
+              { label: "Rejected", value: m.archived, color: "#DC2626" },
+            ]}
+          />
+        </HiringPanel>
+        <HiringPanel
+          title="Hiring activity over time"
+          subtitle={
+            days === 7
+              ? "Applications per day"
+              : "Applications per 7-day interval"
+          }
+        >
+          <HiringTrend points={hiringActivity(cohort, days, now)} />
+        </HiringPanel>
+        <HiringPanel
+          title="Source performance"
+          subtitle="Only recorded sources; conversion to accepted offer"
+        >
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-navy/10 text-navy/65">
+                <th className="pb-3 text-left font-medium">Source</th>
+                <th className="pb-3 text-right font-medium">Applicants</th>
+                <th className="pb-3 text-right font-medium">Conversion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sources.map(({ source, metrics }) => (
+                <tr
+                  key={source}
+                  className="border-b border-navy/8 last:border-0"
+                >
+                  <td className="py-3 text-navy">
+                    {sourceLabels[source] ?? source}
+                  </td>
+                  <td className="text-right text-navy tabular-nums">
+                    {metrics.applicants}
+                  </td>
+                  <td className="text-right text-teal-ink tabular-nums">
+                    {percent(metrics.accepted, metrics.applicants)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!sources.length && (
+            <p className="mt-4 text-sm text-navy/60">
+              No applications in this period.
             </p>
-          ) : (
-            <div className="mt-4 space-y-3">
-              {[
-                { label: "Direct", value: data.applicantSource.direct },
-                { label: "Referral", value: data.applicantSource.referral },
-                { label: "Company website", value: data.applicantSource.companyWebsite },
-              ].map((row) => {
-                const pct = Math.round((row.value / data.applicantSource.totalWithSource) * 100);
-                return (
-                  <div key={row.label} className="flex items-center gap-3">
-                    <span className="w-32 shrink-0 text-sm text-navy/65">{row.label}</span>
-                    <div className="h-2 min-w-0 flex-1 rounded-full bg-navy/8">
-                      <div className="h-full rounded-full bg-teal" style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="w-8 shrink-0 text-right text-sm font-semibold text-navy">{row.value}</span>
-                    <span className="w-10 shrink-0 text-right text-xs text-navy/45">{pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
           )}
-        </CardContent>
-      </Card>
+        </HiringPanel>
+        <HiringPanel
+          title="Top performing internships"
+          subtitle="By accepted offers, then applicant volume"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-navy/10 text-navy/65">
+                  <th className="pb-3 text-left font-medium">Internship</th>
+                  <th className="pb-3 pl-3 text-right font-medium">
+                    Time to hire
+                  </th>
+                  <th className="pb-3 pl-3 text-right font-medium">
+                    Acceptance
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...roles]
+                  .sort(
+                    (a, b) =>
+                      b.metrics.accepted - a.metrics.accepted ||
+                      b.metrics.applicants - a.metrics.applicants,
+                  )
+                  .map((p) => (
+                    <tr
+                      key={p.id}
+                      className="border-b border-navy/8 last:border-0"
+                    >
+                      <td className="py-3 text-navy">
+                        <Link
+                          href={`/company/candidates?opportunity=${p.id}`}
+                          className="hover:text-teal-ink focus-visible:outline-2 focus-visible:outline-teal"
+                        >
+                          {p.role}
+                        </Link>
+                      </td>
+                      <td className="pl-3 text-right text-navy/70 tabular-nums">
+                        {p.metrics.timeToHire === null
+                          ? "Not available"
+                          : `${p.metrics.timeToHire.toFixed(1)}d`}
+                      </td>
+                      <td className="pl-3 text-right text-teal-ink tabular-nums">
+                        {p.metrics.acceptance === null
+                          ? "Not available"
+                          : `${Math.round(p.metrics.acceptance * 100)}%`}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+          {!roles.length && (
+            <p className="text-sm text-navy/60">No internship results yet.</p>
+          )}
+        </HiringPanel>
+      </div>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-navy/10 px-5 py-4">
+        <div>
+          <p className="text-sm font-medium text-navy">
+            Keep improving your hiring process
+          </p>
+          <p className="mt-1 text-xs text-navy/60">
+            Export the current reporting period to review with your team.
+          </p>
+        </div>
+        <a
+          href={`/company/analytics/export?window=${days}`}
+          className="inline-flex items-center gap-2 rounded-md border border-navy/20 px-4 py-2 text-sm font-medium text-navy hover:bg-gray-light focus-visible:outline-2 focus-visible:outline-teal"
+        >
+          <Download className="size-4" aria-hidden="true" />
+          Export report
+        </a>
+      </div>
     </CompanyPageContainer>
   );
 }

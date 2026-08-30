@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { getDb, schema } from "@/db";
 import { eq, and } from "drizzle-orm";
+import { hasPermission, type WorkspacePermission } from "@/lib/company/permissions";
+import { cache } from "react";
 
 /**
  * The only place application code should read "who is signed in and what
@@ -10,7 +12,7 @@ import { eq, and } from "drizzle-orm";
  * companies/opportunities/etc. directly) before returning any data.
  */
 
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async function getCurrentUser() {
   const supabase = await createClient();
   const {
     data: { user: authUser },
@@ -24,9 +26,9 @@ export async function getCurrentUser() {
     .where(eq(schema.users.authUserId, authUser.id))
     .limit(1);
   return user ?? null;
-}
+});
 
-export async function requireCurrentCompanyMember() {
+export async function requireCurrentCompanyMember(permission: WorkspacePermission | null = "hiring_reviewer") {
   const user = await getCurrentUser();
   if (!user || user.role !== "company") throw new Error("Not signed in as a company user.");
 
@@ -37,12 +39,13 @@ export async function requireCurrentCompanyMember() {
     .where(eq(schema.companyMembers.userId, user.id))
     .limit(1);
   if (!membership) throw new Error("This account isn't linked to a company.");
+  if (permission && !hasPermission(membership, permission)) throw new Error("You do not have access to this workspace feature. Ask a workspace administrator.");
 
   return { user, membership };
 }
 
 /** Throws unless the current session belongs to a member of `companyId`. */
-export async function requireCompanyMember(companyId: string) {
+export async function requireCompanyMember(companyId: string, permission: WorkspacePermission | null = "hiring_reviewer") {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -54,6 +57,7 @@ export async function requireCompanyMember(companyId: string) {
     .limit(1);
 
   if (!membership) throw new Error("Not a member of this company.");
+  if (permission && !hasPermission(membership, permission)) throw new Error("You do not have access to this workspace feature. Ask a workspace administrator.");
   return { user, membership };
 }
 

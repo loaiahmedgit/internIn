@@ -10,7 +10,7 @@ export default async function NewInternshipProgramPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { membership } = await requireCurrentCompanyMember();
+  const { membership } = await requireCurrentCompanyMember("program_supervisor");
   const db = getDb();
 
   const [row] = await db

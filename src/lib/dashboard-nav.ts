@@ -16,7 +16,8 @@ export type IconName =
   | "users"
   | "graduation-cap"
   | "bar-chart-3"
-  | "plug";
+  | "plug"
+  | "settings";
 
 export type NavItem = { href: string; label: string; icon: IconName };
 
@@ -34,7 +35,7 @@ export const COMPANY_NAV_ITEMS: NavItem[] = [
   { href: "/company/dashboard", label: "Home", icon: "home" },
   { href: "/company/internships", label: "Internships", icon: "briefcase" },
   { href: "/company/candidates", label: "Candidates", icon: "users" },
-  { href: "/company/interns", label: "Interns", icon: "graduation-cap" },
   { href: "/company/analytics", label: "Analytics", icon: "bar-chart-3" },
   { href: "/company/integrations", label: "Integrations", icon: "plug" },
+  { href: "/company/settings", label: "Settings", icon: "settings" },
 ];
