@@ -151,12 +151,12 @@ export default async function CandidateProfilePage({
         </div>
       </div>
 
-      <div className="mt-5 flex gap-1 border-b border-navy/10">
+      <div className="mt-5 flex gap-1 overflow-x-auto border-b border-navy/10">
         {TABS.map((t) => (
           <Link
             key={t.key}
             href={t.key === "overview" ? `/company/candidates/${id}` : `/company/candidates/${id}?tab=${t.key}`}
-            className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
+            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
               tab === t.key ? "border-teal text-teal-ink" : "border-transparent text-navy/50 hover:text-navy"
             }`}
           >
