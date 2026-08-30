@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { getCompanyCandidates, type CandidateRow } from "@/lib/company/candidates-data";
-import { stageKeyOf, STAGE_LABEL, STAGE_CLASS } from "@/lib/company/candidate-stage";
+import { stageKeyOf, STAGE_LABEL, STAGE_ICON_COLOR } from "@/lib/company/candidate-stage";
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { QuerySelect } from "@/components/company/query-select";
 import { ExportCandidatesMenu } from "@/components/company/export-candidates-menu";
@@ -13,14 +13,15 @@ import { Pagination } from "@/components/company/pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { Users, SearchX, ChevronRight, Clock, Star, Send } from "lucide-react";
+import { Users, SearchX, ChevronRight, Clock3, Star, Send, Search } from "lucide-react";
 
-type TabKey = "all" | "to_review" | "shortlisted" | "invited";
+type TabKey = "all" | "to_review" | "shortlisted" | "invited" | "not_selected";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "to_review", label: "To review" },
-  { key: "shortlisted", label: "Shortlisted" },
+  { key: "to_review", label: STAGE_LABEL.to_review },
+  { key: "shortlisted", label: STAGE_LABEL.shortlisted },
   { key: "invited", label: STAGE_LABEL.invited },
+  { key: "not_selected", label: STAGE_LABEL.not_selected },
 ];
 const SORT_OPTIONS = [
   { value: "newest", label: "Newest first" },
@@ -28,23 +29,23 @@ const SORT_OPTIONS = [
 ];
 const PAGE_SIZE = 10;
 
-// Icon + color pairing per stage — the exact same STAGE_CLASS recipe the
-// table badge and the profile badge use, so a summary card, a table row,
-// and the candidate profile can never show three different colors for the
-// same real stage.
-const SUMMARY_META: { key: "all" | "to_review" | "shortlisted" | "invited"; label: string; icon: typeof Users; className: string }[] = [
-  { key: "all", label: "Total candidates", icon: Users, className: "bg-teal/10 text-teal-ink" },
-  { key: "to_review", label: "To review", icon: Clock, className: "bg-navy/8 text-navy/60" },
-  { key: "shortlisted", label: "Shortlisted", icon: Star, className: STAGE_CLASS.shortlisted },
-  { key: "invited", label: STAGE_LABEL.invited, icon: Send, className: STAGE_CLASS.invited },
+// Icon + color pairing per stage — the same hue STAGE_ICON_COLOR/STAGE_CLASS
+// use for the table badge and the profile badge, so a summary card, a table
+// row, and the candidate profile can never show three different colors for
+// the same real stage. Icons are colored text only — no filled chip behind
+// them, per the summary-card rule.
+const SUMMARY_META: { key: "all" | "to_review" | "shortlisted" | "invited"; label: string; icon: typeof Users; iconColor: string }[] = [
+  { key: "all", label: "Total candidates", icon: Users, iconColor: "text-navy/40" },
+  { key: "to_review", label: STAGE_LABEL.to_review, icon: Clock3, iconColor: STAGE_ICON_COLOR.to_review },
+  { key: "shortlisted", label: STAGE_LABEL.shortlisted, icon: Star, iconColor: STAGE_ICON_COLOR.shortlisted },
+  { key: "invited", label: STAGE_LABEL.invited, icon: Send, iconColor: STAGE_ICON_COLOR.invited },
 ];
 
-function isArchived(row: CandidateRow): boolean {
-  return row.status === "declined" || row.status === "withdrawn";
-}
 function isPrePipeline(row: CandidateRow): boolean {
   return row.status === "applied" && !row.hasSubmission;
 }
+
+const TABLE_HEAD_CLASS = "text-xs uppercase tracking-wide text-navy/65";
 
 export default async function CompanyCandidatesPage({
   searchParams,
@@ -73,17 +74,16 @@ export default async function CompanyCandidatesPage({
 
   const { rows, roleOptions } = await getCompanyCandidates(membership.company.id);
   const q = typeof params.q === "string" ? params.q.trim().toLowerCase() : "";
-  const isArchiveView = params.tab === "archive";
-  const tab: TabKey = !isArchiveView && TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "all";
+  const tab: TabKey = TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "all";
   const opportunityFilter = typeof params.opportunity === "string" ? params.opportunity : "all";
   const sort = params.sort === "oldest" ? "oldest" : "newest";
-  const page = Math.max(1, Number(params.page) || 1);
+  const requestedPage = Math.max(1, Number(params.page) || 1);
 
-  // Real candidate lifecycle, simplified: pre-submission "applied" rows are
-  // not ready for evaluation and never shown here; declined/withdrawn are
-  // archived, reachable only through the subtle link below, never a main tab.
-  const pipelineRows = rows.filter((r) => !isPrePipeline(r) && !isArchived(r));
-  const archiveRows = rows.filter(isArchived);
+  // Pre-submission "applied" rows aren't ready for evaluation and never show
+  // up here at all. Every other real status (including declined/withdrawn,
+  // collapsed into "not_selected") is a normal, filterable tab — no separate
+  // archive view to keep track of.
+  const pipelineRows = rows.filter((r) => !isPrePipeline(r));
   const withKey = pipelineRows.map((r) => ({ ...r, key: stageKeyOf(r) }));
 
   const counts = {
@@ -91,6 +91,7 @@ export default async function CompanyCandidatesPage({
     to_review: withKey.filter((r) => r.key === "to_review").length,
     shortlisted: withKey.filter((r) => r.key === "shortlisted").length,
     invited: withKey.filter((r) => r.key === "invited").length,
+    not_selected: withKey.filter((r) => r.key === "not_selected").length,
   };
 
   let filtered = tab === "all" ? withKey : withKey.filter((r) => r.key === tab);
@@ -102,6 +103,8 @@ export default async function CompanyCandidatesPage({
   }
   filtered = [...filtered].sort((a, b) => (sort === "newest" ? b.appliedAt.getTime() - a.appliedAt.getTime() : a.appliedAt.getTime() - b.appliedAt.getTime()));
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Math.min(requestedPage, totalPages);
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function buildHref(overrides: Record<string, string | number | undefined>) {
@@ -120,7 +123,7 @@ export default async function CompanyCandidatesPage({
   return (
     <CompanyPageContainer>
       <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-navy/45">
-        <Link href="/company/dashboard" className="hover:text-navy">
+        <Link href="/company/dashboard" className="rounded-sm hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
           Home
         </Link>
         <ChevronRight className="size-3" aria-hidden="true" />
@@ -134,9 +137,9 @@ export default async function CompanyCandidatesPage({
         {rows.length > 0 && (
           <ExportCandidatesMenu
             headers={csvHeaders}
-            active={pipelineRows.map(toCsvRow)}
-            notSelected={archiveRows.map(toCsvRow)}
-            all={rows.filter((r) => !isPrePipeline(r)).map(toCsvRow)}
+            active={withKey.filter((r) => r.key !== "not_selected").map(toCsvRow)}
+            notSelected={withKey.filter((r) => r.key === "not_selected").map(toCsvRow)}
+            all={withKey.map(toCsvRow)}
           />
         )}
       </div>
@@ -149,14 +152,12 @@ export default async function CompanyCandidatesPage({
         />
       ) : (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {SUMMARY_META.map((s) => (
-              <div key={s.key} className="flex items-center gap-2.5 rounded-xl border border-navy/10 bg-white px-4 py-3">
-                <span className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${s.className}`}>
-                  <s.icon className="size-4" aria-hidden="true" />
-                </span>
+              <div key={s.key} className="flex min-h-20 items-center gap-4 rounded-xl border border-navy/10 bg-white px-5 py-4">
+                <s.icon className={`size-6 shrink-0 stroke-[1.75] ${s.iconColor}`} aria-hidden="true" />
                 <div className="min-w-0">
-                  <p className="text-lg leading-none font-semibold tabular-nums text-navy">{counts[s.key]}</p>
+                  <p className="text-2xl leading-none font-semibold tabular-nums tracking-tight text-navy">{counts[s.key]}</p>
                   <p className="mt-1 truncate text-xs text-navy/50">{s.label}</p>
                 </div>
               </div>
@@ -170,95 +171,63 @@ export default async function CompanyCandidatesPage({
                   {TABS.map((t) => (
                     <Link
                       key={t.key}
-                      href={t.key === "all" ? "/company/candidates" : `/company/candidates?tab=${t.key}`}
-                      className={`-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-sm font-medium transition-colors ${
-                        tab === t.key && !isArchiveView ? "border-teal text-teal-ink" : "border-transparent text-navy/50 hover:text-navy"
+                      href={buildHref({ tab: t.key === "all" ? undefined : t.key, page: undefined })}
+                      className={`-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
+                        tab === t.key ? "border-teal text-teal-ink" : "border-transparent text-navy/50 hover:text-navy"
                       }`}
                     >
                       {t.label}
-                      <span className="rounded-full bg-gray-light px-1.5 py-0.5 text-xs text-navy/50">{counts[t.key]}</span>
+                      <span className="rounded-full bg-gray-light px-1.5 py-0.5 text-xs tabular-nums text-navy/50">{counts[t.key]}</span>
                     </Link>
                   ))}
-                  {archiveRows.length > 0 && (
-                    <Link
-                      href="/company/candidates?tab=archive"
-                      className={`ml-2 text-xs font-medium underline-offset-2 hover:underline ${
-                        isArchiveView ? "text-teal-ink" : "text-navy/40"
-                      }`}
-                    >
-                      Not selected ({archiveRows.length})
-                    </Link>
-                  )}
                 </div>
-                {!isArchiveView && (
-                  <div className="flex flex-wrap items-center gap-2 py-2.5">
-                    <form method="get" className="flex items-center gap-2">
-                      {tab !== "all" && <input type="hidden" name="tab" value={tab} />}
-                      {opportunityFilter !== "all" && <input type="hidden" name="opportunity" value={opportunityFilter} />}
-                      {sort !== "newest" && <input type="hidden" name="sort" value={sort} />}
-                      <label htmlFor="candidate-search" className="sr-only">
-                        Search candidates
-                      </label>
-                      <input
-                        id="candidate-search"
-                        type="text"
-                        name="q"
-                        defaultValue={q}
-                        placeholder="Search candidates..."
-                        className="h-8 w-52 rounded-lg border border-navy/15 bg-white px-3 text-sm text-navy placeholder:text-navy/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
-                      />
-                    </form>
-                    <QuerySelect
-                      param="opportunity"
-                      value={opportunityFilter}
-                      resetParam="page"
-                      options={[{ value: "all", label: "All internships" }, ...roleOptions.map((o) => ({ value: o.id, label: o.role }))]}
-                      className="h-8"
+                <div className="flex flex-wrap items-center gap-2 py-2.5">
+                  <form method="get" className="relative flex items-center">
+                    {tab !== "all" && <input type="hidden" name="tab" value={tab} />}
+                    {opportunityFilter !== "all" && <input type="hidden" name="opportunity" value={opportunityFilter} />}
+                    {sort !== "newest" && <input type="hidden" name="sort" value={sort} />}
+                    <label htmlFor="candidate-search" className="sr-only">
+                      Search candidates
+                    </label>
+                    <Search className="pointer-events-none absolute left-2.5 size-3.5 text-navy/35" aria-hidden="true" />
+                    <input
+                      id="candidate-search"
+                      type="text"
+                      name="q"
+                      defaultValue={q}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="Search candidates…"
+                      className="h-8 w-52 rounded-lg border border-navy/15 bg-white pr-3 pl-8 text-sm text-navy placeholder:text-navy/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
                     />
-                    <QuerySelect param="sort" value={sort} resetParam="page" options={SORT_OPTIONS} className="h-8" />
-                  </div>
-                )}
+                  </form>
+                  <QuerySelect
+                    param="opportunity"
+                    value={opportunityFilter}
+                    resetParam="page"
+                    ariaLabel="Filter by internship"
+                    options={[{ value: "all", label: "All internships" }, ...roleOptions.map((o) => ({ value: o.id, label: o.role }))]}
+                    className="h-8"
+                  />
+                  <QuerySelect param="sort" value={sort} resetParam="page" ariaLabel="Sort candidates" options={SORT_OPTIONS} className="h-8" />
+                </div>
               </div>
 
-              {isArchiveView ? (
-                archiveRows.length === 0 ? (
-                  <div className="px-4 pb-2">
-                    <EmptyState icon={SearchX} title="Nothing archived" description="Rejected or withdrawn candidates will show up here." />
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader className="bg-gray-50">
-                      <TableRow className="border-navy/10 hover:bg-transparent">
-                        <TableHead className="pl-4 text-xs uppercase tracking-wide text-navy/65">Candidate</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-navy/65">Contact</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-navy/65">Internship</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-navy/65">Applied</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-navy/65">Stage</TableHead>
-                        <TableHead className="pr-4 text-right text-xs uppercase tracking-wide text-navy/65">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {archiveRows.map((row) => (
-                        <CandidateTableRow key={row.applicationId} row={row} />
-                      ))}
-                    </TableBody>
-                  </Table>
-                )
-              ) : filtered.length === 0 ? (
+              {filtered.length === 0 ? (
                 <div className="px-4 pb-2">
                   <EmptyState icon={SearchX} title="Nothing here" description="No candidates match this view." />
                 </div>
               ) : (
                 <>
-                  <Table>
+                  <Table className="min-w-[880px]">
                     <TableHeader className="bg-gray-50">
                       <TableRow className="border-navy/10 hover:bg-transparent">
-                        <TableHead className="pl-4 text-xs uppercase tracking-wide text-navy/65">Candidate</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-navy/65">Contact</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-navy/65">Internship</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-navy/65">Applied</TableHead>
-                        <TableHead className="text-xs uppercase tracking-wide text-navy/65">Stage</TableHead>
-                        <TableHead className="pr-4 text-right text-xs uppercase tracking-wide text-navy/65">Actions</TableHead>
+                        <TableHead className={`pl-4 ${TABLE_HEAD_CLASS}`}>Candidate</TableHead>
+                        <TableHead className={TABLE_HEAD_CLASS}>Contact</TableHead>
+                        <TableHead className={TABLE_HEAD_CLASS}>Internship</TableHead>
+                        <TableHead className={TABLE_HEAD_CLASS}>Applied</TableHead>
+                        <TableHead className={TABLE_HEAD_CLASS}>Stage</TableHead>
+                        <TableHead className={`pr-4 text-right ${TABLE_HEAD_CLASS}`}>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

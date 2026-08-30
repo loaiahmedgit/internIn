@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,14 +16,13 @@ import { formatRecentDate } from "@/lib/format-date";
 import { MoreHorizontal, User, FileSearch } from "lucide-react";
 
 export function CandidateTableRow({ row }: { row: CandidateRow }) {
-  const router = useRouter();
   const profileHref = `/company/candidates/${row.applicationId}`;
   const stage = stageKeyOf(row);
 
   return (
-    <TableRow className="cursor-pointer border-navy/8" onClick={() => router.push(profileHref)}>
+    <TableRow className="border-navy/8">
       <TableCell className="max-w-48 pl-4">
-        <Link href={profileHref} onClick={(e) => e.stopPropagation()} className="flex min-w-0 items-center gap-2">
+        <Link href={profileHref} className="flex min-w-0 items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
           <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink">
             {row.studentName.charAt(0).toUpperCase()}
           </span>
@@ -32,7 +30,7 @@ export function CandidateTableRow({ row }: { row: CandidateRow }) {
         </Link>
       </TableCell>
       <TableCell className="max-w-52 truncate text-navy/65">
-        <a href={`mailto:${row.studentEmail}`} onClick={(e) => e.stopPropagation()} className="hover:text-teal-ink hover:underline">
+        <a href={`mailto:${row.studentEmail}`} className="hover:text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
           {row.studentEmail}
         </a>
       </TableCell>
@@ -43,7 +41,7 @@ export function CandidateTableRow({ row }: { row: CandidateRow }) {
           {STAGE_LABEL[stage] ?? row.status}
         </Badge>
       </TableCell>
-      <TableCell className="pr-4 text-right" onClick={(e) => e.stopPropagation()}>
+      <TableCell className="pr-4 text-right">
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${row.studentName}`} />}>
             <MoreHorizontal className="size-4" aria-hidden="true" />

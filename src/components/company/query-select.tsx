@@ -15,11 +15,13 @@ export function QuerySelect({
   options,
   className,
   resetParam,
+  ariaLabel,
 }: {
   param: string;
   value: string;
   options: { value: string; label: string }[];
   className?: string;
+  ariaLabel?: string;
   /** Another param to drop whenever this one changes — e.g. "page", so picking a new filter/sort always lands back on page 1. */
   resetParam?: string;
 }) {
@@ -39,7 +41,7 @@ export function QuerySelect({
 
   return (
     <Select value={value} onValueChange={handleChange}>
-      <SelectTrigger className={className}>
+      <SelectTrigger className={className} aria-label={ariaLabel}>
         <SelectValue>{(v: string) => labelByValue.get(v) ?? v}</SelectValue>
       </SelectTrigger>
       <SelectContent>

@@ -33,7 +33,7 @@ export function Pagination({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
       <p className="text-xs text-navy/45">
-        Showing {start}–{end} of {totalCount}
+        Showing {start}-{end} of {totalCount}
       </p>
       {totalPages > 1 && (
         <nav aria-label="Pagination" className="flex items-center gap-1">
@@ -41,7 +41,7 @@ export function Pagination({
             href={buildHref(Math.max(1, page - 1))}
             aria-label="Previous page"
             aria-disabled={page <= 1}
-            className={`flex size-7 items-center justify-center rounded-md text-navy/50 hover:bg-gray-light hover:text-navy ${
+            className={`flex size-8 items-center justify-center rounded-md text-navy/50 transition-colors hover:bg-gray-light hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
               page <= 1 ? "pointer-events-none opacity-40" : ""
             }`}
           >
@@ -57,7 +57,7 @@ export function Pagination({
                 key={p}
                 href={buildHref(p)}
                 aria-current={p === page ? "page" : undefined}
-                className={`flex size-7 items-center justify-center rounded-md text-xs font-medium tabular-nums ${
+                className={`flex size-8 items-center justify-center rounded-md text-xs font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
                   p === page ? "bg-teal/10 text-teal-ink" : "text-navy/60 hover:bg-gray-light hover:text-navy"
                 }`}
               >
@@ -69,7 +69,7 @@ export function Pagination({
             href={buildHref(Math.min(totalPages, page + 1))}
             aria-label="Next page"
             aria-disabled={page >= totalPages}
-            className={`flex size-7 items-center justify-center rounded-md text-navy/50 hover:bg-gray-light hover:text-navy ${
+            className={`flex size-8 items-center justify-center rounded-md text-navy/50 transition-colors hover:bg-gray-light hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
               page >= totalPages ? "pointer-events-none opacity-40" : ""
             }`}
           >

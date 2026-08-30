@@ -20,7 +20,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatDeadline } from "@/lib/format-date";
-import { ChevronRight, ExternalLink, MoreHorizontal, FileSearch, Sparkles } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronRight,
+  ExternalLink,
+  FileCheck2,
+  FileSearch,
+  Mail,
+  MapPin,
+  MoreHorizontal,
+  Sparkles,
+} from "lucide-react";
 
 type TabKey = "overview" | "resume" | "challenge" | "notes" | "activity";
 const TABS: { key: TabKey; label: string }[] = [
@@ -84,15 +94,17 @@ export default async function CandidateProfilePage({
     ...(candidate.profile?.cvUrl ? [{ name: "CV", url: candidate.profile.cvUrl }] : []),
     ...(candidate.submission?.artifacts ?? []),
   ];
+  const education = [candidate.profile?.major, candidate.profile?.university].filter(Boolean).join(" · ");
+  const educationWithYear = `${education || "Not provided"}${candidate.profile?.graduationYear ? ` (${candidate.profile.graduationYear})` : ""}`;
 
   return (
     <CompanyPageContainer>
       <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-navy/45">
-        <Link href="/company/dashboard" className="hover:text-navy">
+        <Link href="/company/dashboard" className="rounded-sm hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
           Home
         </Link>
         <ChevronRight className="size-3" aria-hidden="true" />
-        <Link href="/company/candidates" className="hover:text-navy">
+        <Link href="/company/candidates" className="rounded-sm hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
           Candidates
         </Link>
         <ChevronRight className="size-3" aria-hidden="true" />
@@ -144,7 +156,7 @@ export default async function CandidateProfilePage({
           <Link
             key={t.key}
             href={t.key === "overview" ? `/company/candidates/${id}` : `/company/candidates/${id}?tab=${t.key}`}
-            className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
+            className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
               tab === t.key ? "border-teal text-teal-ink" : "border-transparent text-navy/50 hover:text-navy"
             }`}
           >
@@ -162,35 +174,30 @@ export default async function CandidateProfilePage({
                 <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
                   <div>
                     <dt className="text-xs text-navy/45">Email</dt>
-                    <dd className="text-navy">{candidate.studentEmail}</dd>
+                    <dd className="break-words text-navy">{candidate.studentEmail}</dd>
                   </div>
-                  {candidate.profile?.location && (
-                    <div>
-                      <dt className="text-xs text-navy/45">Location</dt>
-                      <dd className="text-navy">{candidate.profile.location}</dd>
-                    </div>
-                  )}
-                  {(candidate.profile?.university || candidate.profile?.major) && (
-                    <div>
-                      <dt className="text-xs text-navy/45">Education</dt>
-                      <dd className="text-navy">
-                        {[candidate.profile?.major, candidate.profile?.university].filter(Boolean).join(" · ")}
-                        {candidate.profile?.graduationYear ? ` (${candidate.profile.graduationYear})` : ""}
-                      </dd>
-                    </div>
-                  )}
-                  {candidate.profile?.availability && (
-                    <div>
-                      <dt className="text-xs text-navy/45">Availability</dt>
-                      <dd className="text-navy">{candidate.profile.availability}</dd>
-                    </div>
-                  )}
-                  {candidate.profile && candidate.profile.opportunityTypes.length > 0 && (
-                    <div>
-                      <dt className="text-xs text-navy/45">Opportunity types</dt>
-                      <dd className="text-navy">{candidate.profile.opportunityTypes.join(", ")}</dd>
-                    </div>
-                  )}
+                  <div>
+                    <dt className="text-xs text-navy/45">Phone</dt>
+                    <dd className="text-navy/60">Not provided</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-navy/45">Location</dt>
+                    <dd className="text-navy">{candidate.profile?.location ?? "Not provided"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-navy/45">Education</dt>
+                    <dd className="text-navy">{educationWithYear}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-navy/45">Availability</dt>
+                    <dd className="text-navy">{candidate.profile?.availability ?? "Not provided"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-navy/45">Opportunity type</dt>
+                    <dd className="text-navy">
+                      {candidate.profile?.opportunityTypes.length ? candidate.profile.opportunityTypes.join(", ") : "Not provided"}
+                    </dd>
+                  </div>
                 </dl>
                 {candidate.profile && candidate.profile.skills.length > 0 && (
                   <div className="mt-4">
@@ -211,7 +218,7 @@ export default async function CandidateProfilePage({
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-semibold text-navy">Submission materials</h2>
                   {candidate.submission && (
-                    <Link href={`/company/candidates/${id}?tab=challenge`} className="text-xs font-medium text-teal-ink hover:underline">
+                    <Link href={`/company/candidates/${id}?tab=challenge`} className="rounded-sm text-xs font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
                       View all
                     </Link>
                   )}
@@ -225,6 +232,68 @@ export default async function CandidateProfilePage({
                 ) : (
                   <p className="mt-2 text-sm text-navy/50">No files submitted yet.</p>
                 )}
+              </section>
+
+              <section className="rounded-xl border border-navy/10 bg-white p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-navy">Challenge deliverables</h2>
+                  {candidate.submission && (
+                    <Link href={`/company/candidates/${id}?tab=challenge`} className="rounded-sm text-xs font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+                      View details
+                    </Link>
+                  )}
+                </div>
+                {candidate.challenge?.deliverables.length ? (
+                  <ul className="mt-3 divide-y divide-navy/8">
+                    {candidate.challenge.deliverables.map((deliverable) => (
+                      <li key={deliverable} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                        <FileCheck2 className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-navy">{deliverable}</p>
+                          <p className="mt-0.5 text-xs text-navy/45">Required challenge deliverable</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-navy/50">No challenge deliverables are available yet.</p>
+                )}
+              </section>
+
+              <section className="rounded-xl border border-navy/10 bg-white p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-navy">Resume preview</h2>
+                  {candidate.profile?.cvUrl && (
+                    <a
+                      href={candidate.profile.cvUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+                    >
+                      View full CV
+                    </a>
+                  )}
+                </div>
+                <div className="mt-3 rounded-lg bg-gray-light/55 px-5 py-4">
+                  <p className="text-lg font-semibold tracking-tight text-navy">{candidate.studentName}</p>
+                  <p className="text-sm text-navy/60">{candidate.profile?.major ?? candidate.role}</p>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-navy/50">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <Mail className="size-3.5 shrink-0" aria-hidden="true" />
+                      <span className="break-all">{candidate.studentEmail}</span>
+                    </span>
+                    {candidate.profile?.location && (
+                      <span className="flex items-center gap-1.5">
+                        <MapPin className="size-3.5" aria-hidden="true" />
+                        {candidate.profile.location}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-4 border-t border-navy/10 pt-3">
+                    <p className="text-xs font-medium text-navy/45">Education</p>
+                    <p className="mt-1 text-sm text-navy">{educationWithYear}</p>
+                  </div>
+                </div>
               </section>
             </>
           )}
@@ -240,7 +309,7 @@ export default async function CandidateProfilePage({
                 <div className="mt-5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">Education</p>
                   <div className="mt-2 flex items-baseline justify-between text-sm">
-                    <span className="text-navy">{candidate.profile?.university ?? "—"}</span>
+                    <span className="text-navy">{candidate.profile?.university ?? "Not provided"}</span>
                     <span className="text-navy/50">{candidate.profile?.graduationYear ?? ""}</span>
                   </div>
                 </div>
@@ -345,6 +414,10 @@ export default async function CandidateProfilePage({
                 <dt className="text-navy/50">Submitted</dt>
                 <dd className="text-navy">{candidate.submission ? formatDeadline(candidate.submission.submittedAt) : "Not yet"}</dd>
               </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-navy/50">Recruiter</dt>
+                <dd className="text-navy">Unassigned</dd>
+              </div>
               {candidate.submission && (
                 <div className="flex items-center justify-between">
                   <dt className="text-navy/50">AI usage policy</dt>
@@ -352,23 +425,30 @@ export default async function CandidateProfilePage({
                 </div>
               )}
             </dl>
-            <div className="mt-4 border-t border-navy/10 pt-3">
-              <CandidateActionsPanel
-                applicationId={candidate.applicationId}
-                submissionId={candidate.submission?.id ?? null}
-                status={candidate.status}
-                offerStatus={candidate.offer?.status ?? null}
-                hasEvidence={!!candidate.evidence}
-              />
-            </div>
+            {candidate.offer && candidate.submission && (
+              <div className="mt-4 border-t border-navy/10 pt-3">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  render={<Link href={`/company/submissions/${candidate.submission.id}`} />}
+                  nativeButton={false}
+                >
+                  <FileSearch className="size-4" aria-hidden="true" />
+                  View offer
+                </Button>
+              </div>
+            )}
           </section>
 
           {insights.length > 0 && (
             <section className="rounded-xl border border-navy/10 bg-white p-4">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-navy/45">Quick insights</h2>
-              <ul className="mt-2 space-y-1.5 text-sm text-navy/75">
+              <ul className="mt-2 space-y-2 text-sm text-navy/75">
                 {insights.map((i) => (
-                  <li key={i}>{i}</li>
+                  <li key={i} className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
+                    <span>{i}</span>
+                  </li>
                 ))}
               </ul>
             </section>
@@ -396,9 +476,20 @@ export default async function CandidateProfilePage({
               </div>
             ) : (
               <p className="mt-2 text-sm text-navy/50">
-                {candidate.submission ? "Not generated yet — use the panel above." : "Nothing to summarize until a submission comes in."}
+                {candidate.submission ? "Not generated yet. Use the action below." : "Nothing to summarize until a submission comes in."}
               </p>
             )}
+          </section>
+
+          <section aria-label="Candidate decision actions" className="rounded-xl border border-navy/10 bg-white p-4">
+            <CandidateActionsPanel
+              applicationId={candidate.applicationId}
+              candidateName={candidate.studentName}
+              submissionId={candidate.submission?.id ?? null}
+              status={candidate.status}
+              offerStatus={candidate.offer?.status ?? null}
+              hasEvidence={!!candidate.evidence}
+            />
           </section>
         </div>
       </div>
