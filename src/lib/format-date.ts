@@ -11,11 +11,21 @@ export function formatDeadline(date: Date): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-/** "Today" / "Yesterday" / "Aug 28" — calendar-day comparison, not a 24h rolling window. */
-export function formatRecentDate(date: Date): string {
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const daysAgo = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
+function calendarDayInTimeZone(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  return Date.UTC(value("year"), value("month") - 1, value("day"));
+}
+
+/** "Today" / "Yesterday" / "Aug 28" in the workspace timezone, identical during SSR and hydration. */
+export function formatRecentDate(date: Date, now = new Date(), timeZone = "Asia/Qatar"): string {
+  const daysAgo = Math.round((calendarDayInTimeZone(now, timeZone) - calendarDayInTimeZone(date, timeZone)) / 86400000);
   if (daysAgo === 0) return "Today";
   if (daysAgo === 1) return "Yesterday";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(date);
 }
