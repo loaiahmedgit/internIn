@@ -359,9 +359,7 @@ export function HiringTrend({
               stroke="#087F78"
               strokeWidth="2"
             >
-              <title>
-                {date(p.date)}: {p.count} applicants
-              </title>
+              <title>{`${date(p.date)}: ${p.count} applicants`}</title>
             </circle>
             {(i === 0 ||
               i === points.length - 1 ||
