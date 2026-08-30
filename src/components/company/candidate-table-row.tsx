@@ -34,7 +34,11 @@ export function CandidateTableRow({ row }: { row: CandidateRow }) {
           {row.studentEmail}
         </a>
       </TableCell>
-      <TableCell className="max-w-36 truncate text-navy/65">{row.role}</TableCell>
+      <TableCell className="max-w-36 text-navy/65">
+        <span className="block truncate" title={row.role}>
+          {row.role}
+        </span>
+      </TableCell>
       <TableCell className="text-navy/65">{formatRecentDate(row.appliedAt)}</TableCell>
       <TableCell>
         <Badge variant="secondary" className={STAGE_CLASS[stage] ?? ""}>

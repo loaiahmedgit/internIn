@@ -112,7 +112,10 @@ export function InternshipRowActions({
             </>
           ) : (
             <>
-              <DropdownMenuItem className={MENU_ITEM_CLASS} render={<Link href={`/company/opportunities/${opportunityId}`} />}>
+              <DropdownMenuItem
+                className={MENU_ITEM_CLASS}
+                render={<Link href={`/company/candidates?opportunity=${encodeURIComponent(opportunityId)}`} />}
+              >
                 <Users className="size-4" aria-hidden="true" />
                 View candidates
               </DropdownMenuItem>

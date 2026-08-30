@@ -82,7 +82,11 @@ export default async function CompanyCandidatesPage({
   // new links. Archived candidates are history, not an active pipeline stage.
   const isArchiveView = params.view === "archived" || params.tab === "archive" || params.tab === "not_selected";
   const tab: TabKey = !isArchiveView && TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "all";
-  const opportunityFilter = typeof params.opportunity === "string" ? params.opportunity : "all";
+  const requestedOpportunityFilter = typeof params.opportunity === "string" ? params.opportunity : "all";
+  const opportunityFilter =
+    requestedOpportunityFilter === "all" || roleOptions.some((option) => option.id === requestedOpportunityFilter)
+      ? requestedOpportunityFilter
+      : "all";
   const sort = params.sort === "oldest" ? "oldest" : "newest";
   const requestedPage = Math.max(1, Number(params.page) || 1);
 
@@ -92,8 +96,13 @@ export default async function CompanyCandidatesPage({
   const reviewableRows = rows.filter((r) => !isPrePipeline(r));
   const activeRows = reviewableRows.filter((r) => !isArchived(r));
   const archivedRows = reviewableRows.filter(isArchived);
-  const activeWithKey = activeRows.map((r) => ({ ...r, key: stageKeyOf(r) }));
-  const archivedWithKey = archivedRows.map((r) => ({ ...r, key: stageKeyOf(r) }));
+  const matchesOpportunity = (row: CandidateRow) =>
+    opportunityFilter === "all" || row.opportunityId === opportunityFilter;
+  const reviewableForOpportunity = reviewableRows.filter(matchesOpportunity);
+  const activeForOpportunity = activeRows.filter(matchesOpportunity);
+  const archivedForOpportunity = archivedRows.filter(matchesOpportunity);
+  const activeWithKey = activeForOpportunity.map((r) => ({ ...r, key: stageKeyOf(r) }));
+  const archivedWithKey = archivedForOpportunity.map((r) => ({ ...r, key: stageKeyOf(r) }));
 
   const counts = {
     all: activeWithKey.length,
@@ -102,12 +111,25 @@ export default async function CompanyCandidatesPage({
     invited: activeWithKey.filter((r) => r.key === "invited").length,
   };
 
+  const internshipCountRows = isArchiveView ? archivedRows : activeRows;
+  const internshipCountById = new Map<string, number>();
+  for (const row of internshipCountRows) {
+    internshipCountById.set(row.opportunityId, (internshipCountById.get(row.opportunityId) ?? 0) + 1);
+  }
+  const internshipOptions = [
+    { value: "all", label: "All internships", count: internshipCountRows.length },
+    ...roleOptions.map((option) => ({
+      value: option.id,
+      label: option.role,
+      count: internshipCountById.get(option.id) ?? 0,
+    })),
+  ];
+
   let filtered = isArchiveView
     ? archivedWithKey
     : tab === "all"
       ? activeWithKey
       : activeWithKey.filter((r) => r.key === tab);
-  if (opportunityFilter !== "all") filtered = filtered.filter((r) => r.opportunityId === opportunityFilter);
   if (q) {
     filtered = filtered.filter(
       (r) => r.studentName.toLowerCase().includes(q) || r.studentEmail.toLowerCase().includes(q),
@@ -157,9 +179,9 @@ export default async function CompanyCandidatesPage({
         {rows.length > 0 && (
           <ExportCandidatesMenu
             headers={csvHeaders}
-            active={activeRows.map(toCsvRow)}
-            rejected={archivedRows.map(toCsvRow)}
-            all={reviewableRows.map(toCsvRow)}
+            active={activeForOpportunity.map(toCsvRow)}
+            archived={archivedForOpportunity.map(toCsvRow)}
+            all={reviewableForOpportunity.map(toCsvRow)}
           />
         )}
       </div>
@@ -200,21 +222,16 @@ export default async function CompanyCandidatesPage({
                       <span className="rounded-full bg-gray-light px-1.5 py-0.5 text-xs tabular-nums text-navy/50">{counts[t.key]}</span>
                     </Link>
                   ))}
-                  {archivedRows.length > 0 && (
-                    <Link
-                      href={buildHref({ view: "archived", tab: undefined, page: undefined })}
-                      aria-current={isArchiveView ? "page" : undefined}
-                      className={`ml-2 flex items-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
-                        isArchiveView ? "text-red-700" : "text-red-600/70 hover:text-red-700"
-                      }`}
-                    >
-                      <Archive className="size-3.5" aria-hidden="true" />
-                      Rejected candidates
-                      <span className="tabular-nums">({archivedRows.length})</span>
-                    </Link>
-                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 py-2.5">
+                  <QuerySelect
+                    param="opportunity"
+                    value={opportunityFilter}
+                    resetParam="page"
+                    ariaLabel="Filter by internship"
+                    options={internshipOptions}
+                    className="h-8 w-56"
+                  />
                   <form method="get" className="relative flex items-center">
                     {isArchiveView ? (
                       <input type="hidden" name="view" value="archived" />
@@ -238,15 +255,22 @@ export default async function CompanyCandidatesPage({
                       className="h-8 w-52 rounded-lg border border-navy/15 bg-white pr-3 pl-8 text-sm text-navy placeholder:text-navy/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
                     />
                   </form>
-                  <QuerySelect
-                    param="opportunity"
-                    value={opportunityFilter}
-                    resetParam="page"
-                    ariaLabel="Filter by internship"
-                    options={[{ value: "all", label: "All internships" }, ...roleOptions.map((o) => ({ value: o.id, label: o.role }))]}
-                    className="h-8"
-                  />
                   <QuerySelect param="sort" value={sort} resetParam="page" ariaLabel="Sort candidates" options={SORT_OPTIONS} className="h-8" />
+                  {archivedRows.length > 0 && (
+                    <Link
+                      href={buildHref({ view: "archived", tab: undefined, page: undefined })}
+                      aria-current={isArchiveView ? "page" : undefined}
+                      className={`flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
+                        isArchiveView
+                          ? "bg-gray-light text-navy/70"
+                          : "text-navy/45 hover:bg-gray-light/70 hover:text-navy/70"
+                      }`}
+                    >
+                      <Archive className="size-3.5" aria-hidden="true" />
+                      Archived candidates
+                      <span className="tabular-nums">{archivedForOpportunity.length}</span>
+                    </Link>
+                  )}
                 </div>
               </div>
 
@@ -255,7 +279,7 @@ export default async function CompanyCandidatesPage({
                   <EmptyState
                     icon={SearchX}
                     title="Nothing here"
-                    description={isArchiveView ? "No rejected candidates match this view." : "No candidates match this view."}
+                    description={isArchiveView ? "No archived candidates match this view." : "No candidates match this view."}
                   />
                 </div>
               ) : (
