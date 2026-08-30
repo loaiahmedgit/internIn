@@ -205,7 +205,7 @@ export default async function CompanyCandidatesPage({
                       href={buildHref({ view: "archived", tab: undefined, page: undefined })}
                       aria-current={isArchiveView ? "page" : undefined}
                       className={`ml-2 flex items-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${
-                        isArchiveView ? "text-teal-ink" : "text-navy/40 hover:text-navy/65"
+                        isArchiveView ? "text-red-700" : "text-red-600/70 hover:text-red-700"
                       }`}
                     >
                       <Archive className="size-3.5" aria-hidden="true" />
