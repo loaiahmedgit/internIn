@@ -58,6 +58,7 @@ function submissionDuration(detail: CandidateDetail): string | null {
   const minutes = elapsedMinutes % 60;
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes === 0) return "under 1m";
   return `${minutes}m`;
 }
 
@@ -98,10 +99,16 @@ export function candidateAssistiveSummary(detail: CandidateDetail): CandidateAss
       ? `The submission includes ${fileCount} ${pluralize(fileCount, "file")}.`
       : "The submission contains written notes and no uploaded files.",
   ];
-  if (skills.length > 0) facts.push(`${skills.length} profile ${pluralize(skills.length, "skill")} match the challenge requirements.`);
+  if (skills.length > 0) {
+    facts.push(
+      skills.length === 1
+        ? "1 profile skill matches the challenge requirements."
+        : `${skills.length} profile skills match the challenge requirements.`,
+    );
+  }
 
   const strength = skills.length > 0
-    ? `${skills.join(", ")} align with the challenge requirements.`
+    ? `${skills.join(", ")} ${skills.length === 1 ? "aligns" : "align"} with the challenge requirements.`
     : progress.completed === progress.total
       ? `Recorded evidence shows all ${progress.total} challenge tasks completed.`
       : fileCount > 0

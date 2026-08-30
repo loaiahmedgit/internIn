@@ -103,6 +103,20 @@ describe("candidateInsights", () => {
     expect(candidateAssistiveSummary(detail)?.watchFor).toBe("Recorded evidence shows 1/3 challenge tasks completed.");
   });
 
+  it("describes a same-minute submission without showing a misleading zero duration", () => {
+    const detail = candidate({
+      submission: {
+        id: "submission-3",
+        submittedAt: new Date("2026-08-30T10:00:30.000Z"),
+        notes: "Written response",
+        artifacts: [],
+        aiUsageMode: "open",
+      },
+    });
+
+    expect(candidateInsights(detail)).toContainEqual({ label: "Submitted in under 1m" });
+  });
+
   it("refuses to summarize inconsistent task evidence", () => {
     const detail = candidate({
       evidence: {
