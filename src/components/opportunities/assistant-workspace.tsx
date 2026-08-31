@@ -167,7 +167,12 @@ export function AssistantWorkspace({
         <PromptInputFooter>
           <PromptInputTools>
             <PromptInputActionMenu>
-              <PromptInputActionMenuTrigger tooltip="Attach">
+              {/* No `tooltip` prop here: PromptInputButton's tooltip wraps its
+                  output in a Tooltip/TooltipTrigger, which is itself a real
+                  <button> — nesting that inside DropdownMenuTrigger's `render`
+                  merge produces an invalid <button> inside <button> and a
+                  hydration mismatch. aria-label covers accessibility instead. */}
+              <PromptInputActionMenuTrigger aria-label="Attach files">
                 <Paperclip className="size-4" />
               </PromptInputActionMenuTrigger>
               <PromptInputActionMenuContent>

@@ -20,8 +20,28 @@ const RequestSchema = z.object({
  * streaming plus honest, real progress steps instead of a spinner.
  */
 export async function POST(req: Request) {
-  const { membership } = await requireCurrentCompanyMember("hiring_reviewer");
-  const body = RequestSchema.parse(await req.json());
+  // Auth and body validation happen before the stream starts, so a failure
+  // here can't be surfaced through createUIMessageStream's onError (that
+  // only covers errors inside execute) — without this try/catch, an
+  // unauthenticated or malformed request fell through to Next's default
+  // framework 500 with an empty body, which useChat then reported as a
+  // blank, unreadable error.
+  let membership: Awaited<ReturnType<typeof requireCurrentCompanyMember>>["membership"];
+  try {
+    ({ membership } = await requireCurrentCompanyMember("hiring_reviewer"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Not signed in.";
+    return new Response(message, { status: 401 });
+  }
+
+  let body: z.infer<typeof RequestSchema>;
+  try {
+    body = RequestSchema.parse(await req.json());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Malformed request.";
+    return new Response(message, { status: 400 });
+  }
+
   const messages = body.messages as unknown as AssistantUIMessage[];
   const opportunityId = body.opportunityId;
 
