@@ -226,7 +226,7 @@ ${resumeText.slice(0, 8000)}
     const { object } = await generateObject({
       model: getModel(),
       schema: InternshipCopyAssistSchema,
-      prompt: `You are helping a hiring manager draft ONE internal internship posting. This is an optional suggestion only — the manager reviews and edits everything before it's used.
+      prompt: `You are helping a hiring manager draft ONE internal internship posting. This is an optional suggestion only — the manager reviews and edits everything before it's used. Write in a plain, professional tone. No emoji, no exclamation points, no marketing hype ("game-changer", "rockstar", "well-oiled machine").
 
 ${taskPrompt[input.task]}`,
     });
