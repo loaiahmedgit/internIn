@@ -132,7 +132,7 @@ export function AssistantWorkspace({
           {turns.map((t, i) => (
             <div key={i} className="space-y-2">
               <p className="text-sm font-medium text-navy">{t.question}</p>
-              <div className="rounded-xl border border-navy/10 bg-white p-4 text-sm text-navy/80">{t.answer}</div>
+              <div className="typeset typeset-docs max-w-[42em] rounded-xl border border-navy/10 bg-white p-4">{t.answer}</div>
               <div className="flex flex-wrap gap-3">
                 {actionsFor(`${t.question} ${t.answer}`, opportunityId).map((a) => (
                   <Link key={a.label} href={a.href} className="flex items-center gap-1 text-xs font-medium text-teal-ink hover:underline">
