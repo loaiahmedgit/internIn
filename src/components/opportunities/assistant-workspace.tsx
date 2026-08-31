@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { Paperclip, Copy, RotateCcw, Users, FileText, PenSquare, BarChart3, Briefcase } from "lucide-react";
 
+import { CompanyPageContainer } from "@/components/company/page-shell";
 import { SelectGroup } from "@/components/ui/select";
 import {
   PromptInput,
@@ -157,116 +158,135 @@ export function AssistantWorkspace({
   const hasMessages = messages.length > 0;
   const isStreaming = status === "submitted" || status === "streaming";
 
-  const composer = (
-    <div ref={composerRef}>
-      <PromptInput onSubmit={handleSubmit} accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,image/*" multiple maxFiles={5} globalDrop>
-        <PromptInputBody>
-          <PromptInputTextarea placeholder="Ask about your hiring, internships, candidates, or pipeline..." />
-        </PromptInputBody>
-        <ComposerAttachments />
-        <PromptInputFooter>
-          <PromptInputTools>
-            <PromptInputActionMenu>
+  // Contextual follow-ups after the conversation starts: reuse the same
+  // scope's canned suggestion pool, just drop whatever's already been
+  // asked and cap it small — never a fabricated "generated from your
+  // answer" claim, just a short, honest list of relevant next questions.
+  const askedTexts = useMemo(
+    () =>
+      new Set(
+        messages
+          .filter((m) => m.role === "user")
+          .flatMap((m) => m.parts.filter((p) => p.type === "text").map((p) => p.text.trim())),
+      ),
+    [messages],
+  );
+  const followups = suggestions.filter((s) => !askedTexts.has(s)).slice(0, 3);
+
+  /** The composer toolbar is identical in both states (attach + scope on
+   * the left, mic + submit on the right) — only the textarea's height
+   * differs: roomy for the empty-state hero, compact once a real
+   * conversation is underway (a ChatGPT/Claude-style persistent bar, not
+   * a form textarea). */
+  function renderComposer(compact: boolean) {
+    return (
+      <div ref={composerRef}>
+        <PromptInput onSubmit={handleSubmit} accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,image/*" multiple maxFiles={5} globalDrop>
+          <PromptInputBody>
+            <PromptInputTextarea
+              placeholder="Ask about your hiring, internships, candidates, or pipeline..."
+              className={compact ? "min-h-10 max-h-40" : undefined}
+            />
+          </PromptInputBody>
+          <ComposerAttachments />
+          <PromptInputFooter>
+            <PromptInputTools>
               {/* No `tooltip` prop here: PromptInputButton's tooltip wraps its
                   output in a Tooltip/TooltipTrigger, which is itself a real
                   <button> — nesting that inside DropdownMenuTrigger's `render`
                   merge produces an invalid <button> inside <button> and a
                   hydration mismatch. aria-label covers accessibility instead. */}
-              <PromptInputActionMenuTrigger aria-label="Attach files">
-                <Paperclip className="size-4" />
-              </PromptInputActionMenuTrigger>
-              <PromptInputActionMenuContent>
-                <PromptInputActionAddAttachments />
-                <PromptInputActionAddScreenshot />
-              </PromptInputActionMenuContent>
-            </PromptInputActionMenu>
-            <PromptInputSelect value={opportunityId ?? "all"} onValueChange={handleScopeChange}>
-              <PromptInputSelectTrigger className="w-auto max-w-40" aria-label="Ask about">
-                <PromptInputSelectValue className="min-w-0 truncate">
-                  {(value: string) => opportunityOptions.find((o) => o.value === value)?.label ?? value}
-                </PromptInputSelectValue>
-              </PromptInputSelectTrigger>
-              <PromptInputSelectContent>
-                <SelectGroup>
-                  {opportunityOptions.map((o) => (
-                    <PromptInputSelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </PromptInputSelectItem>
-                  ))}
-                </SelectGroup>
-              </PromptInputSelectContent>
-            </PromptInputSelect>
-          </PromptInputTools>
-          <PromptInputTools>
-            {speechSupported && (
-              <SpeechInput className="size-8" onTranscriptionChange={handleTranscript} />
-            )}
-            <PromptInputSubmit status={status} onStop={stop} />
-          </PromptInputTools>
-        </PromptInputFooter>
-      </PromptInput>
-    </div>
-  );
-
-  const suggestionRow = (
-    <Suggestions>
-      {suggestions.map((s) => (
-        <Suggestion key={s} suggestion={s} onClick={(text) => sendMessage({ text })} />
-      ))}
-    </Suggestions>
-  );
-
-  if (!hasMessages) {
-    return (
-      <div className="mx-auto flex max-w-2xl flex-col px-6 py-16">
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-navy">Ask internIn</h1>
-          <p className="mt-2 text-sm text-navy/55">Your hiring assistant for internships, candidates and pipeline insights.</p>
-        </div>
-        <div className="mt-8">{composer}</div>
-        <div className="mt-3">{suggestionRow}</div>
-        {error && <p className="mt-4 text-center text-sm text-destructive">{error.message}</p>}
-        <p className="mt-10 text-center text-[11px] text-navy/40">Assistive only — you make every hiring decision.</p>
+              <PromptInputActionMenu>
+                <PromptInputActionMenuTrigger aria-label="Attach files">
+                  <Paperclip className="size-4" />
+                </PromptInputActionMenuTrigger>
+                <PromptInputActionMenuContent>
+                  <PromptInputActionAddAttachments />
+                  <PromptInputActionAddScreenshot />
+                </PromptInputActionMenuContent>
+              </PromptInputActionMenu>
+              <PromptInputSelect value={opportunityId ?? "all"} onValueChange={handleScopeChange}>
+                <PromptInputSelectTrigger className="w-auto max-w-40" aria-label="Ask about">
+                  <PromptInputSelectValue className="min-w-0 truncate">
+                    {(value: string) => opportunityOptions.find((o) => o.value === value)?.label ?? value}
+                  </PromptInputSelectValue>
+                </PromptInputSelectTrigger>
+                <PromptInputSelectContent>
+                  <SelectGroup>
+                    {opportunityOptions.map((o) => (
+                      <PromptInputSelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </PromptInputSelectItem>
+                    ))}
+                  </SelectGroup>
+                </PromptInputSelectContent>
+              </PromptInputSelect>
+            </PromptInputTools>
+            <PromptInputTools>
+              {speechSupported && <SpeechInput className="size-8" onTranscriptionChange={handleTranscript} />}
+              <PromptInputSubmit status={status} onStop={stop} />
+            </PromptInputTools>
+          </PromptInputFooter>
+        </PromptInput>
       </div>
     );
   }
 
+  if (!hasMessages) {
+    return (
+      <CompanyPageContainer>
+        <div className="mx-auto flex max-w-2xl flex-col px-6 py-16">
+          <div className="text-center">
+            <h1 className="text-2xl font-semibold tracking-tight text-navy">Ask internIn</h1>
+            <p className="mt-2 text-sm text-navy/55">Your hiring assistant for internships, candidates and pipeline insights.</p>
+          </div>
+          <div className="mt-8">{renderComposer(false)}</div>
+          <div className="mt-3">
+            <Suggestions>
+              {suggestions.map((s) => (
+                <Suggestion key={s} suggestion={s} onClick={(text) => sendMessage({ text })} />
+              ))}
+            </Suggestions>
+          </div>
+          {error && <p className="mt-4 text-center text-sm text-destructive">{error.message}</p>}
+          <p className="mt-10 text-center text-[11px] text-navy/40">Assistive only — you make every hiring decision.</p>
+        </div>
+      </CompanyPageContainer>
+    );
+  }
+
   return (
-    <div className="mx-auto flex h-[calc(100dvh-13rem)] min-h-[28rem] max-w-3xl flex-col px-6 py-6">
-      <Conversation className="flex-1">
-        <ConversationContent>
+    <div className="flex h-full min-h-0 flex-col">
+      <Conversation className="min-h-0 flex-1">
+        <ConversationContent className="mx-auto w-full max-w-6xl px-6 pt-6 pb-4 md:px-10">
           {messages.map((message) => {
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
             const textParts = message.parts.filter((p) => p.type === "text");
             const responseText = textParts.map((p) => p.text).join("");
             const isLastAssistant = message.role === "assistant" && message.id === messages.at(-1)?.id;
+            const isGrounded = steps.length > 0;
 
             return (
               <Message key={message.id} from={message.role}>
                 {message.role === "user" ? (
                   <MessageContent>{responseText}</MessageContent>
                 ) : (
-                  <MessageContent>
-                    {steps.length > 0 && (
+                  <MessageContent className="w-full max-w-none">
+                    {isGrounded && (
                       <ChainOfThought defaultOpen={false}>
-                        <ChainOfThoughtHeader />
+                        <ChainOfThoughtHeader>How I checked this</ChainOfThoughtHeader>
                         <ChainOfThoughtContent>
                           {steps.map((step) => {
                             const data = step.data as AssistantStepData;
                             return (
-                              <ChainOfThoughtStep
-                                key={step.id}
-                                label={data.label}
-                                description={data.description}
-                                status={data.status}
-                              />
+                              <ChainOfThoughtStep key={step.id} label={data.label} description={data.description} status={data.status} />
                             );
                           })}
                         </ChainOfThoughtContent>
                       </ChainOfThought>
                     )}
                     {responseText ? (
-                      <div className="typeset typeset-docs max-w-none">
+                      <div className="typeset typeset-docs max-w-[42em]">
                         <MessageResponse>{responseText}</MessageResponse>
                       </div>
                     ) : (
@@ -292,6 +312,13 @@ export function AssistantWorkspace({
                             </Link>
                           ))}
                         </div>
+                        {isLastAssistant && isGrounded && !isStreaming && followups.length > 0 && (
+                          <Suggestions>
+                            {followups.map((s) => (
+                              <Suggestion key={s} suggestion={s} onClick={(text) => sendMessage({ text })} />
+                            ))}
+                          </Suggestions>
+                        )}
                       </>
                     )}
                   </MessageContent>
@@ -303,11 +330,11 @@ export function AssistantWorkspace({
         <ConversationScrollButton />
       </Conversation>
 
-      {error && <p className="mb-2 text-center text-sm text-destructive">{error.message}</p>}
-
-      <div className="sticky bottom-0 border-t border-navy/10 bg-white pt-3">
-        {composer}
-        <div className="mt-3">{suggestionRow}</div>
+      <div className="shrink-0 border-t border-navy/10 bg-white px-6 pt-3 pb-4 md:px-10">
+        <div className="mx-auto w-full max-w-6xl">
+          {error && <p className="mb-2 text-center text-sm text-destructive">{error.message}</p>}
+          {renderComposer(true)}
+        </div>
       </div>
     </div>
   );

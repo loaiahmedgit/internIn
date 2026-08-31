@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
-import { CompanyPageContainer } from "@/components/company/page-shell";
 import { AssistantWorkspace } from "@/components/opportunities/assistant-workspace";
 
 export default async function AssistantPage({
@@ -24,8 +23,8 @@ export default async function AssistantPage({
   const opportunityOptions = [{ value: "all", label: "All hiring" }, ...opportunities.map((o) => ({ value: o.id, label: o.role }))];
 
   return (
-    <CompanyPageContainer>
+    <div className="h-full min-h-0">
       <AssistantWorkspace key={opportunityId ?? "all"} opportunityOptions={opportunityOptions} opportunityId={opportunityId} />
-    </CompanyPageContainer>
+    </div>
   );
 }
