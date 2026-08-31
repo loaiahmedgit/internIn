@@ -33,12 +33,12 @@ type CompanyMembershipResult =
       ok: true;
       user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
       membership: typeof schema.companyMembers.$inferSelect;
-      companyName: string;
+      company: typeof schema.companies.$inferSelect;
     }
   | { ok: false; reason: "signed_out" | "not_linked" };
 
 /**
- * The current company user's own membership + company name, looked up
+ * The current company user's own membership + full company row, looked up
  * ONCE per request no matter how many Server Components in the tree ask
  * for it (React `cache()`) — the company layout, every page.tsx, and any
  * nested component can all call this without adding a duplicate
@@ -53,14 +53,14 @@ export const getCurrentCompanyMembership = cache(async (): Promise<CompanyMember
 
   const db = getDb();
   const [row] = await db
-    .select({ membership: schema.companyMembers, companyName: schema.companies.name })
+    .select({ membership: schema.companyMembers, company: schema.companies })
     .from(schema.companyMembers)
     .innerJoin(schema.companies, eq(schema.companies.id, schema.companyMembers.companyId))
     .where(eq(schema.companyMembers.userId, user.id))
     .limit(1);
   if (!row) return { ok: false, reason: "not_linked" };
 
-  return { ok: true, user, membership: row.membership, companyName: row.companyName };
+  return { ok: true, user, membership: row.membership, company: row.company };
 });
 
 export async function requireCurrentCompanyMember(permission: WorkspacePermission | null = "hiring_reviewer") {
@@ -70,7 +70,7 @@ export async function requireCurrentCompanyMember(permission: WorkspacePermissio
   }
   if (permission && !hasPermission(result.membership, permission)) throw new Error("You do not have access to this workspace feature. Ask a workspace administrator.");
 
-  return { user: result.user, membership: result.membership, companyName: result.companyName };
+  return { user: result.user, membership: result.membership, company: result.company };
 }
 
 /**

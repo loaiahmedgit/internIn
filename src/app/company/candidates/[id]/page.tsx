@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
-import { getCurrentUser } from "@/lib/auth";
-import { getDb, schema } from "@/db";
+import { getCurrentUser, getCurrentCompanyMembership } from "@/lib/auth";
 import { getCandidateDetail } from "@/lib/company/candidate-detail-data";
 import { candidateInsights } from "@/lib/company/candidate-insights";
 import { AiEvidenceSummary } from "@/components/company/ai-evidence-summary";
@@ -70,14 +68,8 @@ export default async function CandidateProfilePage({
   const query = await searchParams;
   const tab: TabKey = TABS.some((t) => t.key === query.tab) ? (query.tab as TabKey) : "overview";
 
-  const db = getDb();
-  const [membership] = await db
-    .select({ company: schema.companies })
-    .from(schema.companyMembers)
-    .innerJoin(schema.companies, eq(schema.companyMembers.companyId, schema.companies.id))
-    .where(eq(schema.companyMembers.userId, user.id))
-    .limit(1);
-  if (!membership) {
+  const membership = await getCurrentCompanyMembership();
+  if (!membership.ok) {
     return (
       <CompanyPageContainer>
         <p className="text-center text-navy/60">This account isn&apos;t linked to a company yet.</p>

@@ -22,7 +22,7 @@ export default async function CompanyLayout({
   if (membership.ok) {
     // Layouts persist across client navigation. Feature authorization belongs
     // in each page's data loader/action, not a cached pathname decision here.
-    companyName = membership.companyName;
+    companyName = membership.company.name;
     allowed = true;
     if (!hasPermission(membership.membership, "hiring_reviewer"))
       navItems = COMPANY_NAV_ITEMS.filter((n) =>

@@ -22,7 +22,15 @@ export function CandidateTableRow({ row }: { row: CandidateRow }) {
   return (
     <TableRow className="border-navy/8">
       <TableCell className="max-w-48 pl-4">
-        <Link href={profileHref} className="flex min-w-0 items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+        {/* prefetch={false}: up to PAGE_SIZE (10) of these render per page,
+            and each target is a real authenticated dynamic render (auth +
+            company lookup + full candidate detail fetch) — default viewport
+            prefetch was firing all 10 as background requests the instant
+            this list rendered, queuing behind the serverless instance's
+            2-connection DB pool and starving the next real navigation.
+            Measured: this was the actual cause of multi-second sidebar
+            navigation delays, not query latency. */}
+        <Link href={profileHref} prefetch={false} className="flex min-w-0 items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
           <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink">
             {row.studentName.charAt(0).toUpperCase()}
           </span>
@@ -51,12 +59,12 @@ export function CandidateTableRow({ row }: { row: CandidateRow }) {
             <MoreHorizontal className="size-4" aria-hidden="true" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem render={<Link href={profileHref} />}>
+            <DropdownMenuItem render={<Link href={profileHref} prefetch={false} />}>
               <User className="size-4" aria-hidden="true" />
               Open profile
             </DropdownMenuItem>
             {row.submissionId && (
-              <DropdownMenuItem render={<Link href={`/company/submissions/${row.submissionId}`} />}>
+              <DropdownMenuItem render={<Link href={`/company/submissions/${row.submissionId}`} prefetch={false} />}>
                 <FileSearch className="size-4" aria-hidden="true" />
                 Open full review
               </DropdownMenuItem>

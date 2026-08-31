@@ -171,12 +171,17 @@ export default async function CompanyInternshipsPage({
                   {rows.map((row) => (
                     <TableRow key={row.opportunityId} className="border-navy/8">
                       <TableCell className="max-w-56 pl-4">
+                        {/* prefetch={false}: one of these per internship row
+                            (unbounded count), each targeting a real
+                            authenticated dynamic detail page — see the same
+                            fix + measurement note on candidate-table-row.tsx. */}
                         <Link
                           href={
                             row.status === "draft"
                               ? `/company/opportunities/${row.opportunityId}/setup`
                               : `/company/opportunities/${row.opportunityId}`
                           }
+                          prefetch={false}
                           className="block truncate font-medium text-navy hover:text-teal-ink"
                         >
                           {row.role}
