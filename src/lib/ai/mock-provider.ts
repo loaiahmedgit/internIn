@@ -3,6 +3,8 @@ import type {
   CandidateComparisonRow,
   CandidateEvidence,
   Challenge,
+  InternshipAssistantAnswer,
+  InternshipCopyAssist,
   InternshipDraft,
   InternshipProgram,
   ResumeExtraction,
@@ -345,5 +347,49 @@ export class MockAIProvider implements AIProvider {
       skills: skills.length > 0 ? skills : ["Communication", "Teamwork"],
       interests: interests.length > 0 ? interests : ["Business & Operations"],
     };
+  }
+
+  async assistInternshipCopy(input: {
+    task: "draft_description" | "improve_description" | "suggest_requirements" | "suggest_learning_outcomes";
+    role: string;
+    shortDescription?: string;
+    fullDescription?: string;
+    requirements?: string[];
+  }): Promise<InternshipCopyAssist> {
+    await wait(700);
+    const role = input.role || "this role";
+    switch (input.task) {
+      case "draft_description":
+        return {
+          description: `As a ${role} intern, you'll work alongside the team on real, day-to-day tasks — ${input.shortDescription || "supporting active projects, learning our tools, and contributing to work that ships"}. You'll get hands-on mentorship and a clear view of how the team operates.`,
+        };
+      case "improve_description":
+        return {
+          description: (input.fullDescription || "").trim()
+            ? `${input.fullDescription!.trim()} You'll receive regular feedback and a clear set of goals for each stage of the internship.`
+            : `As a ${role} intern, you'll take on real responsibilities from day one, working closely with the team and receiving regular feedback on your progress.`,
+        };
+      case "suggest_requirements":
+        return { items: ["Currently enrolled in a relevant degree program", "Comfortable working with spreadsheets/data tools", "Clear written and verbal communication", "Available for the full internship duration"] };
+      case "suggest_learning_outcomes":
+        return { items: [`How a real ${role} function operates day to day`, "How to turn ambiguous requests into a concrete plan", "Working with real stakeholders and feedback cycles", "Presenting work clearly to non-technical audiences"] };
+    }
+  }
+
+  async answerInternshipQuestion(input: { question: string; facts: string }): Promise<InternshipAssistantAnswer> {
+    await wait(600);
+    const q = input.question.toLowerCase();
+    const factLines = input.facts.split("\n").filter(Boolean);
+    const find = (needle: string) => factLines.find((l) => l.toLowerCase().includes(needle));
+    if (q.includes("attention") || q.includes("summar")) {
+      return { answer: factLines.slice(0, 3).join(" ") || "No hiring activity recorded yet for this internship." };
+    }
+    if (q.includes("deadline")) {
+      return { answer: find("deadline") ?? "No application deadline is set for this internship." };
+    }
+    if (q.includes("requirement") || q.includes("skill")) {
+      return { answer: find("skill") ?? find("requirement") ?? "No requirement-coverage data is available yet." };
+    }
+    return { answer: factLines[0] ?? "There isn't enough real data on this internship yet to answer that." };
   }
 }

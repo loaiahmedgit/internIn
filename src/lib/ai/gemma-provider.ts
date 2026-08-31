@@ -12,6 +12,8 @@ import {
   CandidateComparisonRowSchema,
   InternshipProgramSchema,
   ResumeExtractionSchema,
+  InternshipCopyAssistSchema,
+  InternshipAssistantAnswerSchema,
   type Challenge,
   type CandidateComparisonRow,
 } from "./schemas";
@@ -204,6 +206,47 @@ Resume text:
 """
 ${resumeText.slice(0, 8000)}
 """`,
+    });
+    return object;
+  }
+
+  async assistInternshipCopy(input: {
+    task: "draft_description" | "improve_description" | "suggest_requirements" | "suggest_learning_outcomes";
+    role: string;
+    shortDescription?: string;
+    fullDescription?: string;
+    requirements?: string[];
+  }) {
+    const taskPrompt: Record<typeof input.task, string> = {
+      draft_description: `Write a full, engaging internship role description (2-4 short paragraphs) for the role "${input.role}"${input.shortDescription ? `, based on this brief summary: "${input.shortDescription}"` : ""}. Return it in the "description" field.`,
+      improve_description: `Improve this existing internship description for clarity, structure, and appeal, without changing its factual meaning. Role: "${input.role}". Current description: "${input.fullDescription || "(empty)"}" Return the improved version in the "description" field.`,
+      suggest_requirements: `Suggest 4-6 realistic candidate requirements for a "${input.role}" internship.${input.requirements?.length ? ` Existing requirements already listed (don't repeat these): ${input.requirements.join("; ")}.` : ""} Return them in the "items" array.`,
+      suggest_learning_outcomes: `Suggest 4-6 concrete things a student would realistically learn during a "${input.role}" internship. Return them in the "items" array.`,
+    };
+    const { object } = await generateObject({
+      model: getModel(),
+      schema: InternshipCopyAssistSchema,
+      prompt: `You are helping a hiring manager draft ONE internal internship posting. This is an optional suggestion only — the manager reviews and edits everything before it's used.
+
+${taskPrompt[input.task]}`,
+    });
+    return object;
+  }
+
+  async answerInternshipQuestion(input: { question: string; facts: string }) {
+    const { object } = await generateObject({
+      model: getModel(),
+      schema: InternshipAssistantAnswerSchema,
+      prompt: `You are an assistive hiring copilot answering ONE question about a specific internship posting, for the hiring manager reviewing it. You do not make hiring decisions — you only surface and explain real data.
+
+Real, already-computed facts about this internship (the ONLY things you're allowed to state numbers or dates from — never invent, estimate, or round a figure that isn't here):
+"""
+${input.facts}
+"""
+
+Manager's question: "${input.question}"
+
+Answer in 1-3 short sentences, plainly, using only the facts above. If the facts don't contain what's needed to answer, say so honestly instead of guessing.`,
     });
     return object;
   }

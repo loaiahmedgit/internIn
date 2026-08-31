@@ -10,10 +10,14 @@ import {
   ChallengeSchema,
   InternshipDraftSchema,
   InternshipProgramSchema,
+  InternshipCopyAssistSchema,
+  InternshipAssistantAnswerSchema,
+  aiProvider,
   type InternshipDraft,
   type InternshipProgram,
   type Challenge,
 } from "@/lib/ai";
+import { buildInternshipFacts } from "@/lib/company/internship-facts";
 
 const IdSchema = z.string().uuid();
 const VersionSourceSchema = z.enum(["ai_generated", "human_edited", "approved"]);
@@ -174,20 +178,26 @@ export async function publishOpportunityAction(opportunityId: string) {
   await assertOwnsOpportunity(validatedOpportunityId, companyId);
   const db = getDb();
 
+  // A challenge is optional, not a publish gate — an internship can go live
+  // with no challenge and have one added later from its Challenge tab. If
+  // one exists, though, it must actually be approved first; publishing a
+  // still-ai_generated challenge would put unreviewed AI content in front
+  // of real applicants.
   const [challengeRow] = await db
     .select()
     .from(schema.challenges)
     .where(eq(schema.challenges.opportunityId, validatedOpportunityId))
     .limit(1);
-  if (!challengeRow) throw new Error("No challenge to publish yet.");
-  if (challengeRow.status !== "approved") {
+  if (challengeRow && challengeRow.status !== "approved") {
     throw new Error("Approve the current challenge version before publishing.");
   }
 
-  await db
-    .update(schema.challenges)
-    .set({ status: "published", updatedAt: new Date() })
-    .where(eq(schema.challenges.id, challengeRow.id));
+  if (challengeRow) {
+    await db
+      .update(schema.challenges)
+      .set({ status: "published", updatedAt: new Date() })
+      .where(eq(schema.challenges.id, challengeRow.id));
+  }
   await db
     .update(schema.opportunities)
     .set({ status: "published", updatedAt: new Date() })
@@ -278,6 +288,99 @@ export async function updateOpportunityDetailsAction(opportunityId: string, deta
       updatedAt: new Date(),
     })
     .where(eq(schema.opportunities.id, validatedOpportunityId));
+}
+
+/** Every field the manual Create/Edit Internship form can set. Everything optional besides the true minimum a listing needs to exist. */
+export const InternshipFormSchema = z.object({
+  role: z.string().trim().min(2).max(120),
+  department: z.string().trim().max(120).nullable().optional(),
+  shortDescription: z.string().trim().max(500).nullable().optional(),
+  description: z.string().trim().min(1).max(6000),
+  whatYouWillLearn: z.string().trim().max(3000).nullable().optional(),
+  requirements: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+  niceToHave: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+  duration: z.string().trim().min(1).max(80),
+  hoursPerWeek: z.number().int().min(1).max(60),
+  location: z.string().trim().min(1).max(120),
+  workMode: z.enum(["remote", "onsite", "hybrid"]).nullable().optional(),
+  applicationDeadline: z.coerce.date().nullable().optional(),
+  startDate: z.coerce.date().nullable().optional(),
+  slots: z.number().int().min(1).max(100),
+  skills: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
+  requireCv: z.boolean().default(true),
+  applicationQuestions: z.array(z.string().trim().min(1).max(300)).max(10).default([]),
+});
+export type InternshipFormInput = z.infer<typeof InternshipFormSchema>;
+
+/**
+ * The manual-first Create/Edit Internship form's single save path — Save
+ * draft and Publish both call this, `publish` just decides the resulting
+ * status. Creates a new posting when `opportunityId` is omitted, otherwise
+ * updates the caller's own existing one. A challenge is never required
+ * here; that's a separate, optional step from the internship's Challenge
+ * tab.
+ */
+export async function saveInternshipAction(input: {
+  opportunityId?: string;
+  publish: boolean;
+  form: InternshipFormInput;
+}) {
+  const validated = InternshipFormSchema.parse(input.form);
+  const { companyId, userId, canPublish } = await getCompanyIdForCurrentUser();
+  if (input.publish && !canPublish) {
+    throw new Error("Ask a Workspace Admin to grant Hiring Access before publishing.");
+  }
+  if (input.publish) await assertCompanyVerified(companyId);
+  const db = getDb();
+
+  const values = {
+    role: validated.role,
+    department: validated.department || null,
+    shortDescription: validated.shortDescription || null,
+    description: validated.description,
+    whatYouWillLearn: validated.whatYouWillLearn || null,
+    requirements: validated.requirements,
+    niceToHave: validated.niceToHave,
+    duration: validated.duration,
+    hoursPerWeek: validated.hoursPerWeek,
+    location: validated.location,
+    workMode: validated.workMode ?? null,
+    applicationDeadline: validated.applicationDeadline ?? null,
+    startDate: validated.startDate ?? null,
+    slots: validated.slots,
+    skills: validated.skills,
+    requireCv: validated.requireCv,
+    applicationQuestions: validated.applicationQuestions,
+  };
+
+  if (input.opportunityId) {
+    const validatedId = IdSchema.parse(input.opportunityId);
+    const existing = await assertOwnsOpportunity(validatedId, companyId);
+    const nowPublishing = input.publish && existing.status !== "published";
+    await db
+      .update(schema.opportunities)
+      .set({ ...values, status: input.publish ? "published" : existing.status, updatedAt: new Date() })
+      .where(eq(schema.opportunities.id, validatedId));
+    await db.insert(schema.eventLog).values({
+      entityType: "opportunity",
+      entityId: validatedId,
+      eventType: nowPublishing ? "opportunity_published" : "opportunity_edited",
+      actorUserId: userId,
+    });
+    return validatedId;
+  }
+
+  const [opportunity] = await db
+    .insert(schema.opportunities)
+    .values({ ...values, companyId, createdByUserId: userId, status: input.publish ? "published" : "draft" })
+    .returning();
+  await db.insert(schema.eventLog).values({
+    entityType: "opportunity",
+    entityId: opportunity.id,
+    eventType: input.publish ? "opportunity_published" : "opportunity_created",
+    actorUserId: userId,
+  });
+  return opportunity.id as string;
 }
 
 /** Permanently removes a draft that was never published — a published/closed listing keeps its history via close, never delete. */
@@ -587,4 +690,39 @@ export async function createInternshipProgramAction(offerId: string, program: In
   });
 
   return programRow.id as string;
+}
+
+const CopyAssistTaskSchema = z.enum(["draft_description", "improve_description", "suggest_requirements", "suggest_learning_outcomes"]);
+
+/** One optional AI-assist call from the Create/Edit Internship form. Never required to save — see saveInternshipAction. */
+export async function assistInternshipCopyAction(input: {
+  task: z.infer<typeof CopyAssistTaskSchema>;
+  role: string;
+  shortDescription?: string;
+  fullDescription?: string;
+  requirements?: string[];
+}) {
+  await requireCurrentCompanyMember("hiring_access");
+  const validated = {
+    task: CopyAssistTaskSchema.parse(input.task),
+    role: z.string().trim().min(1).max(120).parse(input.role || "this internship"),
+    shortDescription: input.shortDescription ? z.string().trim().max(500).parse(input.shortDescription) : undefined,
+    fullDescription: input.fullDescription ? z.string().trim().max(6000).parse(input.fullDescription) : undefined,
+    requirements: input.requirements?.length ? z.array(z.string().trim().max(200)).max(20).parse(input.requirements) : undefined,
+  };
+  return InternshipCopyAssistSchema.parse(await aiProvider.assistInternshipCopy(validated));
+}
+
+/**
+ * The contextual "Ask internIn" panel's one real capability: answer a
+ * question about THIS internship, grounded entirely in buildInternshipFacts
+ * — the model never sees anything else about the company or its data.
+ */
+export async function askInternshipAssistantAction(opportunityId: string, question: string) {
+  const validatedId = IdSchema.parse(opportunityId);
+  const validatedQuestion = z.string().trim().min(1).max(500).parse(question);
+  const { companyId } = await getCompanyIdForCurrentUser("hiring_reviewer");
+  const facts = await buildInternshipFacts(validatedId, companyId);
+  const result = await aiProvider.answerInternshipQuestion({ question: validatedQuestion, facts });
+  return InternshipAssistantAnswerSchema.parse(result).answer;
 }

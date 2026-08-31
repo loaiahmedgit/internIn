@@ -2,6 +2,8 @@ import type {
   CandidateComparisonRow,
   CandidateEvidence,
   Challenge,
+  InternshipAssistantAnswer,
+  InternshipCopyAssist,
   InternshipDraft,
   InternshipProgram,
   ResumeExtraction,
@@ -61,4 +63,16 @@ export interface AIProvider {
 
   /** Extract skills/interests from resume text. Never written to the profile directly — the student reviews it first. */
   extractResumeInfo(resumeText: string): Promise<ResumeExtraction>;
+
+  /** One optional assist on the Create/Edit Internship form. The recruiter can always type everything by hand instead — this only ever suggests, never gates saving. */
+  assistInternshipCopy(input: {
+    task: "draft_description" | "improve_description" | "suggest_requirements" | "suggest_learning_outcomes";
+    role: string;
+    shortDescription?: string;
+    fullDescription?: string;
+    requirements?: string[];
+  }): Promise<InternshipCopyAssist>;
+
+  /** Answers a free-form question about ONE internship's real hiring data. `facts` is a server-built string of real, already-computed numbers/dates for that internship — the model must answer using only what's in it, never invent a figure. */
+  answerInternshipQuestion(input: { question: string; facts: string }): Promise<InternshipAssistantAnswer>;
 }

@@ -146,7 +146,17 @@ export const opportunities = pgTable(
       .notNull()
       .references(() => companies.id, { onDelete: "cascade" }),
     role: text("role").notNull(),
+    /** Full role description — shown on the public listing. */
     description: text("description").notNull(),
+    /** Brief internal-facing summary shown in Overview/lists — distinct from the full public `description`. Null for opportunities created before this field existed. */
+    shortDescription: text("short_description"),
+    department: text("department"),
+    whatYouWillLearn: text("what_you_will_learn"),
+    requirements: jsonb("requirements").$type<string[]>().notNull().default([]),
+    niceToHave: jsonb("nice_to_have").$type<string[]>().notNull().default([]),
+    /** Whether a CV/resume is required to apply. Defaults true — matches every opportunity created before this setting existed. */
+    requireCv: boolean("require_cv").notNull().default(true),
+    applicationQuestions: jsonb("application_questions").$type<string[]>().notNull().default([]),
     duration: text("duration").notNull(),
     hoursPerWeek: integer("hours_per_week").notNull(),
     location: text("location").notNull(),
@@ -154,9 +164,12 @@ export const opportunities = pgTable(
     workMode: workModeEnum("work_mode"),
     /** Optional — a company sets this when it wants to show a real application deadline. Null renders as "no deadline set", never a guessed date. */
     applicationDeadline: timestamp("application_deadline", { withTimezone: true }),
+    startDate: timestamp("start_date", { withTimezone: true }),
     slots: integer("slots").notNull().default(1),
     skills: jsonb("skills").$type<string[]>().notNull().default([]),
     status: opportunityStatusEnum("status").notNull().default("draft"),
+    /** Who created this posting — shown in Overview. Null for postings created before this column existed, or if that user's account is later removed. */
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (t) => [index("opportunities_company_idx").on(t.companyId)],
@@ -201,6 +214,8 @@ export const challengeVersions = pgTable(
     deliverables: jsonb("deliverables").$type<string[]>().notNull().default([]),
     files: jsonb("files").$type<{ name: string; description: string }[]>().notNull().default([]),
     rubric: jsonb("rubric").$type<{ criterion: string; description: string }[]>().notNull().default([]),
+    /** The company's stated AI-usage policy for this challenge — same vocabulary as submissions.aiUsageMode, since it's the same real concept (open/ai_allowed/restricted_ai/controlled), just set by the company instead of declared by the student. */
+    aiUsagePolicy: aiUsageModeEnum("ai_usage_policy").notNull().default("ai_allowed"),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

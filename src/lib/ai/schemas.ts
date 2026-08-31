@@ -18,6 +18,19 @@ export const InternshipDraftSchema = z.object({
 });
 export type InternshipDraft = z.infer<typeof InternshipDraftSchema>;
 
+/** One optional AI-assist call on the Create/Edit Internship form — the user always keeps full manual control; this only ever fills in a suggestion for the field(s) that task targets. */
+export const InternshipCopyAssistSchema = z.object({
+  description: z.string().trim().min(20).max(4000).optional(),
+  items: z.array(z.string().trim().min(1).max(200)).max(10).optional(),
+});
+export type InternshipCopyAssist = z.infer<typeof InternshipCopyAssistSchema>;
+
+/** The contextual "Ask internIn" panel's answer — grounded entirely in the real facts string passed alongside the question; the model is instructed to never state a number that isn't in that string. */
+export const InternshipAssistantAnswerSchema = z.object({
+  answer: z.string().trim().min(1).max(1200),
+});
+export type InternshipAssistantAnswer = z.infer<typeof InternshipAssistantAnswerSchema>;
+
 export const ChallengeTaskSchema = z.object({
   id: z.string().trim().min(1).max(100),
   title: z.string().trim().min(1).max(160),

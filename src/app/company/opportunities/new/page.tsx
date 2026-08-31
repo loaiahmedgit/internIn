@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { eq } from "drizzle-orm";
-import { CreateInternshipWizard } from "@/components/opportunities/create-internship-wizard";
+import { CreateInternshipForm } from "@/components/opportunities/create-internship-form";
 
 export default async function NewOpportunityPage() {
   const user = await getCurrentUser();
@@ -23,5 +23,5 @@ export default async function NewOpportunityPage() {
     );
   }
 
-  return <CreateInternshipWizard />;
+  return <CreateInternshipForm />;
 }

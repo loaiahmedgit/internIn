@@ -24,11 +24,6 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
     .limit(1);
   if (!opportunity) notFound();
 
-  // Already published — nothing left to set up, send them to the real management page.
-  if (opportunity.status !== "draft") {
-    redirect(`/company/opportunities/${id}`);
-  }
-
   const internship: InternshipDraft = {
     role: opportunity.role,
     duration: opportunity.duration,
@@ -72,6 +67,12 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
         status: challengeRow.status,
       };
     }
+  }
+
+  // A real challenge already exists — nothing left to set up here (editing
+  // one isn't this wizard's job), send them to the real management page.
+  if (challenge) {
+    redirect(`/company/opportunities/${id}`);
   }
 
   return <CreateInternshipWizard initial={{ opportunityId: id, internship, challenge }} />;
