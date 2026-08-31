@@ -235,21 +235,21 @@ export function AssistantWorkspace({
   if (!hasMessages) {
     return (
       <CompanyPageContainer>
-        {/* max-w-5xl, not max-w-2xl: this block should read as the page's
-            main object, using most of the same content width Home/
-            Candidates/Analytics get from CompanyPageContainer — not a
-            narrow component demo floating in the middle of a huge
-            unused canvas. */}
-        <div className="mx-auto flex max-w-5xl flex-col pt-10 pb-16 md:pt-14">
+        {/* max-w-3xl inside CompanyPageContainer's own wide canvas: the
+            composer reads as a deliberately-composed centerpiece (~60-70%
+            of the available content width on a large desktop), not a
+            component stretched edge-to-edge and not the old 672px box
+            floating in unused margins. */}
+        <div className="mx-auto flex max-w-3xl flex-col pt-12 pb-16 md:pt-16">
           <div className="text-center">
-            <h1 className="text-2xl font-semibold tracking-tight text-navy">Ask internIn</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-navy">Ask internIn</h1>
             <p className="mt-2 text-sm text-navy/55">Your hiring assistant for internships, candidates and pipeline insights.</p>
           </div>
           <div className="mt-8">{renderComposer(false)}</div>
           {/* Suggestion is reused as-is; the Suggestions wrapper hardcodes a
               horizontal-scroll ScrollArea with no wrap option, which is
-              exactly the clipping this layout can't have at this width. */}
-          <div className="mt-3 flex flex-wrap gap-2">
+              exactly the clipping this layout can't have. */}
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
             {suggestions.map((s) => (
               <Suggestion key={s} suggestion={s} onClick={(text) => sendMessage({ text })} />
             ))}
@@ -264,7 +264,15 @@ export function AssistantWorkspace({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="mx-auto w-full max-w-6xl px-6 pt-6 pb-4 sm:px-10 lg:px-12">
+        {/* min-h-full + justify-end: StickToBottom.Content's inner wrapper is
+            naturally content-sized (shrinks to fit 1-2 messages), which — in
+            a flex-1 box that fills the viewport — left a huge dead gap
+            between a short conversation and the composer below it. Forcing
+            it to at least fill the scroll viewport and bottom-align its
+            children pins short conversations to the composer, exactly like
+            a real chat product; once content overflows, min-height stops
+            mattering and normal top-to-bottom scroll takes over. */}
+        <ConversationContent className="mx-auto min-h-full w-full max-w-6xl flex-col justify-end px-6 pt-6 pb-4 sm:px-10 lg:px-12">
           {messages.map((message) => {
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
             const textParts = message.parts.filter((p) => p.type === "text");
@@ -292,7 +300,7 @@ export function AssistantWorkspace({
                       </ChainOfThought>
                     )}
                     {responseText ? (
-                      <div className="typeset typeset-docs max-w-[42em]">
+                      <div className="typeset typeset-docs max-w-3xl">
                         <MessageResponse>{responseText}</MessageResponse>
                       </div>
                     ) : (
@@ -336,7 +344,10 @@ export function AssistantWorkspace({
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="shrink-0 border-t border-navy/10 bg-white px-6 pt-3 pb-4 sm:px-10 lg:px-12">
+      {/* No border-t — a page-wide line reads as a footer boundary, not
+          part of the conversation. A soft upward shadow is enough to lift
+          the composer off scrolled content without drawing a hard edge. */}
+      <div className="relative z-10 shrink-0 bg-white px-6 pt-3 pb-4 shadow-[0_-8px_16px_-12px_rgba(15,23,42,0.08)] sm:px-10 lg:px-12">
         <div className="mx-auto w-full max-w-6xl">
           {error && <p className="mb-2 text-center text-sm text-destructive">{error.message}</p>}
           {renderComposer(true)}

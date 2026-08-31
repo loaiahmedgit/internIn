@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText } from "ai";
+import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, stepCountIs, streamText, tool } from "ai";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { getModel } from "@/lib/ai/gemma-provider";
 import { buildCompanyHiringFacts, buildInternshipFacts } from "@/lib/company/internship-facts";
@@ -13,27 +13,12 @@ const RequestSchema = z.object({
 });
 
 /**
- * A short greeting/small-talk message has nothing to check — there's no
- * real hiring data to load, so no data-step / "how I checked this"
- * disclosure should render for it (never show tool-progress UI above a
- * plain "hi"). Deliberately conservative: only skips the facts+steps path
- * for genuinely trivial messages, never for anything that could contain a
- * real question.
- */
-function isSmallTalk(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed || trimmed.length > 40) return false;
-  return /^(hi|hey|hello|hiya|yo|sup|howdy|hola|good\s?(morning|afternoon|evening)|thanks|thank you|thx|ok|okay|cool|nice|great|got it|sounds good|bye|goodbye|see ya)[\s!.,]*$/i.test(
-    trimmed,
-  );
-}
-
-/**
- * Streaming backend for "Ask internIn". Auth-gated the same way as the
- * previous request/response version (askHiringAssistantAction); the only
- * thing that changed is the transport (UI message stream instead of a
- * single generateObject round trip) so the client gets real token
- * streaming plus honest, real progress steps instead of a spinner.
+ * Streaming backend for "Ask internIn". Whether real workspace data gets
+ * queried is a genuine model decision (a real AI SDK tool call), never a
+ * server-side keyword guess — a greeting or "what can you do?" should
+ * never touch the database, and the fix for that is giving the model the
+ * *option* to look things up, not deciding for it. See the tool
+ * description below for the actual routing instruction.
  */
 export async function POST(req: Request) {
   // Auth and body validation happen before the stream starts, so a failure
@@ -60,60 +45,54 @@ export async function POST(req: Request) {
 
   const messages = body.messages as unknown as AssistantUIMessage[];
   const opportunityId = body.opportunityId;
-
-  const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
-  const lastUserText = (lastUserMessage?.parts ?? [])
-    .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
-    .map((p) => p.text)
-    .join(" ");
-  const smallTalk = isSmallTalk(lastUserText);
+  const scopeLabel = opportunityId ? "this internship's pipeline" : "your hiring workspace";
 
   const stream = createUIMessageStream<AssistantUIMessage>({
     execute: async ({ writer }) => {
-      let system: string;
-
-      if (smallTalk) {
-        // Nothing to check for a greeting — no data-step part is written at
-        // all, so the client renders no "how I checked this" disclosure.
-        system =
-          "You are internIn's hiring assistant, embedded in a company's hiring dashboard. The hiring manager just sent a short greeting or pleasantry with no real question in it. Reply naturally and briefly — one short sentence is plenty. Do not mention checking data, internships, or candidates; there is nothing to check here.";
-      } else {
-        const scopeLabel = opportunityId ? "this internship's pipeline" : "your hiring workspace";
-        writer.write({ type: "data-step", id: "load", data: { label: `Checking ${scopeLabel}`, status: "active" } });
-
-        const facts = opportunityId
-          ? await buildInternshipFacts(opportunityId, membership.companyId)
-          : await buildCompanyHiringFacts(membership.companyId);
-
-        writer.write({
-          type: "data-step",
-          id: "load",
-          data: { label: `Checked ${scopeLabel}`, description: facts.split("\n")[0], status: "complete" },
-        });
-
-        system = `You are an assistive hiring copilot answering questions about the hiring manager's own company data. You do not make hiring decisions — you only surface and explain real data.
-
-Real, already-computed facts (the ONLY things you're allowed to state numbers or dates from — never invent, estimate, or round a figure that isn't here):
-"""
-${facts}
-"""
-
-Answer plainly and concisely, using only the facts above. If the facts don't contain what's needed to answer, say so honestly instead of guessing. You may use short markdown (headings, lists, bold) when it helps readability, but keep answers focused — a few sentences or a short list, not an essay.`;
-      }
+      // A single no-argument tool scoped to whatever the composer's context
+      // selector currently points at. No LLM-supplied parameters — the
+      // company/internship scope is never something the model should
+      // control, only whether to look at it at all. The data-step parts
+      // that drive the "How I checked this" disclosure are written from
+      // INSIDE execute(), so they only ever appear when the model actually
+      // decides to call this — never unconditionally.
+      const checkWorkspaceData = tool({
+        description: opportunityId
+          ? "Look up real, current data about this specific internship: applicant counts, review/shortlist/offer stage breakdown, application deadline, challenge status, and recent activity. Call this ONLY when the hiring manager's question genuinely needs real data about this internship. Never call it for greetings, small talk, thanks, or general questions about how internIn or hiring concepts work."
+          : "Look up real, current hiring data across the whole company: active internship count, applicant/review/offer counts, weekly application activity, and internships closing soon. Call this ONLY when the hiring manager's question genuinely needs real workspace data. Never call it for greetings, small talk, thanks, or general questions about how internIn or hiring concepts work.",
+        inputSchema: z.object({}),
+        execute: async () => {
+          writer.write({ type: "data-step", id: "load", data: { label: `Checking ${scopeLabel}`, status: "active" } });
+          const facts = opportunityId
+            ? await buildInternshipFacts(opportunityId, membership.companyId)
+            : await buildCompanyHiringFacts(membership.companyId);
+          writer.write({
+            type: "data-step",
+            id: "load",
+            data: { label: `Checked ${scopeLabel}`, description: facts.split("\n")[0], status: "complete" },
+          });
+          return facts;
+        },
+      });
 
       const result = streamText({
         model: getModel(),
-        system,
+        system: `You are internIn's hiring assistant, embedded in a company's hiring dashboard. You do not make hiring decisions — you only surface and explain real data when asked, and otherwise just talk normally.
+
+You have one tool, checkWorkspaceData, that looks up real, current facts about ${scopeLabel}. Call it ONLY when the hiring manager's message actually requires real workspace data (applicant counts, stages, deadlines, activity, an internship's status). For a greeting, thanks, small talk, "what can you do?", or a general question about a hiring concept (e.g. "what does shortlisted mean?") or a writing request (e.g. "help me write an internship title"), answer directly and briefly — do NOT call the tool.
+
+When you do call the tool, treat its result as the ONLY source for any number, date, or count in your answer — never invent, estimate, or round a figure it didn't give you. If the result doesn't contain what's needed to answer, say so honestly instead of guessing.
+
+Keep answers short and plain. Use markdown (headings, lists, bold) only when it genuinely helps a data answer's readability — never for a one-line greeting.`,
         messages: await convertToModelMessages(messages),
+        tools: { checkWorkspaceData },
+        // Default stopWhen is isStepCount(1), which would end the reply
+        // right after a tool call with no text — this allows the model to
+        // call the tool, see the result, and still write a real answer.
+        stopWhen: stepCountIs(4),
       });
 
-      // sendStart: false only when a data-step write already happened above
-      // (that write implicitly starts the message on this stream) — merging
-      // a second 'start' event there would make the client treat the reply
-      // as a second, separate assistant message. For small talk, nothing
-      // was written yet, so the merged stream's own start must go through
-      // or no message gets created at all.
-      writer.merge(result.toUIMessageStream({ sendStart: smallTalk }));
+      writer.merge(result.toUIMessageStream());
     },
     onError: (error) => (error instanceof Error ? error.message : "Couldn't get an answer — try again."),
   });
