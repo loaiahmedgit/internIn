@@ -25,6 +25,7 @@ import {
   BarChart3,
   Plug,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import type { NavItem, IconName } from "@/lib/dashboard-nav";
 
@@ -48,6 +49,7 @@ const ICON_MAP: Record<IconName, typeof ClipboardList> = {
   "bar-chart-3": BarChart3,
   plug: Plug,
   settings: Settings,
+  sparkles: Sparkles,
 };
 
 function isActive(pathname: string, href: string) {

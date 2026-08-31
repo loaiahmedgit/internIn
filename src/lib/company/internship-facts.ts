@@ -2,6 +2,8 @@ import { eq, and, inArray, or, desc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { stageKeyOf } from "./candidate-stage";
 import { formatDeadline } from "@/lib/format-date";
+import { getHiringData } from "./hiring-data";
+import { DAY_MS, hiringMetrics, hiringCohort, hiringActivity } from "./hiring-metrics";
 
 export const EVENT_LABEL: Record<string, string> = {
   opportunity_created: "Internship created",
@@ -118,6 +120,50 @@ export async function buildInternshipFacts(opportunityId: string, companyId: str
     lines.push(`Recent activity (most recent first): ${activity.map((e) => `${EVENT_LABEL[e.eventType] ?? e.eventType} (${formatDeadline(e.createdAt)})`).join("; ")}.`);
   } else {
     lines.push("No activity recorded yet.");
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * The "All hiring" scope facts — real, already-computed numbers across
+ * every posting in the company, reusing the exact same hiringMetrics logic
+ * Home and Analytics already render from, so the assistant can never state
+ * a figure that disagrees with what's on screen elsewhere.
+ */
+export async function buildCompanyHiringFacts(companyId: string): Promise<string> {
+  const data = await getHiringData(companyId);
+  const now = new Date();
+  const m = hiringMetrics(data.applications);
+  const published = data.postings.filter((p) => p.status === "published");
+
+  const lines: string[] = [];
+  lines.push(`Active internships: ${published.length}.`);
+  lines.push(`Total applicants (all time): ${m.applicants}.`);
+  lines.push(`To review: ${m.toReview}. Shortlisted: ${m.shortlisted}. Offer sent: ${m.offerSent}. Hired: ${m.accepted}. Not selected: ${m.archived}.`);
+
+  const newThisWeek = hiringCohort(data.applications, 7, now).length;
+  const prevWeek = hiringCohort(data.applications, 14, now).length - newThisWeek;
+  lines.push(`New applicants in the last 7 days: ${newThisWeek} (previous 7 days: ${prevWeek}).`);
+
+  const weekly = hiringActivity(data.applications, 28, now);
+  lines.push(`Weekly application counts, oldest to most recent: ${weekly.map((w) => w.count).join(", ")}.`);
+
+  const closingSoon = published
+    .filter((p) => p.applicationDeadline && p.applicationDeadline.getTime() - now.getTime() <= 7 * DAY_MS && p.applicationDeadline.getTime() >= now.getTime())
+    .sort((a, b) => a.applicationDeadline!.getTime() - b.applicationDeadline!.getTime());
+  lines.push(
+    closingSoon.length > 0
+      ? `Internships closing within 7 days: ${closingSoon.map((p) => `${p.role} (${formatDeadline(p.applicationDeadline!)})`).join("; ")}.`
+      : "No internships closing within 7 days.",
+  );
+
+  lines.push("Per-internship breakdown:");
+  for (const p of published) {
+    const pm = hiringMetrics(data.applications.filter((a) => a.opportunityId === p.id));
+    lines.push(
+      `- ${p.role}: ${pm.applicants} applicants, ${pm.toReview} to review, ${pm.shortlisted} shortlisted, ${pm.offerSent} offer sent, ${pm.accepted} hired${p.applicationDeadline ? `, deadline ${formatDeadline(p.applicationDeadline)}` : ", no deadline set"}.`,
+    );
   }
 
   return lines.join("\n");
