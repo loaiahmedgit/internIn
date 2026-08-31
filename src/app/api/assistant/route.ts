@@ -77,7 +77,10 @@ Answer plainly and concisely, using only the facts above. If the facts don't con
         },
       });
 
-      writer.merge(result.toUIMessageStream());
+      // sendStart: false — our own data-step writes above already started
+      // this message; without this the merged stream's own start event
+      // makes the client treat it as a second, separate assistant message.
+      writer.merge(result.toUIMessageStream({ sendStart: false }));
     },
     onError: (error) => (error instanceof Error ? error.message : "Couldn't get an answer — try again."),
   });
