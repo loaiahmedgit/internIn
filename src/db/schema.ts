@@ -131,7 +131,14 @@ export const companyMembers = pgTable(
     offerNotifications: boolean("offer_notifications").notNull().default(true),
     ...timestamps,
   },
-  (t) => [uniqueIndex("company_members_company_user_uidx").on(t.companyId, t.userId)],
+  (t) => [
+    uniqueIndex("company_members_company_user_uidx").on(t.companyId, t.userId),
+    // Every "who's my company" lookup (getCurrentCompanyMembership, called
+    // on every dashboard navigation) filters by user_id alone — the
+    // composite unique index above leads with company_id, which doesn't
+    // serve that access pattern directly.
+    index("company_members_user_idx").on(t.userId),
+  ],
 );
 
 // ---------------------------------------------------------------------------

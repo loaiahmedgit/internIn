@@ -12,10 +12,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import type { UIMessage } from "ai";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
@@ -321,8 +317,12 @@ export const MessageBranchPage = ({
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
-const streamdownPlugins = { cjk, code, math, mermaid };
-
+// No default `plugins` here on purpose: the AI Elements registry ships
+// {cjk, code, math, mermaid} by default, which statically pulls shiki +
+// katex + mermaid into every page that renders a MessageResponse (measured:
+// ~1MB+ of this app's only AI page's ~2.5MB bundle). This app's assistant
+// only ever needs plain markdown, so none are wired in — pass a `plugins`
+// prop from a specific call site if a real future need appears.
 export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (
     <Streamdown
@@ -330,7 +330,6 @@ export const MessageResponse = memo(
         "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
-      plugins={streamdownPlugins}
       {...props}
     />
   ),

@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
-import { getCurrentUser } from "@/lib/auth";
-import { getDb, schema } from "@/db";
+import { getCurrentUser, getCurrentCompanyMembership } from "@/lib/auth";
 import { getCompanyCandidates, type CandidateRow } from "@/lib/company/candidates-data";
 import { stageKeyOf, STAGE_LABEL, STAGE_ICON_COLOR } from "@/lib/company/candidate-stage";
 import { CompanyPageContainer } from "@/components/company/page-shell";
@@ -60,15 +58,8 @@ export default async function CompanyCandidatesPage({
   if (!user) redirect("/signin");
   const params = await searchParams;
 
-  const db = getDb();
-  const [membership] = await db
-    .select({ company: schema.companies })
-    .from(schema.companyMembers)
-    .innerJoin(schema.companies, eq(schema.companyMembers.companyId, schema.companies.id))
-    .where(eq(schema.companyMembers.userId, user.id))
-    .limit(1);
-
-  if (!membership) {
+  const membership = await getCurrentCompanyMembership();
+  if (!membership.ok) {
     return (
       <CompanyPageContainer>
         <p className="text-center text-navy/60">This account isn&apos;t linked to a company yet.</p>
@@ -76,7 +67,7 @@ export default async function CompanyCandidatesPage({
     );
   }
 
-  const { rows, roleOptions } = await getCompanyCandidates(membership.company.id);
+  const { rows, roleOptions } = await getCompanyCandidates(membership.membership.companyId);
   const q = typeof params.q === "string" ? params.q.trim().toLowerCase() : "";
   // Keep old archived URLs working while using a clearer query parameter for
   // new links. Archived candidates are history, not an active pipeline stage.

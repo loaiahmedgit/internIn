@@ -28,24 +28,58 @@ export const getCurrentUser = cache(async function getCurrentUser() {
   return user ?? null;
 });
 
-export async function requireCurrentCompanyMember(permission: WorkspacePermission | null = "hiring_reviewer") {
+type CompanyMembershipResult =
+  | {
+      ok: true;
+      user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
+      membership: typeof schema.companyMembers.$inferSelect;
+      companyName: string;
+    }
+  | { ok: false; reason: "signed_out" | "not_linked" };
+
+/**
+ * The current company user's own membership + company name, looked up
+ * ONCE per request no matter how many Server Components in the tree ask
+ * for it (React `cache()`) — the company layout, every page.tsx, and any
+ * nested component can all call this without adding a duplicate
+ * `company_members` round trip. Never throws; callers decide how to react
+ * to `ok: false` (redirect, inline message, or throw via the `require*`
+ * wrappers below), so this stays safe to call from places that want to
+ * degrade gracefully (e.g. the layout's "workspace access required" view).
+ */
+export const getCurrentCompanyMembership = cache(async (): Promise<CompanyMembershipResult> => {
   const user = await getCurrentUser();
-  if (!user || user.role !== "company") throw new Error("Not signed in as a company user.");
+  if (!user || user.role !== "company") return { ok: false, reason: "signed_out" };
 
   const db = getDb();
-  const [membership] = await db
-    .select()
+  const [row] = await db
+    .select({ membership: schema.companyMembers, companyName: schema.companies.name })
     .from(schema.companyMembers)
+    .innerJoin(schema.companies, eq(schema.companies.id, schema.companyMembers.companyId))
     .where(eq(schema.companyMembers.userId, user.id))
     .limit(1);
-  if (!membership) throw new Error("This account isn't linked to a company.");
-  if (permission && !hasPermission(membership, permission)) throw new Error("You do not have access to this workspace feature. Ask a workspace administrator.");
+  if (!row) return { ok: false, reason: "not_linked" };
 
-  return { user, membership };
+  return { ok: true, user, membership: row.membership, companyName: row.companyName };
+});
+
+export async function requireCurrentCompanyMember(permission: WorkspacePermission | null = "hiring_reviewer") {
+  const result = await getCurrentCompanyMembership();
+  if (!result.ok) {
+    throw new Error(result.reason === "signed_out" ? "Not signed in as a company user." : "This account isn't linked to a company.");
+  }
+  if (permission && !hasPermission(result.membership, permission)) throw new Error("You do not have access to this workspace feature. Ask a workspace administrator.");
+
+  return { user: result.user, membership: result.membership, companyName: result.companyName };
 }
 
-/** Throws unless the current session belongs to a member of `companyId`. */
-export async function requireCompanyMember(companyId: string, permission: WorkspacePermission | null = "hiring_reviewer") {
+/**
+ * Throws unless the current session belongs to a member of `companyId`.
+ * Cached per companyId so multiple callers scoped to the same company
+ * within one request (e.g. a page.tsx and a data helper it calls) share
+ * one query instead of each re-checking membership independently.
+ */
+const getMembershipForCompany = cache(async (companyId: string) => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -57,6 +91,11 @@ export async function requireCompanyMember(companyId: string, permission: Worksp
     .limit(1);
 
   if (!membership) throw new Error("Not a member of this company.");
+  return { user, membership };
+});
+
+export async function requireCompanyMember(companyId: string, permission: WorkspacePermission | null = "hiring_reviewer") {
+  const { user, membership } = await getMembershipForCompany(companyId);
   if (permission && !hasPermission(membership, permission)) throw new Error("You do not have access to this workspace feature. Ask a workspace administrator.");
   return { user, membership };
 }

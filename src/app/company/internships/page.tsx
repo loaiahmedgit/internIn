@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
-import { getDb, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { getCurrentUser, getCurrentCompanyMembership } from "@/lib/auth";
 import { getHiringInternships } from "@/lib/company/internships-data";
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { Badge } from "@/components/ui/badge";
@@ -59,15 +57,8 @@ export default async function CompanyInternshipsPage({
   if (!user) redirect("/signin");
   const params = await searchParams;
 
-  const db = getDb();
-  const [membership] = await db
-    .select({ company: schema.companies })
-    .from(schema.companyMembers)
-    .innerJoin(schema.companies, eq(schema.companyMembers.companyId, schema.companies.id))
-    .where(eq(schema.companyMembers.userId, user.id))
-    .limit(1);
-
-  if (!membership) {
+  const membership = await getCurrentCompanyMembership();
+  if (!membership.ok) {
     return (
       <CompanyPageContainer>
         <p className="text-center text-navy/60">This account isn&apos;t linked to a company yet.</p>
@@ -75,7 +66,7 @@ export default async function CompanyInternshipsPage({
     );
   }
 
-  const data = await getHiringInternships(membership.company.id);
+  const data = await getHiringInternships(membership.membership.companyId);
   const q = typeof params.q === "string" ? params.q.trim().toLowerCase() : "";
   const tab: TabKey = TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "all";
   const sort = params.sort === "oldest" ? "oldest" : "newest";

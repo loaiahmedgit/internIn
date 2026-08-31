@@ -1,6 +1,4 @@
-import { getCurrentUser } from "@/lib/auth";
-import { getDb, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { getCurrentUser, getCurrentCompanyMembership } from "@/lib/auth";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { COMPANY_NAV_ITEMS } from "@/lib/dashboard-nav";
 import Link from "next/link";
@@ -11,32 +9,25 @@ export default async function CompanyLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // getCurrentUser() and getCurrentCompanyMembership() are both React
+  // cache()-memoized per request: every page.tsx under this layout calls
+  // requireCurrentCompanyMember() too, and now reuses this exact lookup
+  // instead of running a second company_members query on every navigation.
   const user = await getCurrentUser();
+  const membership = await getCurrentCompanyMembership();
 
   let companyName = "";
   let allowed = false;
   let navItems = COMPANY_NAV_ITEMS;
-  if (user) {
-    const db = getDb();
-    const [membership] = await db
-      .select({ name: schema.companies.name, access: schema.companyMembers })
-      .from(schema.companyMembers)
-      .innerJoin(
-        schema.companies,
-        eq(schema.companyMembers.companyId, schema.companies.id),
-      )
-      .where(eq(schema.companyMembers.userId, user.id))
-      .limit(1);
-    companyName = membership?.name ?? "";
-    if (membership) {
-      // Layouts persist across client navigation. Feature authorization belongs
-      // in each page's data loader/action, not a cached pathname decision here.
-      allowed = true;
-      if (!hasPermission(membership.access, "hiring_reviewer"))
-        navItems = COMPANY_NAV_ITEMS.filter((n) =>
-          ["Settings", "Integrations"].includes(n.label),
-        );
-    }
+  if (membership.ok) {
+    // Layouts persist across client navigation. Feature authorization belongs
+    // in each page's data loader/action, not a cached pathname decision here.
+    companyName = membership.companyName;
+    allowed = true;
+    if (!hasPermission(membership.membership, "hiring_reviewer"))
+      navItems = COMPANY_NAV_ITEMS.filter((n) =>
+        ["Settings", "Integrations"].includes(n.label),
+      );
   }
 
   return (
