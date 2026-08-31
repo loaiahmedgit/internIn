@@ -263,17 +263,23 @@ export function AssistantWorkspace({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {/* Three independent layers, not one flex column doing double duty:
+          Conversation is the ONE scrolling region (fills whatever height is
+          left); the message column inside it is top-anchored, normal
+          document flow — messages start right after the top padding, not
+          bottom-pinned. The composer below is a separate, independently
+          positioned layer with its own margin from the viewport edge. No
+          justify-end/justify-between anywhere in this structure. */}
       <Conversation className="min-h-0 flex-1">
-        {/* min-h-full + justify-end: StickToBottom.Content's inner wrapper is
-            naturally content-sized (shrinks to fit 1-2 messages), which — in
-            a flex-1 box that fills the viewport — left a huge dead gap
-            between a short conversation and the composer below it. Forcing
-            it to at least fill the scroll viewport and bottom-align its
-            children pins short conversations to the composer, exactly like
-            a real chat product; once content overflows, min-height stops
-            mattering and normal top-to-bottom scroll takes over. */}
-        <ConversationContent className="mx-auto min-h-full w-full max-w-6xl flex-col justify-end px-6 pt-6 pb-4 sm:px-10 lg:px-12">
-          {messages.map((message) => {
+        <ConversationContent className="mx-auto w-full max-w-6xl px-6 pt-12 pb-8 sm:px-10 lg:px-12">
+          {/* The wide max-w-6xl above is the canvas ceiling for a future
+              rich/wide result component to render as a sibling of this
+              column. Ordinary messages — including the user bubble — live
+              in this narrower, centered reading column so the user message
+              aligns to the conversation's own right edge, not the
+              dashboard's. */}
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+            {messages.map((message) => {
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
             const textParts = message.parts.filter((p) => p.type === "text");
             const responseText = textParts.map((p) => p.text).join("");
@@ -300,7 +306,7 @@ export function AssistantWorkspace({
                       </ChainOfThought>
                     )}
                     {responseText ? (
-                      <div className="typeset typeset-docs max-w-3xl">
+                      <div className="typeset typeset-docs">
                         <MessageResponse>{responseText}</MessageResponse>
                       </div>
                     ) : (
@@ -339,16 +345,21 @@ export function AssistantWorkspace({
                 )}
               </Message>
             );
-          })}
+            })}
+          </div>
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
 
-      {/* No border-t — a page-wide line reads as a footer boundary, not
-          part of the conversation. A soft upward shadow is enough to lift
-          the composer off scrolled content without drawing a hard edge. */}
-      <div className="relative z-10 shrink-0 bg-white px-6 pt-3 pb-4 shadow-[0_-8px_16px_-12px_rgba(15,23,42,0.08)] sm:px-10 lg:px-12">
-        <div className="mx-auto w-full max-w-6xl">
+      {/* Independent bottom layer, not glued to the viewport edge: a subtle
+          fade (not a border, not a shadow bar) softens the handoff from
+          scrolled content, and pb-8 gives the composer real breathing room
+          above the edge instead of sitting flush against it. Narrowed to
+          max-w-3xl — the same width as the reading column above, not the
+          wider canvas ceiling. */}
+      <div className="relative z-10 shrink-0 px-6 pt-4 pb-8 sm:px-10 lg:px-12">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-white to-transparent" />
+        <div className="relative mx-auto w-full max-w-3xl">
           {error && <p className="mb-2 text-center text-sm text-destructive">{error.message}</p>}
           {renderComposer(true)}
         </div>
