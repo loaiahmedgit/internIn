@@ -291,7 +291,7 @@ export async function updateOpportunityDetailsAction(opportunityId: string, deta
 }
 
 /** Every field the manual Create/Edit Internship form can set. Everything optional besides the true minimum a listing needs to exist. */
-export const InternshipFormSchema = z.object({
+const InternshipFormSchema = z.object({
   role: z.string().trim().min(2).max(120),
   department: z.string().trim().max(120).nullable().optional(),
   shortDescription: z.string().trim().max(500).nullable().optional(),

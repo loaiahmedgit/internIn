@@ -25,6 +25,7 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 const WORK_MODE_LABEL: Record<string, string> = { onsite: "On-site", hybrid: "Hybrid", remote: "Remote" };
+const AI_USAGE_POLICY_LABEL: Record<string, string> = { open: "Open", ai_allowed: "AI allowed", restricted_ai: "Restricted AI", controlled: "Controlled" };
 const TABLE_HEAD_CLASS = "text-xs uppercase tracking-wide text-navy/65";
 
 export default async function OpportunityDetailPage({
@@ -395,7 +396,7 @@ export default async function OpportunityDetailPage({
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">AI usage policy</p>
-                  <p className="mt-1 text-navy capitalize">{challengeVersion!.aiUsagePolicy.replace("_", " ")}</p>
+                  <p className="mt-1 text-navy">{AI_USAGE_POLICY_LABEL[challengeVersion!.aiUsagePolicy] ?? challengeVersion!.aiUsagePolicy}</p>
                 </div>
               </div>
               <div className="mt-4">
