@@ -30,7 +30,7 @@ import {
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
 import { Attachments, Attachment, AttachmentPreview, AttachmentInfo, AttachmentRemove } from "@/components/ai-elements/attachments";
-import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
+import { Suggestion } from "@/components/ai-elements/suggestion";
 import { SpeechInput } from "@/components/ai-elements/speech-input";
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse, MessageActions, MessageAction } from "@/components/ai-elements/message";
@@ -235,18 +235,24 @@ export function AssistantWorkspace({
   if (!hasMessages) {
     return (
       <CompanyPageContainer>
-        <div className="mx-auto flex max-w-2xl flex-col px-6 py-16">
+        {/* max-w-5xl, not max-w-2xl: this block should read as the page's
+            main object, using most of the same content width Home/
+            Candidates/Analytics get from CompanyPageContainer — not a
+            narrow component demo floating in the middle of a huge
+            unused canvas. */}
+        <div className="mx-auto flex max-w-5xl flex-col pt-10 pb-16 md:pt-14">
           <div className="text-center">
             <h1 className="text-2xl font-semibold tracking-tight text-navy">Ask internIn</h1>
             <p className="mt-2 text-sm text-navy/55">Your hiring assistant for internships, candidates and pipeline insights.</p>
           </div>
           <div className="mt-8">{renderComposer(false)}</div>
-          <div className="mt-3">
-            <Suggestions>
-              {suggestions.map((s) => (
-                <Suggestion key={s} suggestion={s} onClick={(text) => sendMessage({ text })} />
-              ))}
-            </Suggestions>
+          {/* Suggestion is reused as-is; the Suggestions wrapper hardcodes a
+              horizontal-scroll ScrollArea with no wrap option, which is
+              exactly the clipping this layout can't have at this width. */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {suggestions.map((s) => (
+              <Suggestion key={s} suggestion={s} onClick={(text) => sendMessage({ text })} />
+            ))}
           </div>
           {error && <p className="mt-4 text-center text-sm text-destructive">{error.message}</p>}
           <p className="mt-10 text-center text-[11px] text-navy/40">Assistive only — you make every hiring decision.</p>
@@ -258,7 +264,7 @@ export function AssistantWorkspace({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="mx-auto w-full max-w-6xl px-6 pt-6 pb-4 md:px-10">
+        <ConversationContent className="mx-auto w-full max-w-6xl px-6 pt-6 pb-4 sm:px-10 lg:px-12">
           {messages.map((message) => {
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
             const textParts = message.parts.filter((p) => p.type === "text");
@@ -313,11 +319,11 @@ export function AssistantWorkspace({
                           ))}
                         </div>
                         {isLastAssistant && isGrounded && !isStreaming && followups.length > 0 && (
-                          <Suggestions>
+                          <div className="flex flex-wrap gap-2">
                             {followups.map((s) => (
                               <Suggestion key={s} suggestion={s} onClick={(text) => sendMessage({ text })} />
                             ))}
-                          </Suggestions>
+                          </div>
                         )}
                       </>
                     )}
@@ -330,7 +336,7 @@ export function AssistantWorkspace({
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="shrink-0 border-t border-navy/10 bg-white px-6 pt-3 pb-4 md:px-10">
+      <div className="shrink-0 border-t border-navy/10 bg-white px-6 pt-3 pb-4 sm:px-10 lg:px-12">
         <div className="mx-auto w-full max-w-6xl">
           {error && <p className="mb-2 text-center text-sm text-destructive">{error.message}</p>}
           {renderComposer(true)}
