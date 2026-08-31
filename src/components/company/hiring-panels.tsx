@@ -196,7 +196,7 @@ export function ApplicantBars({
     >
       <div
         className="flex gap-2 pt-6"
-        style={{ minWidth: Math.max(260, rows.length * 66 + 28) }}
+        style={{ minWidth: Math.max(220, rows.length * 52 + 28) }}
       >
         <div
           className="relative h-36 w-6 shrink-0 text-right text-[10px] text-navy/60"
