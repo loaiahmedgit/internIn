@@ -177,7 +177,9 @@ export function AssistantWorkspace({
             </PromptInputActionMenu>
             <PromptInputSelect value={opportunityId ?? "all"} onValueChange={handleScopeChange}>
               <PromptInputSelectTrigger className="w-auto max-w-40" aria-label="Ask about">
-                <PromptInputSelectValue />
+                <PromptInputSelectValue className="min-w-0 truncate">
+                  {(value: string) => opportunityOptions.find((o) => o.value === value)?.label ?? value}
+                </PromptInputSelectValue>
               </PromptInputSelectTrigger>
               <PromptInputSelectContent>
                 <SelectGroup>
