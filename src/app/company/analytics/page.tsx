@@ -78,9 +78,13 @@ export default async function CompanyAnalyticsPage({
     }))
     .sort((a, b) => b.metrics.applicants - a.metrics.applicants);
   const sourceLabels: Record<string, string> = {
+    linkedin: "LinkedIn",
+    company_website: "Company Website",
+    employee_referral: "Employee Referral",
+    university_portal: "University Portal",
+    job_boards: "Job Boards",
     direct: "Direct",
     referral: "Referral",
-    company_website: "Company website",
     unknown: "Not recorded",
   };
   return (
@@ -176,14 +180,11 @@ export default async function CompanyAnalyticsPage({
         >
           <StageDistribution
             rows={[
-              {
-                label: "Awaiting submission",
-                value: m.awaitingSubmission,
-                color: "#94A3B8",
-              },
-              { label: "To review", value: m.toReview, color: "#2563EB" },
-              { label: "Shortlisted", value: m.shortlisted, color: "#D97706" },
-              { label: "Offer sent", value: m.offerSent, color: "#059669" },
+              { label: "Applicant", value: m.awaitingSubmission, color: "#94A3B8" },
+              { label: "Screening", value: m.toReview, color: "#2563EB" },
+              { label: "Interview", value: m.shortlisted, color: "#7C3AED" },
+              { label: "Offer", value: m.pending, color: "#D97706" },
+              { label: "Hired", value: m.accepted, color: "#059669" },
               { label: "Rejected", value: m.archived, color: "#DC2626" },
             ]}
           />

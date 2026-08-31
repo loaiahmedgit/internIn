@@ -104,21 +104,27 @@ export function HiringFunnel({
 }: {
   metrics: ReturnType<typeof hiringMetrics>;
 }) {
-  // Offers can bypass shortlisting; do not invent a sequential interview funnel.
+  // The real hiring lifecycle, derived entirely from existing real counts —
+  // no new tracked event, just naming the stages a reviewer actually
+  // recognizes. "Screening" = has a real submission; "Interviews" = ever
+  // shortlisted or further (offers can bypass shortlisting, so this is a
+  // superset of "currently shortlisted", not a separate tracked stage);
+  // "Offers"/"Hired" map straight to offerSent/accepted. Monotonically
+  // non-increasing by construction, since each stage's population is a
+  // real subset of the one before it.
   const steps = [
     { label: "Applicants", value: metrics.applicants, color: "fill-teal/20" },
-    { label: "Offers sent", value: metrics.offers, color: "fill-emerald-100" },
-    {
-      label: "Offers accepted",
-      value: metrics.accepted,
-      color: "fill-emerald-200",
-    },
+    { label: "Screening", value: metrics.submitted, color: "fill-blue-100" },
+    { label: "Interviews", value: metrics.shortlisted + metrics.offerSent, color: "fill-violet-100" },
+    { label: "Offers", value: metrics.offerSent, color: "fill-amber-100" },
+    { label: "Hired", value: metrics.accepted, color: "fill-emerald-200" },
   ];
+  const rowHeight = 50;
   return (
     <>
-      <div className="grid grid-cols-[minmax(80px,0.8fr)_1.4fr] items-center gap-4">
+      <div className="grid grid-cols-[minmax(76px,0.8fr)_1.4fr] items-center gap-4">
         <svg
-          viewBox="0 0 160 210"
+          viewBox={`0 0 160 ${steps.length * rowHeight}`}
           className="w-full"
           role="img"
           aria-label="Hiring funnel; exact counts are listed alongside"
@@ -126,14 +132,14 @@ export function HiringFunnel({
           {steps.map((s, i) => (
             <g key={s.label}>
               <path
-                d={`M${i * 18} ${i * 70} H${160 - i * 18} L${142 - i * 18} ${i * 70 + 66} H${18 + i * 18} Z`}
+                d={`M${i * 14} ${i * rowHeight} H${160 - i * 14} L${160 - (i + 1) * 14} ${(i + 1) * rowHeight - 3} H${(i + 1) * 14} Z`}
                 className={s.color}
               />
               <text
                 x="80"
-                y={i * 70 + 38}
+                y={i * rowHeight + rowHeight / 2 + 4}
                 textAnchor="middle"
-                className="fill-navy text-[14px] font-semibold"
+                className="fill-navy text-[13px] font-semibold"
               >
                 {s.value}
               </text>
@@ -143,15 +149,15 @@ export function HiringFunnel({
         <table className="w-full text-xs">
           <thead className="text-navy/65">
             <tr>
-              <th className="pb-3 text-left font-medium">Stage</th>
-              <th className="pb-3 text-right font-medium">Count</th>
-              <th className="pb-3 pl-2 text-right font-medium">Conversion</th>
+              <th className="pb-2 text-left font-medium">Stage</th>
+              <th className="pb-2 text-right font-medium">Count</th>
+              <th className="pb-2 pl-2 text-right font-medium">Conversion</th>
             </tr>
           </thead>
           <tbody>
             {steps.map((s, i) => (
               <tr key={s.label} className="border-t border-navy/8">
-                <td className="py-4 text-navy">{s.label}</td>
+                <td className="py-2.5 text-navy">{s.label}</td>
                 <td className="text-right tabular-nums text-navy">{s.value}</td>
                 <td className="pl-2 text-right tabular-nums text-navy/70">
                   {i
