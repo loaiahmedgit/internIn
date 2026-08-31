@@ -33,7 +33,7 @@ import {
 
 const DEFAULT_MODEL = "google/gemma-4-31b-it-20260402";
 
-function getModel() {
+export function getModel() {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error(

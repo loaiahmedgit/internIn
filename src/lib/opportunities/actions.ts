@@ -11,13 +11,11 @@ import {
   InternshipDraftSchema,
   InternshipProgramSchema,
   InternshipCopyAssistSchema,
-  InternshipAssistantAnswerSchema,
   aiProvider,
   type InternshipDraft,
   type InternshipProgram,
   type Challenge,
 } from "@/lib/ai";
-import { buildInternshipFacts, buildCompanyHiringFacts } from "@/lib/company/internship-facts";
 
 const IdSchema = z.string().uuid();
 const VersionSourceSchema = z.enum(["ai_generated", "human_edited", "approved"]);
@@ -713,21 +711,7 @@ export async function assistInternshipCopyAction(input: {
   return InternshipCopyAssistSchema.parse(await aiProvider.assistInternshipCopy(validated));
 }
 
-/**
- * The contextual "Ask internIn" panel's one real capability: answer a
- * question about THIS internship, grounded entirely in buildInternshipFacts
- * — the model never sees anything else about the company or its data.
- */
-/**
- * `opportunityId: null` = the "All hiring" scope (real, company-wide
- * facts); a real id scopes to just that internship. Same grounding
- * discipline either way — the model only ever sees buildInternshipFacts/
- * buildCompanyHiringFacts's output, never raw database access.
- */
-export async function askHiringAssistantAction(opportunityId: string | null, question: string) {
-  const validatedQuestion = z.string().trim().min(1).max(500).parse(question);
-  const { companyId } = await getCompanyIdForCurrentUser("hiring_reviewer");
-  const facts = opportunityId ? await buildInternshipFacts(IdSchema.parse(opportunityId), companyId) : await buildCompanyHiringFacts(companyId);
-  const result = await aiProvider.answerInternshipQuestion({ question: validatedQuestion, facts });
-  return InternshipAssistantAnswerSchema.parse(result).answer;
-}
+// The old single-shot "Ask internIn" action (askHiringAssistantAction) was
+// removed when the assistant moved to a streaming UI-message backend — see
+// src/app/api/assistant/route.ts, which calls buildInternshipFacts/
+// buildCompanyHiringFacts directly instead of going through a Server Action.

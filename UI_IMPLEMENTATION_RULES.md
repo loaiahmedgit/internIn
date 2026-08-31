@@ -13,3 +13,10 @@
 - Use screenshots/reference designs as the visual source of truth when provided.
 - Use responsive layouts, proper focus states, keyboard accessibility, and semantic structure.
 - Never use emoji as interface icons.
+- For AI interfaces, prefer official AI Elements components over custom implementations.
+- Do not manually recreate AI prompt inputs, attachments, messages, suggestions, loaders, or reasoning displays when an appropriate AI Elements component exists.
+- Use shadcn/ui primitives and Tailwind design tokens.
+- Use Lucide React icons instead of custom SVG icon components.
+- shadcn/typeset is for rendered rich/markdown AI output, not ordinary application UI.
+- Add `not-typeset` or `data-not-typeset` to embedded interactive shadcn components inside AI responses.
+- Never expose raw hidden model chain-of-thought. Structured progress UI may show user-visible tool calls/actions/results only.

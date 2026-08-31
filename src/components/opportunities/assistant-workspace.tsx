@@ -1,22 +1,60 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useRef, useSyncExternalStore } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { QuerySelect } from "@/components/company/query-select";
-import { askHiringAssistantAction } from "@/lib/opportunities/actions";
-import { Sparkles, Send, Users, FileText, PenSquare, BarChart3, Briefcase } from "lucide-react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { Paperclip, Copy, RotateCcw, Users, FileText, PenSquare, BarChart3, Briefcase } from "lucide-react";
 
-const SUGGESTED_PROMPTS = [
+import { SelectGroup } from "@/components/ui/select";
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputTextarea,
+  PromptInputFooter,
+  PromptInputTools,
+  PromptInputActionMenu,
+  PromptInputActionMenuTrigger,
+  PromptInputActionMenuContent,
+  PromptInputActionAddAttachments,
+  PromptInputActionAddScreenshot,
+  PromptInputSelect,
+  PromptInputSelectTrigger,
+  PromptInputSelectValue,
+  PromptInputSelectContent,
+  PromptInputSelectItem,
+  PromptInputSubmit,
+  usePromptInputAttachments,
+  type PromptInputMessage,
+} from "@/components/ai-elements/prompt-input";
+import { Attachments, Attachment, AttachmentPreview, AttachmentInfo, AttachmentRemove } from "@/components/ai-elements/attachments";
+import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
+import { SpeechInput } from "@/components/ai-elements/speech-input";
+import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
+import { Message, MessageContent, MessageResponse, MessageActions, MessageAction } from "@/components/ai-elements/message";
+import { ChainOfThought, ChainOfThoughtHeader, ChainOfThoughtContent, ChainOfThoughtStep } from "@/components/ai-elements/chain-of-thought";
+import { Shimmer } from "@/components/ai-elements/shimmer";
+import type { AssistantStepData, AssistantUIMessage } from "@/lib/ai/assistant-messages";
+
+const ALL_HIRING_SUGGESTIONS = [
   "What needs my attention?",
-  "Summarize this week's hiring.",
+  "Summarize this week's hiring",
   "Which internships are closing soon?",
-  "Show offer acceptance over the last month.",
-  "Which requirements are applicants commonly missing?",
+  "Show applications waiting for review",
+  "Compare applicant volume",
+  "How is offer acceptance trending?",
 ];
 
-type Turn = { question: string; answer: string };
+const PER_INTERNSHIP_SUGGESTIONS = [
+  "Summarize this pipeline",
+  "What needs review?",
+  "Which requirements are applicants missing?",
+  "Show recent activity",
+  "How many candidates reached shortlist?",
+  "Should we improve the listing?",
+];
+
 type ActionLink = { label: string; href: string; icon: typeof Users };
 
 function actionsFor(text: string, opportunityId: string | null): ActionLink[] {
@@ -41,6 +79,35 @@ function actionsFor(text: string, opportunityId: string | null): ActionLink[] {
   return links.slice(0, 2);
 }
 
+const speechSupportSubscribe = () => () => {};
+const getServerSpeechSupport = () => false;
+const getClientSpeechSupport = () => "SpeechRecognition" in window || "webkitSpeechRecognition" in window;
+
+/** Real browser feature check — the mic button only renders when the
+ * browser actually supports it, never a disabled decoration. Uses
+ * useSyncExternalStore (not an effect) so there's no server/client
+ * hydration mismatch: SSR and the first client render both see "false",
+ * then React re-syncs to the real client snapshot right after. */
+function useSpeechSupported() {
+  return useSyncExternalStore(speechSupportSubscribe, getClientSpeechSupport, getServerSpeechSupport);
+}
+
+function ComposerAttachments() {
+  const { files, remove } = usePromptInputAttachments();
+  if (files.length === 0) return null;
+  return (
+    <Attachments variant="inline" className="px-3 pt-3">
+      {files.map((file) => (
+        <Attachment key={file.id} data={file} onRemove={() => remove(file.id)}>
+          <AttachmentPreview />
+          <AttachmentInfo />
+          <AttachmentRemove />
+        </Attachment>
+      ))}
+    </Attachments>
+  );
+}
+
 export function AssistantWorkspace({
   opportunityOptions,
   opportunityId,
@@ -48,106 +115,193 @@ export function AssistantWorkspace({
   opportunityOptions: { value: string; label: string }[];
   opportunityId: string | null;
 }) {
-  const [question, setQuestion] = useState("");
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const composerRef = useRef<HTMLDivElement>(null);
+  const speechSupported = useSpeechSupported();
 
-  function ask(q: string) {
-    const trimmed = q.trim();
-    if (!trimmed || isPending) return;
-    setError(null);
-    setQuestion("");
-    startTransition(async () => {
-      try {
-        const answer = await askHiringAssistantAction(opportunityId, trimmed);
-        setTurns((t) => [...t, { question: trimmed, answer }]);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Couldn't get an answer — try again.");
-      }
-    });
+  const { messages, sendMessage, status, regenerate, stop, error, clearError } = useChat<AssistantUIMessage>({
+    transport: new DefaultChatTransport({ api: "/api/assistant", body: { opportunityId } }),
+  });
+
+  const handleScopeChange = useCallback(
+    (next: unknown) => {
+      if (typeof next !== "string") return;
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === "all") params.delete("opportunity");
+      else params.set("opportunity", next);
+      router.push(`${pathname}?${params.toString()}`);
+    },
+    [router, pathname, searchParams],
+  );
+
+  const handleSubmit = useCallback(
+    (message: PromptInputMessage) => {
+      if (!message.text.trim() && message.files.length === 0) return;
+      clearError();
+      sendMessage({ text: message.text, files: message.files });
+    },
+    [sendMessage, clearError],
+  );
+
+  const handleTranscript = useCallback((transcript: string) => {
+    const textarea = composerRef.current?.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
+    if (!textarea) return;
+    textarea.value = textarea.value ? `${textarea.value} ${transcript}` : transcript;
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    textarea.focus();
+  }, []);
+
+  const suggestions = opportunityId ? PER_INTERNSHIP_SUGGESTIONS : ALL_HIRING_SUGGESTIONS;
+  const hasMessages = messages.length > 0;
+  const isStreaming = status === "submitted" || status === "streaming";
+
+  const composer = (
+    <div ref={composerRef}>
+      <PromptInput onSubmit={handleSubmit} accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,image/*" multiple maxFiles={5} globalDrop>
+        <PromptInputBody>
+          <PromptInputTextarea placeholder="Ask about your hiring, internships, candidates, or pipeline..." />
+        </PromptInputBody>
+        <ComposerAttachments />
+        <PromptInputFooter>
+          <PromptInputTools>
+            <PromptInputActionMenu>
+              <PromptInputActionMenuTrigger tooltip="Attach">
+                <Paperclip className="size-4" />
+              </PromptInputActionMenuTrigger>
+              <PromptInputActionMenuContent>
+                <PromptInputActionAddAttachments />
+                <PromptInputActionAddScreenshot />
+              </PromptInputActionMenuContent>
+            </PromptInputActionMenu>
+            <PromptInputSelect value={opportunityId ?? "all"} onValueChange={handleScopeChange}>
+              <PromptInputSelectTrigger className="w-auto max-w-40" aria-label="Ask about">
+                <PromptInputSelectValue />
+              </PromptInputSelectTrigger>
+              <PromptInputSelectContent>
+                <SelectGroup>
+                  {opportunityOptions.map((o) => (
+                    <PromptInputSelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </PromptInputSelectItem>
+                  ))}
+                </SelectGroup>
+              </PromptInputSelectContent>
+            </PromptInputSelect>
+          </PromptInputTools>
+          <PromptInputTools>
+            {speechSupported && (
+              <SpeechInput className="size-8" onTranscriptionChange={handleTranscript} />
+            )}
+            <PromptInputSubmit status={status} onStop={stop} />
+          </PromptInputTools>
+        </PromptInputFooter>
+      </PromptInput>
+    </div>
+  );
+
+  const suggestionRow = (
+    <Suggestions>
+      {suggestions.map((s) => (
+        <Suggestion key={s} suggestion={s} onClick={(text) => sendMessage({ text })} />
+      ))}
+    </Suggestions>
+  );
+
+  if (!hasMessages) {
+    return (
+      <div className="mx-auto flex max-w-2xl flex-col px-6 py-16">
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold tracking-tight text-navy">Ask internIn</h1>
+          <p className="mt-2 text-sm text-navy/55">Your hiring assistant for internships, candidates and pipeline insights.</p>
+        </div>
+        <div className="mt-8">{composer}</div>
+        <div className="mt-3">{suggestionRow}</div>
+        {error && <p className="mt-4 text-center text-sm text-destructive">{error.message}</p>}
+        <p className="mt-10 text-center text-[11px] text-navy/40">Assistive only — you make every hiring decision.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
-      <div className="text-center">
-        <h1 className="flex items-center justify-center gap-2 text-2xl font-semibold tracking-tight text-navy">
-          <Sparkles className="size-6 text-teal-ink" aria-hidden="true" />
-          Ask internIn
-        </h1>
-        <p className="mt-2 text-sm text-navy/55">Ask about your hiring, internships, candidates, or pipeline.</p>
+    <div className="mx-auto flex h-[calc(100dvh-13rem)] min-h-[28rem] max-w-3xl flex-col px-6 py-6">
+      <Conversation className="flex-1">
+        <ConversationContent>
+          {messages.map((message) => {
+            const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
+            const textParts = message.parts.filter((p) => p.type === "text");
+            const responseText = textParts.map((p) => p.text).join("");
+            const isLastAssistant = message.role === "assistant" && message.id === messages.at(-1)?.id;
+
+            return (
+              <Message key={message.id} from={message.role}>
+                {message.role === "user" ? (
+                  <MessageContent>{responseText}</MessageContent>
+                ) : (
+                  <MessageContent>
+                    {steps.length > 0 && (
+                      <ChainOfThought defaultOpen={false}>
+                        <ChainOfThoughtHeader />
+                        <ChainOfThoughtContent>
+                          {steps.map((step) => {
+                            const data = step.data as AssistantStepData;
+                            return (
+                              <ChainOfThoughtStep
+                                key={step.id}
+                                label={data.label}
+                                description={data.description}
+                                status={data.status}
+                              />
+                            );
+                          })}
+                        </ChainOfThoughtContent>
+                      </ChainOfThought>
+                    )}
+                    {responseText ? (
+                      <div className="typeset typeset-docs max-w-none">
+                        <MessageResponse>{responseText}</MessageResponse>
+                      </div>
+                    ) : (
+                      isLastAssistant && isStreaming && <Shimmer>Thinking…</Shimmer>
+                    )}
+                    {responseText && (
+                      <>
+                        <MessageActions>
+                          <MessageAction tooltip="Copy" onClick={() => navigator.clipboard.writeText(responseText)}>
+                            <Copy className="size-3.5" />
+                          </MessageAction>
+                          {isLastAssistant && (
+                            <MessageAction tooltip="Retry" onClick={() => regenerate()}>
+                              <RotateCcw className="size-3.5" />
+                            </MessageAction>
+                          )}
+                        </MessageActions>
+                        <div className="flex flex-wrap gap-3">
+                          {actionsFor(responseText, opportunityId).map((a) => (
+                            <Link key={a.label} href={a.href} className="flex items-center gap-1 text-xs font-medium text-teal-ink hover:underline">
+                              <a.icon className="size-3" aria-hidden="true" />
+                              {a.label}
+                            </Link>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </MessageContent>
+                )}
+              </Message>
+            );
+          })}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+
+      {error && <p className="mb-2 text-center text-sm text-destructive">{error.message}</p>}
+
+      <div className="sticky bottom-0 border-t border-navy/10 bg-white pt-3">
+        {composer}
+        <div className="mt-3">{suggestionRow}</div>
       </div>
-
-      <div className="mt-8 rounded-2xl border border-navy/10 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.05)]">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-navy/45">Ask about</span>
-          <QuerySelect param="opportunity" value={opportunityId ?? "all"} options={opportunityOptions} className="h-7 w-auto border-none bg-transparent px-1.5 text-xs font-medium text-teal-ink shadow-none hover:bg-teal/5" />
-        </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            ask(question);
-          }}
-          className="mt-2"
-        >
-          <Textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Ask about your hiring, internships, candidates, or pipeline..."
-            className="min-h-20 resize-none border-none bg-transparent p-0 text-base shadow-none focus-visible:ring-0"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                ask(question);
-              }
-            }}
-          />
-          <div className="mt-2 flex justify-end">
-            <Button type="submit" size="sm" className="gap-1.5 bg-teal text-white hover:bg-teal/90" disabled={isPending || !question.trim()}>
-              <Send className="size-3.5" aria-hidden="true" />
-              {isPending ? "Thinking…" : "Ask"}
-            </Button>
-          </div>
-        </form>
-      </div>
-
-      {turns.length === 0 && (
-        <div className="mt-5 flex flex-wrap justify-center gap-2">
-          {SUGGESTED_PROMPTS.map((p) => (
-            <button
-              key={p}
-              onClick={() => ask(p)}
-              className="rounded-full border border-navy/10 bg-white px-3.5 py-1.5 text-xs text-navy/70 hover:border-teal/30 hover:bg-teal/5 hover:text-navy"
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {error && <p className="mt-4 text-center text-sm text-red-600">{error}</p>}
-
-      {turns.length > 0 && (
-        <div className="mt-8 space-y-5">
-          {turns.map((t, i) => (
-            <div key={i} className="space-y-2">
-              <p className="text-sm font-medium text-navy">{t.question}</p>
-              <div className="typeset typeset-docs max-w-[42em] rounded-xl border border-navy/10 bg-white p-4">{t.answer}</div>
-              <div className="flex flex-wrap gap-3">
-                {actionsFor(`${t.question} ${t.answer}`, opportunityId).map((a) => (
-                  <Link key={a.label} href={a.href} className="flex items-center gap-1 text-xs font-medium text-teal-ink hover:underline">
-                    <a.icon className="size-3" aria-hidden="true" />
-                    {a.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-          {isPending && <p className="text-center text-xs text-navy/45">Thinking…</p>}
-        </div>
-      )}
-
-      <p className="mt-10 text-center text-[11px] text-navy/40">Assistive only — you make every hiring decision.</p>
     </div>
   );
 }
