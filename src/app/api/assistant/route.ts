@@ -4,6 +4,8 @@ import { requireCurrentCompanyMember } from "@/lib/auth";
 import { getModel } from "@/lib/ai/gemma-provider";
 import { buildCompanyHiringFacts, buildInternshipFacts } from "@/lib/company/internship-facts";
 import { classifyAssistantRequest } from "@/lib/ai/assistant-router";
+import { buildClarificationQuestions, resolveMissingSlots } from "@/lib/ai/clarification-engine";
+import { getRoleProfile } from "@/lib/ai/role-profiles";
 import { CHALLENGE_POLICY, attachDraftIdentity, buildDesignSummary, buildEmployerContext, generateChallengeDraftObject } from "@/lib/ai/challenge-generation";
 import { latestChallengeDraft, latestQuestionnaireAnswers, transcriptOf } from "@/lib/ai/assistant-conversation";
 import type { AssistantUIMessage } from "@/lib/ai/assistant-messages";
@@ -175,27 +177,33 @@ export async function POST(req: Request) {
       }
 
       if (decision.action === "ask_clarifying_questions") {
-        // Never a text fallback: if the router claimed clarification was
-        // needed but didn't actually produce questions in the same
-        // response, that's a real generation failure — show the same
-        // graceful "try again" every other generation failure shows,
-        // never raw prose standing in for the form.
-        if (!decision.clarificationQuestions?.length) {
-          console.error(`[assistant] requestId=${requestId} ask_clarifying_questions returned no questions at +${Date.now() - t0}ms`);
+        const normalizedRole = decision.normalizedRole ?? decision.roleSummary ?? "the described role";
+        const missingSlots = resolveMissingSlots(decision.roleConfidence, decision.missingSlots);
+
+        let questions;
+        try {
+          const profile = await getRoleProfile(normalizedRole);
+          questions = buildClarificationQuestions(missingSlots, profile);
+        } catch (error) {
+          console.error(`[assistant] requestId=${requestId} ask_clarifying_questions failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
           throw new Error("We couldn't prepare the clarification form — try again.");
         }
-        console.log(`[assistant] requestId=${requestId} ask_clarifying_questions complete at +${Date.now() - t0}ms questions=${decision.clarificationQuestions.length}`);
-        writer.write({
-          type: "data-questionnaire",
-          id: `questionnaire:${turnId}`,
-          data: {
-            intro: decision.clarificationIntro ?? "I can help with that — I just need a few details first.",
-            questions: decision.clarificationQuestions,
-          },
-        });
-        // No second model call for this sentence — the router already
-        // generated it in the same structured response above.
-        writePlainText(writer, `intro:${turnId}`, decision.clarificationIntro ?? "I can help with that — I just need a few details first.");
+
+        // Never a text fallback: if the slot pipeline genuinely produced
+        // no usable questions, that's a real failure — show the same
+        // graceful "try again" every other generation failure shows,
+        // never raw prose standing in for the form.
+        if (!questions.length) {
+          console.error(`[assistant] requestId=${requestId} ask_clarifying_questions produced no questions at +${Date.now() - t0}ms`);
+          throw new Error("We couldn't prepare the clarification form — try again.");
+        }
+        console.log(`[assistant] requestId=${requestId} ask_clarifying_questions complete at +${Date.now() - t0}ms role=${normalizedRole} questions=${questions.length}`);
+
+        const intro = `I can help you design a challenge for the ${normalizedRole} role — I just need a few details first.`;
+        writer.write({ type: "data-questionnaire", id: `questionnaire:${turnId}`, data: { intro, questions } });
+        // No model call for this sentence at all — deterministic template,
+        // instant, and the router already spent its one call on routing.
+        writePlainText(writer, `intro:${turnId}`, intro);
         return;
       }
 

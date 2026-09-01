@@ -25,8 +25,29 @@ export const ClarificationChoiceSchema = z.object({
 });
 export type ClarificationChoice = z.infer<typeof ClarificationChoiceSchema>;
 
+/** The closed, profession-agnostic "what information is missing"
+ * vocabulary — see role-profiles.ts for the full explanation. Kept as a
+ * plain string union here (not importing InformationSlotSchema) to avoid
+ * a cross-module dependency in a foundational schema file; the two must
+ * stay in sync (enforced by the shared unit tests). */
+const ClarificationSlotSchema = z.enum([
+  "candidate_level",
+  "responsibilities",
+  "tools_technologies",
+  "work_environment",
+  "expected_deliverables",
+  "access_level",
+  "restrictions",
+  "special_company_context",
+]);
+
 export const ClarificationQuestionSchema = z.object({
   id: z.string().trim().min(1).max(60),
+  /** WHAT this question is actually asking about — not just display text.
+   * Every clarification question is now built deterministically from a
+   * slot (see clarification-engine.ts); this field is what makes an
+   * answer machine-readable instead of just prose. */
+  slot: ClarificationSlotSchema,
   prompt: z.string().trim().min(4).max(200),
   description: optionalText(300),
   type: z.enum(["single", "multiple", "freeform"]),

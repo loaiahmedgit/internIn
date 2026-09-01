@@ -33,23 +33,24 @@ describe("AssistantRouterDecisionSchema", () => {
     }
   });
 
-  it("accepts clarificationIntro and clarificationQuestions in the SAME response as the action — no second call needed", () => {
+  it("accepts normalizedRole, roleConfidence, and missingSlots for ask_clarifying_questions — the model only picks slots, never writes question text/choices", () => {
     const result = AssistantRouterDecisionSchema.parse({
       action: "ask_clarifying_questions",
-      roleSummary: "An IT technician intern",
-      clarificationIntro: "I can help with that — I just need a few details first.",
-      clarificationQuestions: [
-        { id: "level", prompt: "What level of student are you targeting?", type: "single", required: false },
-        { id: "responsibilities", prompt: "What will they mainly work on?", type: "multiple", required: true },
-      ],
+      normalizedRole: "IT Technician Intern",
+      roleConfidence: "high",
+      missingSlots: ["candidate_level", "responsibilities", "tools_technologies"],
     });
-    expect(result.clarificationQuestions).toHaveLength(2);
-    expect(result.clarificationQuestions?.[1].type).toBe("multiple");
+    expect(result.missingSlots).toEqual(["candidate_level", "responsibilities", "tools_technologies"]);
   });
 
-  it("tolerates explicit null for clarificationIntro/clarificationQuestions (e.g. for a non-clarification action)", () => {
-    const result = AssistantRouterDecisionSchema.parse({ action: "chat", clarificationIntro: null, clarificationQuestions: null });
-    expect(result.clarificationIntro).toBeNull();
-    expect(result.clarificationQuestions).toBeNull();
+  it("rejects a slot outside the closed 8-value vocabulary — the model cannot invent a new kind of question", () => {
+    expect(() => AssistantRouterDecisionSchema.parse({ action: "ask_clarifying_questions", missingSlots: ["favorite_color"] })).toThrow();
+  });
+
+  it("tolerates explicit null for normalizedRole/roleConfidence/missingSlots (e.g. for a non-clarification action)", () => {
+    const result = AssistantRouterDecisionSchema.parse({ action: "chat", normalizedRole: null, roleConfidence: null, missingSlots: null });
+    expect(result.normalizedRole).toBeNull();
+    expect(result.roleConfidence).toBeNull();
+    expect(result.missingSlots).toBeNull();
   });
 });

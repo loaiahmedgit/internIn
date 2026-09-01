@@ -10,7 +10,7 @@ import { ClarificationQuestionSchema, ClarificationQuestionsResultSchema, Challe
  * both `undefined` (omitted) and an explicit `null`.
  */
 describe("ClarificationQuestionSchema — null-tolerant optional fields", () => {
-  const base = { id: "level", prompt: "What year are you targeting?", type: "single" as const, required: false };
+  const base = { id: "level", slot: "candidate_level" as const, prompt: "What year are you targeting?", type: "single" as const, required: false };
 
   it("accepts an omitted optional field", () => {
     const result = ClarificationQuestionSchema.parse(base);

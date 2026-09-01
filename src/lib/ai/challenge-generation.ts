@@ -1,14 +1,6 @@
 import { generateObject } from "ai";
 import { getModel } from "./gemma-provider";
-import {
-  ChallengeDraftGeneratedSchema,
-  ClarificationQuestionsResultSchema,
-  EmployerContextSchema,
-  type ChallengeDraft,
-  type ChallengeDraftGenerated,
-  type ClarificationQuestionsResult,
-  type EmployerContext,
-} from "./challenge-clarification-schemas";
+import { ChallengeDraftGeneratedSchema, EmployerContextSchema, type ChallengeDraft, type ChallengeDraftGenerated, type EmployerContext } from "./challenge-clarification-schemas";
 import type { QuestionnaireAnswer } from "./assistant-messages";
 
 /**
@@ -44,23 +36,6 @@ For safety-sensitive professions (healthcare, pharmacy, legal, cybersecurity, en
 
 Rubric criteria must be observable and job-relevant (e.g. "SQL correctness — 30%"), never vague or unrelated to the defined task (never "culture fit", "confidence", appearance, or any protected/personal characteristic). Difficulty should match the specified candidate level, not a seasoned professional, unless told otherwise.`;
 
-export const CLARIFICATION_POLICY = `Establish, in priority order, only what's actually missing:
-1. Candidate level / expected experience (e.g. year of study, junior vs. more advanced).
-2. Main responsibilities / work area — what they'll actually spend time on.
-3. Tools / environment, when the choice would change the task (e.g. which database, which stack).
-4. Real constraints or supervisor-only responsibilities, when relevant (e.g. things they must NOT do unsupervised).
-
-Skip anything already given. Never ask more than needed to cover what's missing — 2-4 questions, not one per topic out of habit.
-
-Ask questions the employer can realistically answer about THEIR role, never questions that ask them to design the assessment for you (bad: "What exact realistic task should we give them?" — deciding that is internIn's job, not theirs).
-
-Choose each question's type from its own semantics, never default to "single":
-- A single primary target (e.g. "What level of student are you targeting?") -> "single".
-- Several things can genuinely apply at once (e.g. "What will they spend most of their time doing?", "Which databases/tools will they work with?") -> "multiple". A database intern can write SQL AND clean data AND maintain schemas at the same time — forcing one answer there is wrong.
-- An unpredictable or open detail (e.g. "Anything unusual about the work we should account for?") -> "freeform", and mark it optional (required: false).
-
-For a "multiple" question about tools/technologies, offer "Other" and, when genuinely uncertain fits, a "Not sure yet" choice. Mark a question required only when the challenge genuinely cannot be designed without it — most should be optional (required: false) so the employer can skip anything they're unsure of.`;
-
 /** One human-readable line per answer, "(not specified — use your best
  * professional judgment)" for a skipped optional question — never the
  * literal string "(skipped)" fed to the model as if it were real data. */
@@ -88,30 +63,6 @@ export async function buildEmployerContext(params: { originalRequest: string; tr
       system: `Extract a factual, structured record of an internship role from a hiring conversation. Report ONLY what was actually said or selected — an empty array means "not specified", never a guess. Do not invent a responsibility, tool, or restriction that wasn't mentioned.`,
       prompt: `Original request: ${originalRequest}${answersBlock}\n\nFull conversation:\n${transcript}`,
       abortSignal: AbortSignal.timeout(CONTEXT_TIMEOUT_MS),
-    });
-    return object;
-  });
-}
-
-const CLARIFICATION_TIMEOUT_MS = 30_000;
-const CLARIFICATION_ATTEMPTS = [{}, {}] as const;
-
-/**
- * Generates the 2-4 clarification questions for a vague role description.
- * Two independent attempts at a moderate timeout (was one 60s attempt) —
- * this schema is small and has historically finished in a few seconds, so
- * a bad draw here is exactly the kind of hang a fresh retry recovers from
- * faster than a longer wait would.
- */
-export async function generateClarificationQuestions(params: { roleSummary: string; transcript: string }): Promise<ClarificationQuestionsResult> {
-  const { roleSummary, transcript } = params;
-  return withGenerateRetries("generateClarificationQuestions", CLARIFICATION_ATTEMPTS, async () => {
-    const { object } = await generateObject({
-      model: getModel(),
-      schema: ClarificationQuestionsResultSchema,
-      system: `You write short, plain-language clarification questions for a hiring manager who wants an internship work challenge designed. ${CLARIFICATION_POLICY} Avoid HR jargon (say "What will they spend most of their time doing?", never "Select the primary competency domain").`,
-      prompt: `Internship role so far: ${roleSummary}\n\nFull conversation:\n${transcript}`,
-      abortSignal: AbortSignal.timeout(CLARIFICATION_TIMEOUT_MS),
     });
     return object;
   });
