@@ -3,6 +3,8 @@ import { eq, and, desc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { CreateInternshipWizard } from "@/components/opportunities/create-internship-wizard";
+import { OpportunityDraftReview } from "@/components/opportunities/opportunity-draft-review";
+import { isUnsetDuration, isUnsetLocation, isUnsetHoursPerWeek } from "@/lib/opportunities/opportunity-draft-sentinels";
 import type { Challenge, InternshipDraft } from "@/lib/ai";
 
 /**
@@ -14,7 +16,7 @@ import type { Challenge, InternshipDraft } from "@/lib/ai";
  */
 export default async function ResumeOpportunitySetupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { membership } = await requireCurrentCompanyMember();
+  const { membership, company } = await requireCurrentCompanyMember();
   const db = getDb();
 
   const [opportunity] = await db
@@ -69,10 +71,36 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
     }
   }
 
-  // A real challenge already exists — nothing left to set up here (editing
-  // one isn't this wizard's job), send them to the real management page.
-  if (challenge) {
+  // A real challenge already exists on an already-published internship —
+  // nothing left to set up here, send them to the real management page.
+  // A DRAFT opportunity with a challenge attached, though, is exactly the
+  // "generated from Ask internIn, not yet published" state — show the
+  // compact review-before-publish screen instead of redirecting away.
+  if (challenge && opportunity.status !== "draft") {
     redirect(`/company/opportunities/${id}`);
+  }
+
+  if (challenge) {
+    return (
+      <OpportunityDraftReview
+        opportunityId={id}
+        companyName={company.name}
+        role={opportunity.role}
+        shortDescription={opportunity.shortDescription}
+        description={opportunity.description}
+        whatYouWillLearn={opportunity.whatYouWillLearn}
+        requirements={opportunity.requirements}
+        niceToHave={opportunity.niceToHave}
+        challengeSummary={{ title: challenge.title, taskCount: challenge.tasks.length, estimatedMinutes: challenge.estimatedMinutes }}
+        initialLocation={isUnsetLocation(opportunity.location) ? "" : opportunity.location}
+        initialDuration={isUnsetDuration(opportunity.duration) ? "" : opportunity.duration}
+        initialHoursPerWeek={isUnsetHoursPerWeek(opportunity.hoursPerWeek) ? null : opportunity.hoursPerWeek}
+        initialWorkMode={opportunity.workMode}
+        initialApplicationDeadline={opportunity.applicationDeadline}
+        initialStartDate={opportunity.startDate}
+        initialSlots={opportunity.slots}
+      />
+    );
   }
 
   return <CreateInternshipWizard initial={{ opportunityId: id, internship, challenge }} />;

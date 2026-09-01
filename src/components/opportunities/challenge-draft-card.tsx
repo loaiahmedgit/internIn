@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
+  ArrowLeft,
   File,
   FileArchive,
   FileCode,
@@ -17,6 +19,10 @@ import {
 } from "lucide-react";
 import { type ChallengeDraft, type ChallengeDraftMaterial } from "@/lib/ai/challenge-clarification-schemas";
 import { saveChallengeDraftAction } from "@/lib/opportunities/challenge-draft-actions";
+import {
+  createOpportunityFromChallengeDraftAction,
+  listAttachableOpportunitiesAction,
+} from "@/lib/opportunities/opportunity-from-challenge-actions";
 import { ChallengeDraftEditForm } from "@/components/opportunities/challenge-draft-edit-form";
 
 /** Icon by material type/filename — CSV/XLSX, PDF/DOCX, images,
@@ -79,6 +85,7 @@ export function ChallengeDraftCard({
    * internship — only after the confirm dialog below. */
   onStartOver: () => void;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isEditing, setIsEditing] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
@@ -86,6 +93,21 @@ export function ChallengeDraftCard({
   const [startOverOpen, setStartOverOpen] = useState(false);
   const [saved, setSaved] = useState<{ opportunityId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // The "no internship yet" dialog has three steps: the initial choice,
+  // the existing-internships list, and a confirm step before attaching —
+  // never a silent attach, per the same "no write before confirmation"
+  // rule as the existing-internship Approve & attach dialog above.
+  const [pickerStep, setPickerStep] = useState<"choose" | "list" | "confirm">("choose");
+  const [attachable, setAttachable] = useState<{ id: string; role: string; status: "draft" | "published" }[] | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<{ id: string; role: string } | null>(null);
+
+  function resetPicker() {
+    setPickerStep("choose");
+    setAttachable(null);
+    setSelectedTarget(null);
+    setError(null);
+  }
 
   function handleApprove() {
     if (!opportunityId) return;
@@ -97,6 +119,52 @@ export function ChallengeDraftCard({
         setApproveOpen(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't save this challenge — try again.");
+      }
+    });
+  }
+
+  /** "Create internship from this draft" — generates a real, pre-filled
+   * internship draft from THIS SAME ChallengeDraft (no re-running the
+   * assistant router, no re-asking clarification questions, no second
+   * draft) and lands on its review-before-publish screen. Never the empty
+   * manual /opportunities/new form. */
+  function handleCreateFromDraft() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const { opportunityId: newOpportunityId } = await createOpportunityFromChallengeDraftAction(draft);
+        setChooseInternshipOpen(false);
+        router.push(`/company/opportunities/${newOpportunityId}/setup`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't create the internship draft — try again.");
+      }
+    });
+  }
+
+  function handleShowExistingInternships() {
+    setError(null);
+    setPickerStep("list");
+    startTransition(async () => {
+      try {
+        const rows = await listAttachableOpportunitiesAction();
+        setAttachable(rows);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't load your internships — try again.");
+        setPickerStep("choose");
+      }
+    });
+  }
+
+  function handleConfirmAttachExisting() {
+    if (!selectedTarget) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await saveChallengeDraftAction(selectedTarget.id, draft);
+        setChooseInternshipOpen(false);
+        router.push(`/company/opportunities/${selectedTarget.id}/setup`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't attach the challenge — try again.");
       }
     });
   }
@@ -287,21 +355,86 @@ export function ChallengeDraftCard({
       </Dialog>
 
       {/* Approve & attach — no internship yet: ask which way to go, never
-          silently publish. */}
-      <Dialog open={chooseInternshipOpen} onOpenChange={setChooseInternshipOpen}>
+          silently publish. Three steps: choose, pick an existing
+          internship, confirm — never an instant attach. */}
+      <Dialog
+        open={chooseInternshipOpen}
+        onOpenChange={(open) => {
+          setChooseInternshipOpen(open);
+          if (!open) resetPicker();
+        }}
+      >
         <DialogContent className="not-typeset">
-          <DialogHeader>
-            <DialogTitle>Attach this challenge to an internship</DialogTitle>
-            <DialogDescription>This draft isn&apos;t attached to an internship yet.</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2">
-            <Link href="/company/internships">
-              <Button variant="outline" className="w-full justify-start">Attach to an existing internship</Button>
-            </Link>
-            <Link href="/company/opportunities/new">
-              <Button className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90">Create internship from this draft</Button>
-            </Link>
-          </div>
+          {pickerStep === "choose" && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Attach this challenge to an internship</DialogTitle>
+                <DialogDescription>This draft isn&apos;t attached to an internship yet.</DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-2">
+                <Button variant="outline" className="w-full justify-start" disabled={isPending} onClick={handleShowExistingInternships}>
+                  Attach to an existing internship
+                </Button>
+                <Button className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90" disabled={isPending} onClick={handleCreateFromDraft}>
+                  {isPending ? "Preparing internship draft…" : "Create internship from this draft"}
+                </Button>
+              </div>
+            </>
+          )}
+
+          {pickerStep === "list" && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Choose an internship</DialogTitle>
+                <DialogDescription>Attach &quot;{draft.title}&quot; to one of your existing internships.</DialogDescription>
+              </DialogHeader>
+              {attachable === null ? (
+                <p className="py-4 text-sm text-muted-foreground">Loading your internships…</p>
+              ) : attachable.length === 0 ? (
+                <p className="py-4 text-sm text-muted-foreground">You don&apos;t have any draft or open internships yet.</p>
+              ) : (
+                <ul className="max-h-72 space-y-1 overflow-y-auto">
+                  {attachable.map((o) => (
+                    <li key={o.id}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-muted"
+                        onClick={() => {
+                          setSelectedTarget({ id: o.id, role: o.role });
+                          setPickerStep("confirm");
+                        }}
+                      >
+                        <span className="font-medium text-foreground">{o.role}</span>
+                        <Badge variant="secondary" className="font-normal capitalize">{o.status}</Badge>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <DialogFooter>
+                <Button variant="ghost" size="sm" onClick={() => setPickerStep("choose")}>
+                  <ArrowLeft className="size-3.5" /> Back
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {pickerStep === "confirm" && selectedTarget && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Attach &quot;{draft.title}&quot; to &quot;{selectedTarget.role}&quot;?</DialogTitle>
+                <DialogDescription>This replaces any existing challenge draft on that internship — it won&apos;t create a duplicate.</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPickerStep("list")}>Cancel</Button>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={isPending} onClick={handleConfirmAttachExisting}>
+                  {isPending ? "Attaching…" : "Attach challenge"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </DialogContent>
       </Dialog>
 
