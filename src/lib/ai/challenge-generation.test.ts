@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { attachDraftIdentity, buildDesignSummary, formatQuestionnaireAnswers } from "./challenge-generation";
-import type { ChallengeDraft, ChallengeDraftGenerated } from "./challenge-clarification-schemas";
+import { attachDraftIdentity, buildDesignSummary, formatQuestionnaireAnswers, normalizeRubricWeights } from "./challenge-generation";
+import { ChallengeDraftGeneratedSchema, ChallengeDraftSchema, type ChallengeDraft, type ChallengeDraftGenerated } from "./challenge-clarification-schemas";
+import { mapChallengeDraftToChallenge } from "@/lib/opportunities/challenge-draft-mapping";
+import { ChallengeSchema } from "@/lib/ai/schemas";
 import type { QuestionnaireAnswer } from "./assistant-messages";
 
 function draft(overrides: Partial<ChallengeDraftGenerated> = {}): ChallengeDraftGenerated {
@@ -81,5 +83,91 @@ describe("attachDraftIdentity", () => {
     expect(result.tasks.every((t) => Boolean(t.id))).toBe(true);
     expect(result.materials.every((m) => Boolean(m.id))).toBe(true);
     expect(result.rubric.every((r) => Boolean(r.id))).toBe(true);
+  });
+});
+
+describe("normalizeRubricWeights", () => {
+  it("leaves a rubric that already sums to 100 untouched", () => {
+    const rubric = [{ criterion: "A", weight: 60 }, { criterion: "B", weight: 40 }];
+    expect(normalizeRubricWeights(rubric)).toEqual(rubric);
+  });
+
+  it("rescales a rubric that doesn't sum to 100, exactly to 100", () => {
+    const rubric = [{ criterion: "A", weight: 30 }, { criterion: "B", weight: 30 }, { criterion: "C", weight: 30 }]; // sums to 90
+    const normalized = normalizeRubricWeights(rubric);
+    expect(normalized.reduce((sum, r) => sum + r.weight, 0)).toBe(100);
+  });
+
+  it("puts any rounding remainder on the heaviest criterion, never a fractional weight", () => {
+    const rubric = [{ criterion: "A", weight: 33 }, { criterion: "B", weight: 33 }, { criterion: "C", weight: 33 }]; // sums to 99
+    const normalized = normalizeRubricWeights(rubric);
+    expect(normalized.every((r) => Number.isInteger(r.weight))).toBe(true);
+    expect(normalized.reduce((sum, r) => sum + r.weight, 0)).toBe(100);
+  });
+
+  it("leaves an empty rubric alone rather than dividing by zero", () => {
+    expect(normalizeRubricWeights([])).toEqual([]);
+  });
+});
+
+describe("end-to-end: generated output -> schema validation -> ChallengeDraft -> mapping (Part 15)", () => {
+  function generated(overrides: Partial<ChallengeDraftGenerated> = {}): ChallengeDraftGenerated {
+    return {
+      role: "IT Technician Intern",
+      title: "New Hire Onboarding & Troubleshooting",
+      scenario: "A fictional company is onboarding new hires who need workstation setup and IT support.",
+      skills: ["Hardware setup", "Troubleshooting"],
+      tasks: [
+        { title: "Set up workstation", instructions: "Unbox and configure a new laptop.", deliverableType: "written" },
+        { title: "Resolve a ticket", instructions: "Diagnose a login issue.", deliverableType: "written" },
+      ],
+      materials: [],
+      durationMinutes: 60,
+      rubric: [
+        { criterion: "Accuracy", weight: 50, description: "Steps followed correctly." },
+        { criterion: "Communication", weight: 50, description: "Clear documentation." },
+      ],
+      assumptions: [],
+      safetyNotes: [],
+      ...overrides,
+    };
+  }
+
+  it("a normal generation with a 100% rubric passes through schema validation, mapping, and the real live ChallengeSchema untouched", () => {
+    const parsed = ChallengeDraftGeneratedSchema.parse(generated());
+    const withIdentity = attachDraftIdentity(parsed, null);
+    expect(() => ChallengeDraftSchema.parse(withIdentity)).not.toThrow();
+    const mapped = mapChallengeDraftToChallenge(withIdentity);
+    expect(() => ChallengeSchema.parse(mapped)).not.toThrow();
+  });
+
+  it("a non-100% rubric is normalized before it ever reaches the schema/renderer boundary", () => {
+    const withBadRubric = generated({ rubric: [{ criterion: "Accuracy", weight: 30, description: "x" }, { criterion: "Speed", weight: 30, description: "y" }] });
+    const parsed = ChallengeDraftGeneratedSchema.parse(withBadRubric);
+    const normalizedRubric = normalizeRubricWeights(parsed.rubric);
+    const withIdentity = attachDraftIdentity({ ...parsed, rubric: normalizedRubric }, null);
+    expect(withIdentity.rubric.reduce((sum, r) => sum + r.weight, 0)).toBe(100);
+  });
+
+  it("an unknown but benign deliverableType alias maps to 'other' and still validates end to end", () => {
+    const withAlias = { ...generated(), tasks: [{ title: "Export a sheet", instructions: "Export the ticket log.", deliverableType: "excel" }] };
+    const parsed = ChallengeDraftGeneratedSchema.parse(withAlias);
+    expect(parsed.tasks[0].deliverableType).toBe("other");
+    const withIdentity = attachDraftIdentity(parsed, null);
+    expect(() => ChallengeSchema.parse(mapChallengeDraftToChallenge(withIdentity))).not.toThrow();
+  });
+
+  it("omitted materials/assumptions/safetyNotes default cleanly and still produce a valid, renderable draft", () => {
+    const parsed = ChallengeDraftGeneratedSchema.parse({ ...generated(), materials: undefined, assumptions: undefined, safetyNotes: undefined });
+    const withIdentity = attachDraftIdentity(parsed, null);
+    expect(withIdentity.materials).toEqual([]);
+    expect(() => ChallengeSchema.parse(mapChallengeDraftToChallenge(withIdentity))).not.toThrow();
+  });
+
+  it("a revision keeps the SAME draft id all the way through mapping", () => {
+    const first = attachDraftIdentity(ChallengeDraftGeneratedSchema.parse(generated()), null);
+    const revised = attachDraftIdentity(ChallengeDraftGeneratedSchema.parse(generated({ durationMinutes: 45 })), first as ChallengeDraft);
+    expect(revised.id).toBe(first.id);
+    expect(revised.durationMinutes).toBe(45);
   });
 });

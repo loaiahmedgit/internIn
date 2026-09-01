@@ -3,6 +3,32 @@ import { getModel } from "./gemma-provider";
 import { ChallengeDraftGeneratedSchema, EmployerContextSchema, type ChallengeDraft, type ChallengeDraftGenerated, type EmployerContext } from "./challenge-clarification-schemas";
 import type { QuestionnaireAnswer } from "./assistant-messages";
 
+// Split ChallengeDraftGeneratedSchema into two independently-generated
+// halves — a real, isolated finding, not a guess: a small flat schema
+// (role/title/scenario/skills) succeeded reliably in every test (~10-30s);
+// the SAME context with the full 7-field schema (adding tasks/materials/
+// rubric) hung to its full timeout repeatedly. A follow-up test showed
+// this isn't one single deterministic trigger (a minimal tasks-only
+// schema also succeeded fast on its own) — the pattern is PROBABILISTIC
+// reliability that degrades with overall combined schema size/field
+// count, not one specific field. Splitting into two smaller, focused
+// calls run in parallel directly exploits the one thing every test
+// agreed on: small, focused schemas are far more reliable than one large
+// combined one, and running them concurrently keeps total wall time to
+// roughly the slower of the two instead of their sum.
+const ChallengeDraftCoreSchema = ChallengeDraftGeneratedSchema.pick({
+  role: true,
+  title: true,
+  scenario: true,
+  skills: true,
+  durationMinutes: true,
+  aiUsagePolicyMode: true,
+  aiUsagePolicyCustomText: true,
+  assumptions: true,
+  safetyNotes: true,
+});
+const ChallengeDraftDetailsSchema = ChallengeDraftGeneratedSchema.pick({ tasks: true, materials: true, rubric: true });
+
 /**
  * Runs `run` up to `attempts.length` times, returning the first success.
  * Real, logged timings per attempt — this model has shown genuine
@@ -82,22 +108,14 @@ export function buildDesignSummary(draft: ChallengeDraftGenerated): string[] {
   return lines;
 }
 
-// This model is genuinely flaky for this task — real diagnostic runs
-// showed successful generations reliably finishing in well under 80s
-// (39-58s observed), while unlucky draws don't just run *long*, they hang
-// or degenerate into repeated filler indefinitely (one test ran past 400s
-// with no timeout at all and never finished). A longer per-attempt wait
-// doesn't rescue a hung draw — a FRESH one does. So: several independent
-// attempts at a moderate timeout, not fewer attempts with more patience.
-const ATTEMPT_TIMEOUT_MS = 75_000;
-const ATTEMPTS = [
+// Smaller schema, smaller timeout: every isolated test of a schema this
+// size succeeded in well under 30s. 2 attempts, not 3 — a focused schema
+// either works quickly or it doesn't; a third attempt at the same size
+// wasn't earning its wait in testing.
+const PART_TIMEOUT_MS = 35_000;
+const PART_ATTEMPTS = [
   { temperature: 0.5, extraInstruction: "" },
-  { temperature: 0.35, extraInstruction: "\n\nBe concise — a few sentences per field is enough." },
-  {
-    temperature: 0.15,
-    extraInstruction:
-      "\n\nIMPORTANT: previous attempts did not finish in time. Be significantly more concise: shorter scenario, shorter task instructions, fewer materials, and never repeat a sentence or phrase.",
-  },
+  { temperature: 0.3, extraInstruction: "\n\nBe concise — a sentence or two per field is enough." },
 ] as const;
 
 // Kept short and positively-phrased on purpose: an earlier, more elaborate
@@ -121,12 +139,12 @@ function contextBlockFrom(context: EmployerContext): string {
 
 /**
  * Generates (or revises) a ChallengeDraft from the canonical EmployerContext
- * — never from a re-serialized chat transcript. One automatic retry at a
- * lower temperature with an explicit "be more concise" nudge on failure
- * (the real, observed failure mode is the model hitting its output-token
- * ceiling mid-JSON). Returns the model's validated output only; id/status
- * assignment is attachDraftIdentity's job, kept separate so a control
- * field is never something the model influences.
+ * — never from a re-serialized chat transcript. Runs as TWO smaller,
+ * focused generateObject calls IN PARALLEL (see the schema-split comment
+ * above) instead of one large combined call — total wall time is roughly
+ * the slower of the two, not their sum. Returns the model's validated
+ * output only; id/status assignment is attachDraftIdentity's job, kept
+ * separate so a control field is never something the model influences.
  */
 export async function generateChallengeDraftObject(params: {
   context: EmployerContext;
@@ -135,20 +153,59 @@ export async function generateChallengeDraftObject(params: {
 }): Promise<ChallengeDraftGenerated> {
   const { context, existingDraft, revisionInstruction } = params;
   const basePrompt = existingDraft
-    ? `${contextBlockFrom(context)}\n\nCurrent draft (JSON):\n${JSON.stringify(existingDraft)}\n\nThe employer's revision instruction: ${revisionInstruction}\n\nReturn the FULL updated draft (not a diff), reusing everything the employer didn't ask to change.`
+    ? `${contextBlockFrom(context)}\n\nCurrent draft (JSON):\n${JSON.stringify(existingDraft)}\n\nThe employer's revision instruction: ${revisionInstruction}\n\nReturn the FULL updated value for your part (not a diff), reusing everything the employer didn't ask to change.`
     : `${contextBlockFrom(context)}\n\nDesign a new challenge draft for this role.`;
 
-  return withGenerateRetries("generateChallengeDraftObject", ATTEMPTS, async (attempt) => {
-    const { object } = await generateObject({
-      model: getModel(),
-      schema: ChallengeDraftGeneratedSchema,
-      system: `${CHALLENGE_POLICY}\n\nKeep every field concise — a few sentences at most — so the whole object fits comfortably; never pad or repeat text.`,
-      prompt: basePrompt + attempt.extraInstruction,
-      temperature: attempt.temperature,
-      abortSignal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
-    });
-    return object;
-  });
+  const [core, details] = await Promise.all([
+    withGenerateRetries("generateChallengeDraftObject:core", PART_ATTEMPTS, async (attempt) => {
+      const { object } = await generateObject({
+        model: getModel(),
+        schema: ChallengeDraftCoreSchema,
+        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the role, title, scenario, skills, duration, AI usage policy, assumptions, and safety notes — not tasks/materials/rubric, those come from a separate step. Keep every field concise.`,
+        prompt: basePrompt + attempt.extraInstruction,
+        temperature: attempt.temperature,
+        maxOutputTokens: 1500,
+        abortSignal: AbortSignal.timeout(PART_TIMEOUT_MS),
+      });
+      return object;
+    }),
+    withGenerateRetries("generateChallengeDraftObject:details", PART_ATTEMPTS, async (attempt) => {
+      const { object } = await generateObject({
+        model: getModel(),
+        schema: ChallengeDraftDetailsSchema,
+        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the tasks, materials, and evaluation rubric — not the title/scenario/skills, those come from a separate step. Keep every field concise — a sentence or two at most.`,
+        prompt: basePrompt + attempt.extraInstruction,
+        temperature: attempt.temperature,
+        maxOutputTokens: 3000,
+        abortSignal: AbortSignal.timeout(PART_TIMEOUT_MS),
+      });
+      return object;
+    }),
+  ]);
+
+  return { ...core, rubric: normalizeRubricWeights(details.rubric), tasks: details.tasks, materials: details.materials };
+}
+
+/**
+ * Rescales rubric weights to sum to exactly 100 when the model's arithmetic
+ * comes out slightly off — a deterministic repair, not a reason to throw
+ * away an otherwise-good challenge (Part 7: "do not rely purely on the
+ * model to get arithmetic perfect... normalize or validate
+ * deterministically"). Any leftover rounding remainder goes to the
+ * heaviest criterion, so the total is exact without a fractional weight
+ * anywhere.
+ */
+export function normalizeRubricWeights<T extends { weight: number }>(rubric: T[]): T[] {
+  const total = rubric.reduce((sum, r) => sum + r.weight, 0);
+  if (rubric.length === 0 || total === 100 || total === 0) return rubric;
+
+  const scaled = rubric.map((r) => ({ ...r, weight: Math.round((r.weight / total) * 100) }));
+  const remainder = 100 - scaled.reduce((sum, r) => sum + r.weight, 0);
+  if (remainder !== 0) {
+    const heaviestIndex = scaled.reduce((best, r, i) => (r.weight > scaled[best].weight ? i : best), 0);
+    scaled[heaviestIndex] = { ...scaled[heaviestIndex], weight: scaled[heaviestIndex].weight + remainder };
+  }
+  return scaled;
 }
 
 /** Attaches the control fields the model never touches. Reuses the

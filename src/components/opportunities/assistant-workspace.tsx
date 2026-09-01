@@ -5,9 +5,10 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { Paperclip, Copy, RotateCcw, Users, FileText, PenSquare, BarChart3, Briefcase } from "lucide-react";
+import { Paperclip, Copy, RotateCcw, Users, FileText, PenSquare, BarChart3, Briefcase, AlertCircle } from "lucide-react";
 
 import { CompanyPageContainer } from "@/components/company/page-shell";
+import { Button } from "@/components/ui/button";
 import { SelectGroup } from "@/components/ui/select";
 import {
   PromptInput,
@@ -326,6 +327,10 @@ export function AssistantWorkspace({
               (p): p is Extract<typeof p, { type: "data-designSummary" }> & { id: string } =>
                 p.type === "data-designSummary" && typeof p.id === "string",
             );
+            const generationError = message.parts.findLast(
+              (p): p is Extract<typeof p, { type: "data-generationError" }> & { id: string } =>
+                p.type === "data-generationError" && typeof p.id === "string",
+            );
             const textParts = message.parts.filter((p) => p.type === "text");
             const responseText = textParts.map((p) => p.text).join("");
             const progress = message.parts.findLast((p): p is Extract<typeof p, { type: "data-progress" }> => p.type === "data-progress");
@@ -372,7 +377,8 @@ export function AssistantWorkspace({
                     {isLastAssistant &&
                       isStreaming &&
                       !questionnaire &&
-                      !challengeDraft && <Shimmer>{progress?.data.label ?? "Thinking…"}</Shimmer>}
+                      !challengeDraft &&
+                      !generationError && <Shimmer>{progress?.data.label ?? "Thinking…"}</Shimmer>}
 
                     {questionnaire && (
                       <AskInternInQuestionnaire
@@ -415,6 +421,26 @@ export function AssistantWorkspace({
                         onRequestAiEdit={(instruction) => sendMessage({ text: instruction })}
                         onManualSave={(next) => handleManualDraftSave(message.id, challengeDraft.id, next)}
                       />
+                    )}
+
+                    {generationError && (
+                      // Rendered where the draft would have appeared, not
+                      // a generic red line near the composer. "Try again"
+                      // calls regenerate() — that re-sends this SAME
+                      // message (still carrying its original
+                      // questionnaire-answer metadata, if any), so the
+                      // questionnaire is never re-asked and no context is
+                      // lost.
+                      <div className="not-typeset flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4">
+                        <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <p className="text-sm font-medium text-navy">Challenge generation failed</p>
+                          <p className="text-sm text-navy/70">{generationError.data.message}</p>
+                          <Button size="sm" variant="outline" onClick={() => regenerate()} disabled={isStreaming}>
+                            <RotateCcw className="size-3.5" /> Try again
+                          </Button>
+                        </div>
+                      </div>
                     )}
                     {responseText && (
                       <>

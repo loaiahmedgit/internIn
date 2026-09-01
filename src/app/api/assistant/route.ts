@@ -103,7 +103,14 @@ export async function POST(req: Request) {
           draft = attachDraftIdentity(generated, existingDraft);
         } catch (error) {
           console.error(`[assistant] requestId=${requestId} generationId=${generationId} generation failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
-          throw new Error("We couldn't finish generating the challenge. Your answers are saved — try again.");
+          // Real message state, not a thrown stream error — lets the UI
+          // render a proper inline "try again" card where the draft would
+          // have appeared. clicking Try again calls regenerate(), which
+          // re-sends this SAME message (still carrying the original
+          // questionnaire answers in its metadata) — the questionnaire is
+          // never re-asked.
+          writer.write({ type: "data-generationError", id: `error:${turnId}`, data: { message: "We couldn't finish generating the challenge. Your answers are saved — try again." } });
+          return;
         }
 
         writer.write({ type: "data-designSummary", id: `designSummary:${turnId}`, data: { lines: buildDesignSummary(draft) } });
@@ -219,7 +226,8 @@ export async function POST(req: Request) {
         draft = attachDraftIdentity(generated, existingDraft);
       } catch (error) {
         console.error(`[assistant] requestId=${requestId} generationId=${generationId} generation failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
-        throw new Error("We couldn't finish generating the challenge — try again.");
+        writer.write({ type: "data-generationError", id: `error:${turnId}`, data: { message: "We couldn't finish generating the challenge — try again." } });
+        return;
       }
 
       writer.write({ type: "data-designSummary", id: `designSummary:${turnId}`, data: { lines: buildDesignSummary(draft) } });

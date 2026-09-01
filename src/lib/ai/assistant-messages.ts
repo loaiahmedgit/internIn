@@ -34,6 +34,17 @@ export interface ProgressData {
   label: string;
 }
 
+/** A challenge-generation failure represented as real message state, not
+ * a thrown stream error — lets the UI render a proper inline card where
+ * the draft would have appeared ("Challenge generation failed... Try
+ * again") instead of a generic red line near the composer. Clicking
+ * "Try again" calls regenerate(), which re-sends the SAME triggering
+ * message (still carrying its original questionnaire-answer metadata,
+ * if any) — the questionnaire is never re-asked and no context is lost. */
+export interface GenerationErrorData {
+  message: string;
+}
+
 /** One clarification question's answer, as submitted by the real shadcn
  * Questionnaire — never serialized into a giant chat-bubble string. A
  * `null` answer means the (optional) question was skipped; the app never
@@ -68,5 +79,6 @@ export type AssistantUIMessage = UIMessage<
     challengeDraft: ChallengeDraft;
     designSummary: DesignSummaryData;
     progress: ProgressData;
+    generationError: GenerationErrorData;
   }
 >;

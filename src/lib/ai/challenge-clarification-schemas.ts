@@ -131,7 +131,11 @@ export const DELIVERABLE_TYPE_LABEL: Record<ChallengeTaskDeliverableType, string
 const GeneratedTaskSchema = z.object({
   title: z.string().trim().min(1).max(160),
   instructions: z.string().trim().min(1).max(2000),
-  deliverableType: ChallengeTaskDeliverableTypeSchema,
+  // `.catch("other")`, not a bare enum: an unrecognized value here (the
+  // model writing "excel" instead of "spreadsheet", say) must not throw
+  // away an otherwise-good task — it degrades to "other" instead of
+  // failing the whole generation.
+  deliverableType: ChallengeTaskDeliverableTypeSchema.catch("other"),
 });
 
 const GeneratedMaterialSchema = z.object({
@@ -180,15 +184,18 @@ export const ChallengeDraftGeneratedSchema = z.object({
   scenario: z.string().trim().min(20).max(3000),
   skills: z.array(z.string().trim().min(1).max(80)).min(1).max(10),
   tasks: z.array(GeneratedTaskSchema).min(1).max(10),
-  materials: z.array(GeneratedMaterialSchema).max(10),
+  // `.default([])`, not a bare required array: the model omitting a
+  // genuinely nonessential field (no materials needed for this role, no
+  // real safety concern to flag) must not fail the whole generation.
+  // Input stays optional; the OUTPUT type is still always a real array —
+  // no consuming code needs an undefined-check either way.
+  materials: z.array(GeneratedMaterialSchema).max(10).default([]),
   durationMinutes: z.number().int().min(10).max(480).nullable().optional(),
   rubric: z.array(GeneratedRubricCriterionSchema).min(1).max(8),
   aiUsagePolicyMode: ChallengeAiUsagePolicyModeSchema.nullable().optional(),
   aiUsagePolicyCustomText: optionalText(300),
-  /** Always present as an array — empty means none, never omitted/null,
-   * so consuming code never needs a null-check for these two. */
-  assumptions: z.array(z.string().trim().min(1).max(300)).max(6),
-  safetyNotes: z.array(z.string().trim().min(1).max(300)).max(6),
+  assumptions: z.array(z.string().trim().min(1).max(300)).max(6).default([]),
+  safetyNotes: z.array(z.string().trim().min(1).max(300)).max(6).default([]),
 });
 export type ChallengeDraftGenerated = z.infer<typeof ChallengeDraftGeneratedSchema>;
 

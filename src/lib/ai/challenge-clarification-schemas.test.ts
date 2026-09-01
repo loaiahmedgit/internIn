@@ -64,8 +64,17 @@ describe("ChallengeDraftGeneratedSchema — the shape the model actually outputs
     expect(() => ChallengeDraftGeneratedSchema.parse(generatedDraft())).not.toThrow();
   });
 
-  it("requires assumptions/safetyNotes to be arrays (empty is fine, but never optional/null — no null-tolerance headache needed for these two)", () => {
-    expect(() => ChallengeDraftGeneratedSchema.parse({ ...generatedDraft(), assumptions: undefined })).toThrow();
+  it("defaults materials/assumptions/safetyNotes to an empty array when the model omits them — never fails generation over a nonessential field", () => {
+    const result = ChallengeDraftGeneratedSchema.parse({ ...generatedDraft(), materials: undefined, assumptions: undefined, safetyNotes: undefined });
+    expect(result.materials).toEqual([]);
+    expect(result.assumptions).toEqual([]);
+    expect(result.safetyNotes).toEqual([]);
+  });
+
+  it("degrades an unrecognized deliverableType to 'other' instead of failing the whole generation", () => {
+    const draft = generatedDraft();
+    const result = ChallengeDraftGeneratedSchema.parse({ ...draft, tasks: [{ ...draft.tasks[0], deliverableType: "excel" }] });
+    expect(result.tasks[0].deliverableType).toBe("other");
   });
 
   it("does not constrain free-text content like a database vendor name to any enum — 'Oracle' is just prose", () => {
