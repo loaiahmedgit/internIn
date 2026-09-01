@@ -161,7 +161,15 @@ function QuestionnaireInput({
   return (
     <div
       data-slot="questionnaire-input-wrapper"
-      className="group/questionnaire-input relative w-full min-w-0"
+      // z-20, not just `relative`: when this input is nested inside a
+      // QuestionnaireChoice (the "Other: ___" pattern), the Choice's own
+      // invisible native radio/checkbox hit-target is `absolute inset-0
+      // z-10` — covering the WHOLE card, including this input's area. Any
+      // z-index at or below 10 loses that stacking fight, so every click
+      // on the text field lands on the choice's overlay instead of
+      // focusing the input — the field visually exists but can never be
+      // typed into. Real, reproduced bug, not a guess.
+      className="group/questionnaire-input relative z-20 w-full min-w-0"
     >
       <QuestionnairePrimitive.Input
         data-slot="questionnaire-input"
