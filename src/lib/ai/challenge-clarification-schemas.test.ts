@@ -88,6 +88,7 @@ describe("ChallengeDraftSchema — the full, id-carrying app-facing shape", () =
     return {
       id: "draft-1",
       status: "draft" as const,
+      version: 1,
       ...generatedDraft(),
       tasks: [{ id: "t1", title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" as const }],
       materials: [],

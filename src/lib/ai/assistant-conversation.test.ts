@@ -16,6 +16,7 @@ function minimalDraft(title: string): ChallengeDraft {
   return {
     id: "draft-1",
     status: "draft",
+    version: 1,
     title,
     role: "Database Intern",
     scenario: "A fictional retail company has messy customer data that needs investigation.",

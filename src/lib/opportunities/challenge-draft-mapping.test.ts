@@ -7,6 +7,7 @@ function draft(overrides: Partial<ChallengeDraft> = {}): ChallengeDraft {
   return {
     id: "draft-1",
     status: "draft",
+    version: 1,
     role: "Database Intern",
     title: "Database Quality Investigation",
     scenario: "A fictional ecommerce database has duplicate customers and inconsistent order totals.",

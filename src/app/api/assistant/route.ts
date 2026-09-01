@@ -97,9 +97,17 @@ export async function POST(req: Request) {
         writer.write({ type: "data-progress", id: "progress", data: { label: "Designing your challenge…" } });
         let draft;
         try {
-          const context = await buildEmployerContext({ originalRequest, transcript: transcriptOf(messages), answers: forcedAnswers });
+          // NOT transcriptOf(messages) here: the questionnaire's own
+          // structured answers already carry everything EmployerContext
+          // needs. Sending the full, ever-growing conversation transcript
+          // on top of them was pure re-derivation — extra tokens for the
+          // model to read AND a transcript that gets longer on every
+          // regenerate/chat-edit turn of the SAME draft (Part 24/latency).
+          const context = await buildEmployerContext({ originalRequest, transcript: originalRequest, answers: forcedAnswers });
+          console.log(`[assistant] requestId=${requestId} generationId=${generationId} T1 employerContext ready at +${Date.now() - t0}ms`);
           const existingDraft = latestChallengeDraft(messages);
           const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction: existingDraft ? "Incorporate the employer's latest answers." : undefined });
+          console.log(`[assistant] requestId=${requestId} generationId=${generationId} T4 draft object validated at +${Date.now() - t0}ms`);
           draft = attachDraftIdentity(generated, existingDraft);
         } catch (error) {
           console.error(`[assistant] requestId=${requestId} generationId=${generationId} generation failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
@@ -115,7 +123,7 @@ export async function POST(req: Request) {
 
         writer.write({ type: "data-designSummary", id: `designSummary:${turnId}`, data: { lines: buildDesignSummary(draft) } });
         writer.write({ type: "data-challengeDraft", id: `challengeDraft:${turnId}`, data: draft });
-        console.log(`[assistant] requestId=${requestId} generationId=${generationId} generation complete at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
+        console.log(`[assistant] requestId=${requestId} generationId=${generationId} T5 draft written to client at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
 
         writer.merge(
           streamText({

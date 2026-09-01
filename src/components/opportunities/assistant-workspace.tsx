@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { Paperclip, Copy, RotateCcw, Users, FileText, PenSquare, BarChart3, Briefcase, AlertCircle } from "lucide-react";
+import { Paperclip, Copy, RotateCcw, Users, FileText, PenSquare, BarChart3, Briefcase, AlertCircle, CheckCircle2 } from "lucide-react";
 
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { Button } from "@/components/ui/button";
@@ -96,6 +96,33 @@ const getClientSpeechSupport = () => "SpeechRecognition" in window || "webkitSpe
  * then React re-syncs to the real client snapshot right after. */
 function useSpeechSupported() {
   return useSyncExternalStore(speechSupportSubscribe, getClientSpeechSupport, getServerSpeechSupport);
+}
+
+/** The plain "Designing your challenge…" Shimmer for the first 2 seconds,
+ * then a real (never fabricated) workflow-status checklist — every line
+ * describes work the generation pipeline actually does with the
+ * employer's own answers, not hidden chain-of-thought. Swaps back to a
+ * plain Shimmer instantly once the draft or an error arrives (this
+ * component unmounts with the rest of the progress block). */
+function DesigningStatus({ label }: { label: string }) {
+  const [showDetail, setShowDetail] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setShowDetail(true), 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!showDetail) return <Shimmer>{label}</Shimmer>;
+  return (
+    <div className="space-y-1.5 text-sm text-navy/60">
+      <p className="flex items-center gap-1.5">
+        <CheckCircle2 className="size-3.5 shrink-0 text-teal-ink" aria-hidden="true" /> Using your selected responsibilities
+      </p>
+      <p className="flex items-center gap-1.5">
+        <CheckCircle2 className="size-3.5 shrink-0 text-teal-ink" aria-hidden="true" /> Matching the requested candidate level
+      </p>
+      <Shimmer duration={1.4}>Building practical tasks and evaluation criteria</Shimmer>
+    </div>
+  );
 }
 
 function ComposerAttachments() {
@@ -200,6 +227,27 @@ export function AssistantWorkspace({
     [messages],
   );
   const followups = suggestions.filter((s) => !askedTexts.has(s)).slice(0, 3);
+
+  // A regenerate or chat edit sends a whole new assistant message carrying
+  // the SAME draft id at a higher `version` (see attachDraftIdentity) —
+  // without this, every revision would render its own full-size
+  // ChallengeDraftCard stacked in the transcript, which is exactly the
+  // "duplicate/too long" complaint. Only the message holding the highest
+  // version of a given draft id renders the full card; earlier ones
+  // collapse to a one-line note (Part 20/21: one draft, many versions).
+  const latestDraftVersionByDraftId = useMemo(() => {
+    const map = new Map<string, { messageId: string; version: number }>();
+    for (const m of messages) {
+      for (const p of m.parts) {
+        if (p.type === "data-challengeDraft") {
+          const d = p.data as ChallengeDraft;
+          const existing = map.get(d.id);
+          if (!existing || d.version >= existing.version) map.set(d.id, { messageId: m.id, version: d.version });
+        }
+      }
+    }
+    return map;
+  }, [messages]);
 
   /** The composer toolbar is identical in both states (attach + scope on
    * the left, mic + submit on the right) — only the textarea's height
@@ -307,7 +355,7 @@ export function AssistantWorkspace({
               aligns to the conversation's own right edge, not the
               dashboard's. */}
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-            {messages.map((message) => {
+            {messages.map((message, index) => {
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
             // .findLast, not .filter: there is exactly ONE questionnaire /
             // challenge draft / design summary per message, ever — even if
@@ -319,6 +367,11 @@ export function AssistantWorkspace({
               (p): p is Extract<typeof p, { type: "data-questionnaire" }> & { id: string } =>
                 p.type === "data-questionnaire" && typeof p.id === "string",
             );
+            // The real submitted answers live on the NEXT message's
+            // metadata (the questionnaire's own onSubmit puts them there —
+            // see below). Looked up here, not duplicated into local state,
+            // so "View answers" always shows the actual submitted values.
+            const questionnaireAnswers = questionnaire ? messages[index + 1]?.metadata?.questionnaireAnswers : undefined;
             const challengeDraft = message.parts.findLast(
               (p): p is Extract<typeof p, { type: "data-challengeDraft" }> & { id: string } =>
                 p.type === "data-challengeDraft" && typeof p.id === "string",
@@ -378,13 +431,13 @@ export function AssistantWorkspace({
                       isStreaming &&
                       !questionnaire &&
                       !challengeDraft &&
-                      !generationError && <Shimmer>{progress?.data.label ?? "Thinking…"}</Shimmer>}
+                      !generationError &&
+                      (progress ? <DesigningStatus label={progress.data.label} /> : <Shimmer>Thinking…</Shimmer>)}
 
-                    {questionnaire && (
+                    {questionnaire && !answeredQuestionnaireIds.has(questionnaire.id) && (
                       <AskInternInQuestionnaire
                         key={questionnaire.id}
                         result={questionnaire.data}
-                        disabled={answeredQuestionnaireIds.has(questionnaire.id)}
                         onSubmit={(answers) => {
                           setAnsweredQuestionnaireIds((prev) => new Set(prev).add(questionnaire.id));
                           // Compact acknowledgement in the transcript, not a
@@ -401,6 +454,52 @@ export function AssistantWorkspace({
                       />
                     )}
 
+                    {/* Once answered, the full form is gone — a completed
+                        Questionnaire is history, not something to keep
+                        scanning past on every scroll. */}
+                    {questionnaire && answeredQuestionnaireIds.has(questionnaire.id) && (
+                      <details className="not-typeset group w-fit rounded-md border border-navy/10 px-3 py-1.5">
+                        <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-navy/60 select-none">
+                          <CheckCircle2 className="size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
+                          {questionnaire.data.questions.length} clarification question{questionnaire.data.questions.length === 1 ? "" : "s"} answered
+                          <span className="text-teal-ink underline decoration-dotted">View answers</span>
+                        </summary>
+                        {questionnaireAnswers && (
+                          <ul className="mt-2 space-y-1 border-t border-navy/10 pt-2 text-xs text-navy/60">
+                            {questionnaireAnswers.map((a, i) => (
+                              <li key={i}>
+                                <span className="text-navy/45">{a.prompt}</span> — {a.answer ?? "(not specified)"}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </details>
+                    )}
+
+                    {/* The draft itself renders first — it's the thing the
+                        employer actually asked for. "How this was designed"
+                        is a secondary, collapsed disclosure BELOW it, never
+                        something that delays the result. Only the LATEST
+                        version of this draft id gets the full card; an
+                        older version (superseded by a later regenerate or
+                        chat edit) collapses to a one-line note instead of
+                        stacking another full-size card in the transcript. */}
+                    {challengeDraft &&
+                      (latestDraftVersionByDraftId.get(challengeDraft.data.id)?.messageId === message.id ? (
+                        <ChallengeDraftCard
+                          key={challengeDraft.id}
+                          draft={challengeDraft.data}
+                          opportunityId={opportunityId}
+                          disabled={isStreaming}
+                          onRequestAiEdit={(instruction) => sendMessage({ text: instruction })}
+                          onManualSave={(next) => handleManualDraftSave(message.id, challengeDraft.id, next)}
+                        />
+                      ) : (
+                        <p className="not-typeset text-xs text-navy/45">
+                          Challenge draft revised (v{challengeDraft.data.version}) — see the latest version below.
+                        </p>
+                      ))}
+
                     {designSummary && (
                       <Reasoning key={designSummary.id} isStreaming={isLastAssistant && isStreaming && !challengeDraft} className="not-typeset">
                         <ReasoningTrigger
@@ -410,17 +509,6 @@ export function AssistantWorkspace({
                         />
                         <ReasoningContent>{designSummary.data.lines.map((l) => `- ${l}`).join("\n")}</ReasoningContent>
                       </Reasoning>
-                    )}
-
-                    {challengeDraft && (
-                      <ChallengeDraftCard
-                        key={challengeDraft.id}
-                        draft={challengeDraft.data}
-                        opportunityId={opportunityId}
-                        disabled={isStreaming}
-                        onRequestAiEdit={(instruction) => sendMessage({ text: instruction })}
-                        onManualSave={(next) => handleManualDraftSave(message.id, challengeDraft.id, next)}
-                      />
                     )}
 
                     {generationError && (

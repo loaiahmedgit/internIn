@@ -173,7 +173,7 @@ export async function generateChallengeDraftObject(params: {
       const { object } = await generateObject({
         model: getModel(),
         schema: ChallengeDraftDetailsSchema,
-        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the tasks, materials, and evaluation rubric — not the title/scenario/skills, those come from a separate step. Keep every field concise — a sentence or two at most.`,
+        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the tasks, materials, and evaluation rubric — not the title/scenario/skills, those come from a separate step. Keep every field concise — a sentence or two at most.\n\nEach material's "name" must be a real, candidate-facing filename with a plausible extension (e.g. "customers.csv", "onboarding_checklist.pdf"), never an internal-sounding label like "Base_Model_ID". Put what it actually is in "description", not in the name.`,
         prompt: basePrompt + attempt.extraInstruction,
         temperature: attempt.temperature,
         maxOutputTokens: 3000,
@@ -218,6 +218,7 @@ export function attachDraftIdentity(generated: ChallengeDraftGenerated, existing
   return {
     ...generated,
     id: existingDraft?.id ?? crypto.randomUUID(),
+    version: (existingDraft?.version ?? 0) + 1,
     status: "draft",
     tasks: generated.tasks.map((task) => ({ ...task, id: crypto.randomUUID() })),
     materials: generated.materials.map((material) => ({ ...material, id: crypto.randomUUID() })),

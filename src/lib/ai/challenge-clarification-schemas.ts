@@ -219,6 +219,12 @@ export type ChallengeDraftRubricCriterion = z.infer<typeof ChallengeDraftRubricC
 export const ChallengeDraftSchema = ChallengeDraftGeneratedSchema.omit({ tasks: true, materials: true, rubric: true }).extend({
   id: idField(),
   status: z.enum(["draft", "approved"]),
+  // The stable identity is `id` — `version` is a plain incrementing
+  // counter over revisions of THAT id (regenerate, a chat edit, a manual
+  // save). The model never sets either; attachDraftIdentity does
+  // (challenge-generation.ts). The UI uses this to show only the latest
+  // version of a draft in the conversation, never one card per revision.
+  version: z.number().int().min(1),
   tasks: z.array(ChallengeDraftTaskSchema).min(1).max(10),
   materials: z.array(ChallengeDraftMaterialSchema).max(10),
   rubric: z.array(ChallengeDraftRubricCriterionSchema).min(1).max(8),

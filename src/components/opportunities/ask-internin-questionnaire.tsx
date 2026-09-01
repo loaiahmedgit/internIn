@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import {
   Questionnaire,
   QuestionnaireActions,
@@ -49,8 +50,20 @@ export function AskInternInQuestionnaire({
     choices: q.choices?.map((c) => ({ value: c.value })),
   }));
 
+  // Root cause of the "challenge draft rendered twice" bug: a fast
+  // double-click (or Enter-then-click) fires this handler twice before
+  // the parent's React-state `disabled` prop has re-rendered the button,
+  // producing two real sendMessage calls — two separate assistant turns,
+  // each with its own draft. React state can't close that race (it's
+  // async); a plain ref can, since it updates synchronously within the
+  // same event. Resets per questionnaire instance (parent keys this
+  // component by questionnaire.id), so a NEW questionnaire can still submit.
+  const submittedRef = useRef(false);
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     const formData = new FormData(event.currentTarget);
     const answers: QuestionnaireAnswer[] = result.questions.map((q) => {
       const raw = q.type === "multiple" ? formData.getAll(q.id).map(String) : [String(formData.get(q.id) ?? "")];
