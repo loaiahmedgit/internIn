@@ -21,6 +21,7 @@ function minimalDraft(title: string): ChallengeDraft {
     role: "Database Intern",
     scenario: "A fictional retail company has messy customer data that needs investigation.",
     skills: ["SQL"],
+    deliverables: ["SQL scripts"],
     materials: [],
     tasks: [{ id: "t1", title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" }],
     durationMinutes: 60,

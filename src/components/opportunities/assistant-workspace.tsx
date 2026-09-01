@@ -36,7 +36,6 @@ import { SpeechInput } from "@/components/ai-elements/speech-input";
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse, MessageActions, MessageAction } from "@/components/ai-elements/message";
 import { ChainOfThought, ChainOfThoughtHeader, ChainOfThoughtContent, ChainOfThoughtStep } from "@/components/ai-elements/chain-of-thought";
-import { Reasoning, ReasoningTrigger, ReasoningContent } from "@/components/ai-elements/reasoning";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { AskInternInQuestionnaire } from "@/components/opportunities/ask-internin-questionnaire";
 import { ChallengeDraftCard } from "@/components/opportunities/challenge-draft-card";
@@ -180,6 +179,16 @@ export function AssistantWorkspace({
     },
     [setMessages],
   );
+
+  /** "Start over" clears the whole conversation back to the empty-state
+   * composer — there's no meaningful partial reset for a single draft
+   * inside a persistent chat transcript, and the confirm dialog (in
+   * ChallengeDraftCard) already makes this an explicit, confirmed choice,
+   * never a silent one. */
+  const handleStartOver = useCallback(() => {
+    setMessages([]);
+    setAnsweredQuestionnaireIds(new Set());
+  }, [setMessages]);
 
   const handleScopeChange = useCallback(
     (next: unknown) => {
@@ -376,10 +385,6 @@ export function AssistantWorkspace({
               (p): p is Extract<typeof p, { type: "data-challengeDraft" }> & { id: string } =>
                 p.type === "data-challengeDraft" && typeof p.id === "string",
             );
-            const designSummary = message.parts.findLast(
-              (p): p is Extract<typeof p, { type: "data-designSummary" }> & { id: string } =>
-                p.type === "data-designSummary" && typeof p.id === "string",
-            );
             const generationError = message.parts.findLast(
               (p): p is Extract<typeof p, { type: "data-generationError" }> & { id: string } =>
                 p.type === "data-generationError" && typeof p.id === "string",
@@ -388,11 +393,7 @@ export function AssistantWorkspace({
             const responseText = textParts.map((p) => p.text).join("");
             const progress = message.parts.findLast((p): p is Extract<typeof p, { type: "data-progress" }> => p.type === "data-progress");
             const isLastAssistant = message.role === "assistant" && message.id === messages.at(-1)?.id;
-            // Never show "How I checked this" and "How this challenge was
-            // designed" on the same message — a challenge-generation turn
-            // always wins that choice, since it's the more specific and
-            // more relevant disclosure for what actually happened.
-            const isGrounded = steps.length > 0 && !designSummary;
+            const isGrounded = steps.length > 0;
 
             return (
               <Message key={message.id} from={message.role}>
@@ -476,40 +477,27 @@ export function AssistantWorkspace({
                       </details>
                     )}
 
-                    {/* The draft itself renders first — it's the thing the
-                        employer actually asked for. "How this was designed"
-                        is a secondary, collapsed disclosure BELOW it, never
-                        something that delays the result. Only the LATEST
-                        version of this draft id gets the full card; an
-                        older version (superseded by a later regenerate or
-                        chat edit) collapses to a one-line note instead of
-                        stacking another full-size card in the transcript. */}
+                    {/* Only the LATEST version of this draft id gets the
+                        full card; an older version (superseded by a later
+                        regenerate or chat edit) collapses to a one-line
+                        note instead of stacking another full-size card in
+                        the transcript. */}
                     {challengeDraft &&
                       (latestDraftVersionByDraftId.get(challengeDraft.data.id)?.messageId === message.id ? (
                         <ChallengeDraftCard
                           key={challengeDraft.id}
                           draft={challengeDraft.data}
                           opportunityId={opportunityId}
+                          opportunityLabel={opportunityOptions.find((o) => o.value === opportunityId)?.label}
                           disabled={isStreaming}
-                          onRequestAiEdit={(instruction) => sendMessage({ text: instruction })}
                           onManualSave={(next) => handleManualDraftSave(message.id, challengeDraft.id, next)}
+                          onStartOver={handleStartOver}
                         />
                       ) : (
                         <p className="not-typeset text-xs text-navy/45">
                           Challenge draft revised (v{challengeDraft.data.version}) — see the latest version below.
                         </p>
                       ))}
-
-                    {designSummary && (
-                      <Reasoning key={designSummary.id} isStreaming={isLastAssistant && isStreaming && !challengeDraft} className="not-typeset">
-                        <ReasoningTrigger
-                          getThinkingMessage={(streaming) =>
-                            streaming ? <Shimmer duration={1}>Designing challenge…</Shimmer> : <p>How this challenge was designed</p>
-                          }
-                        />
-                        <ReasoningContent>{designSummary.data.lines.map((l) => `- ${l}`).join("\n")}</ReasoningContent>
-                      </Reasoning>
-                    )}
 
                     {generationError && (
                       // Rendered where the draft would have appeared, not

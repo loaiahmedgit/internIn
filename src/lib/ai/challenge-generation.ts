@@ -22,6 +22,8 @@ const ChallengeDraftCoreSchema = ChallengeDraftGeneratedSchema.pick({
   scenario: true,
   skills: true,
   durationMinutes: true,
+  estimatedDurationLabel: true,
+  deliverables: true,
   aiUsagePolicyMode: true,
   aiUsagePolicyCustomText: true,
   assumptions: true,
@@ -161,7 +163,7 @@ export async function generateChallengeDraftObject(params: {
       const { object } = await generateObject({
         model: getModel(),
         schema: ChallengeDraftCoreSchema,
-        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the role, title, scenario, skills, duration, AI usage policy, assumptions, and safety notes — not tasks/materials/rubric, those come from a separate step. Keep every field concise.`,
+        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the role, title, scenario, skills, duration, deliverables, AI usage policy, assumptions, and safety notes — not tasks/materials/rubric, those come from a separate step. Keep every field concise.\n\n"estimatedDurationLabel" is a short human range like "3–4 hours" or "60–90 minutes" — always fill it in. "deliverables" is a short list (2-4 items) of what the candidate actually hands in (e.g. "SQL scripts", "a one-page summary report"), not a restatement of the tasks.`,
         prompt: basePrompt + attempt.extraInstruction,
         temperature: attempt.temperature,
         maxOutputTokens: 1500,
@@ -173,7 +175,7 @@ export async function generateChallengeDraftObject(params: {
       const { object } = await generateObject({
         model: getModel(),
         schema: ChallengeDraftDetailsSchema,
-        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the tasks, materials, and evaluation rubric — not the title/scenario/skills, those come from a separate step. Keep every field concise — a sentence or two at most.\n\nEach material's "name" must be a real, candidate-facing filename with a plausible extension (e.g. "customers.csv", "onboarding_checklist.pdf"), never an internal-sounding label like "Base_Model_ID". Put what it actually is in "description", not in the name.`,
+        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the tasks, materials, and evaluation rubric — not the title/scenario/skills, those come from a separate step. Keep every field concise — a sentence or two at most.\n\nEach task's "title" is ONE short, concrete, action-first sentence — this exact sentence is what the employer sees in the compact summary view (e.g. "Design a reporting schema for the provided OLTP data."), never a short label. "instructions" can add extra step-by-step detail beyond that sentence, for later editing — repeat the title there if nothing more is needed.\n\nAlways include at least 2 supporting materials (synthetic datasets, templates, or reference documents the candidate would actually receive) — a challenge with zero materials is incomplete. Each material's "name" must be a real, candidate-facing filename with a plausible extension (e.g. "customers.csv", "onboarding_checklist.pdf"), never an internal-sounding label like "Base_Model_ID". Put what it actually is in "description", not in the name.`,
         prompt: basePrompt + attempt.extraInstruction,
         temperature: attempt.temperature,
         maxOutputTokens: 3000,

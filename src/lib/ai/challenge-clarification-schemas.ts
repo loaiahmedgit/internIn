@@ -191,6 +191,15 @@ export const ChallengeDraftGeneratedSchema = z.object({
   // no consuming code needs an undefined-check either way.
   materials: z.array(GeneratedMaterialSchema).max(10).default([]),
   durationMinutes: z.number().int().min(10).max(480).nullable().optional(),
+  // A short human duration RANGE ("3–4 hours") for display — separate
+  // from durationMinutes (a single number other code already maps onto
+  // Challenge.estimatedMinutes). Flat, nullable/optional primitive, not a
+  // nested object — follows the established null-tolerant-field rule.
+  estimatedDurationLabel: optionalText(40),
+  // A short, employer-facing summary of what the candidate hands in —
+  // distinct from each task's own instructions. Rendered as one summary
+  // line, never a bulleted restatement of the tasks.
+  deliverables: z.array(z.string().trim().min(1).max(160)).max(6).default([]),
   rubric: z.array(GeneratedRubricCriterionSchema).min(1).max(8),
   aiUsagePolicyMode: ChallengeAiUsagePolicyModeSchema.nullable().optional(),
   aiUsagePolicyCustomText: optionalText(300),

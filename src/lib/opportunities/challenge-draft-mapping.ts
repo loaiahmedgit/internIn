@@ -39,7 +39,10 @@ export function mapChallengeDraftToChallenge(draft: ChallengeDraft): Challenge {
     estimatedMinutes: draft.durationMinutes ?? 60,
     skills: draft.skills,
     tasks,
-    deliverables: tasks.map((t) => t.title),
+    // Prefer the model's own explicit deliverables summary; only fall
+    // back to task titles for a draft generated before that field
+    // existed (an older saved draft, or a manual edit that cleared it).
+    deliverables: draft.deliverables.length ? draft.deliverables : tasks.map((t) => t.title),
     files: draft.materials.map((m) => ({ name: m.name, description: m.description ?? m.type })),
     rubric: draft.rubric.map((r) => ({
       criterion: `${r.criterion} (${r.weight}%)`,

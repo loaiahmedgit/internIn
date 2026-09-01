@@ -6,7 +6,7 @@ import { buildCompanyHiringFacts, buildInternshipFacts } from "@/lib/company/int
 import { classifyAssistantRequest } from "@/lib/ai/assistant-router";
 import { buildClarificationQuestions, resolveMissingSlots } from "@/lib/ai/clarification-engine";
 import { getRoleProfile } from "@/lib/ai/role-profiles";
-import { CHALLENGE_POLICY, attachDraftIdentity, buildDesignSummary, buildEmployerContext, generateChallengeDraftObject } from "@/lib/ai/challenge-generation";
+import { attachDraftIdentity, buildEmployerContext, generateChallengeDraftObject } from "@/lib/ai/challenge-generation";
 import { latestChallengeDraft, latestQuestionnaireAnswers, transcriptOf } from "@/lib/ai/assistant-conversation";
 import type { AssistantUIMessage } from "@/lib/ai/assistant-messages";
 
@@ -121,17 +121,14 @@ export async function POST(req: Request) {
           return;
         }
 
-        writer.write({ type: "data-designSummary", id: `designSummary:${turnId}`, data: { lines: buildDesignSummary(draft) } });
         writer.write({ type: "data-challengeDraft", id: `challengeDraft:${turnId}`, data: draft });
         console.log(`[assistant] requestId=${requestId} generationId=${generationId} T5 draft written to client at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
 
-        writer.merge(
-          streamText({
-            model: getModel(),
-            system: `You just designed an internship challenge draft titled "${draft.title}" based on the employer's answers. Write exactly one short, natural sentence introducing it (e.g. "I've drafted the challenge based on your answers. Review it below — nothing has been published yet."). The app renders the draft itself as a real, editable component below — do not restate or summarize its contents.`,
-            prompt: "Write the introductory sentence now.",
-          }).toUIMessageStream(),
-        );
+        // Deterministic, not a model call: the approved flow's intro text
+        // is fixed copy ("Challenge draft ready" / one sentence), so there
+        // is nothing left for the model to decide here — writing it
+        // directly saves an entire round-trip on the critical path.
+        writePlainText(writer, `intro:${turnId}`, "Challenge draft ready\n\nHere's a draft challenge based on your request.");
         return;
       }
 
@@ -238,16 +235,9 @@ export async function POST(req: Request) {
         return;
       }
 
-      writer.write({ type: "data-designSummary", id: `designSummary:${turnId}`, data: { lines: buildDesignSummary(draft) } });
       writer.write({ type: "data-challengeDraft", id: `challengeDraft:${turnId}`, data: draft });
       console.log(`[assistant] requestId=${requestId} generationId=${generationId} generation complete at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
-      writer.merge(
-        streamText({
-          model: getModel(),
-          system: `You just designed an internship challenge draft titled "${draft.title}". ${CHALLENGE_POLICY}\n\nWrite exactly one short, natural sentence introducing it (e.g. "Here's a draft based on what you described."). The app renders the draft itself as a real, editable component below — do not restate or summarize its contents.`,
-          prompt: "Write the introductory sentence now.",
-        }).toUIMessageStream(),
-      );
+      writePlainText(writer, `intro:${turnId}`, "Challenge draft ready\n\nHere's a draft challenge based on your request.");
     },
     onError: (error) => (error instanceof Error ? error.message : "Couldn't get an answer — try again."),
   });

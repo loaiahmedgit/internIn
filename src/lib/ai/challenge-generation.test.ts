@@ -11,6 +11,7 @@ function draft(overrides: Partial<ChallengeDraftGenerated> = {}): ChallengeDraft
     role: "Database Intern",
     scenario: "A fictional retailer has duplicate customer records.",
     skills: ["SQL"],
+    deliverables: ["SQL scripts"],
     materials: [{ name: "customers.csv", type: "csv", description: "Synthetic customer records" }],
     tasks: [{ title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" }],
     durationMinutes: 60,
@@ -122,6 +123,7 @@ describe("end-to-end: generated output -> schema validation -> ChallengeDraft ->
         { title: "Resolve a ticket", instructions: "Diagnose a login issue.", deliverableType: "written" },
       ],
       materials: [],
+      deliverables: ["Workstation setup notes"],
       durationMinutes: 60,
       rubric: [
         { criterion: "Accuracy", weight: 50, description: "Steps followed correctly." },

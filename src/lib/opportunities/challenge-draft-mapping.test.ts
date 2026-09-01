@@ -18,6 +18,7 @@ function draft(overrides: Partial<ChallengeDraft> = {}): ChallengeDraft {
       { id: "t3", title: "Handoff note", instructions: "Summarize findings in 200 words.", deliverableType: "written" },
     ],
     materials: [{ id: "m1", name: "customers.csv", type: "csv", description: "Synthetic customer records" }],
+    deliverables: ["SQL scripts", "a one-page summary"],
     durationMinutes: 75,
     aiUsagePolicyMode: "research_only",
     rubric: [
