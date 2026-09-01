@@ -91,7 +91,11 @@ export async function POST(req: Request) {
         const originalRequest = transcriptOf(messages.slice(0, -1)).split("\n").find((line) => line.startsWith("Employer:")) ?? "Internship role described in this conversation";
         console.log(`[assistant] generation start requestId=${requestId} generationId=${generationId} trigger=questionnaire`);
 
-        writer.write({ type: "data-step", id: "designing", data: { label: "Designing challenge…", status: "active" } });
+        // Written BEFORE the slow generateObject call, not after — this is
+        // the actual fix for the "blank dead wait" complaint: the client
+        // gets a real, specific label to show immediately, superseded the
+        // instant the real challengeDraft part arrives.
+        writer.write({ type: "data-progress", id: "progress", data: { label: "Designing your challenge…" } });
         let draft;
         try {
           const context = await buildEmployerContext({ originalRequest, transcript: transcriptOf(messages), answers: forcedAnswers });
@@ -100,11 +104,9 @@ export async function POST(req: Request) {
           draft = attachDraftIdentity(generated, existingDraft);
         } catch (error) {
           console.error(`[assistant] generation failed requestId=${requestId} generationId=${generationId}:`, error instanceof Error ? error.message : error);
-          writer.write({ type: "data-step", id: "designing", data: { label: "Couldn't finish designing the challenge", status: "complete" } });
           throw new Error("We couldn't finish generating the challenge. Your answers are saved — try again.");
         }
 
-        writer.write({ type: "data-step", id: "designing", data: { label: "Designed challenge", status: "complete" } });
         writer.write({ type: "data-designSummary", id: "designing", data: { lines: buildDesignSummary(draft) } });
         writer.write({ type: "data-challengeDraft", id: crypto.randomUUID(), data: draft });
         console.log(`[assistant] generation complete requestId=${requestId} generationId=${generationId} draftId=${draft.id} taskCount=${draft.tasks.length}`);
@@ -162,6 +164,7 @@ export async function POST(req: Request) {
         execute: async ({ roleSummary }) => {
           if (questionnaireAsked) return { askedQuestionCount: 0, note: "Already asked in this turn." };
           questionnaireAsked = true;
+          writer.write({ type: "data-progress", id: "progress", data: { label: "Preparing a few questions…" } });
           const { object } = await generateObject({
             model: getModel(),
             schema: ClarificationQuestionsResultSchema,
@@ -187,6 +190,7 @@ export async function POST(req: Request) {
 
           const generationId = crypto.randomUUID();
           console.log(`[assistant] generation start requestId=${requestId} generationId=${generationId} trigger=tool`);
+          writer.write({ type: "data-progress", id: "progress", data: { label: "Designing your challenge…" } });
           const existingDraft = latestChallengeDraft(messages);
           const context = await buildEmployerContext({ originalRequest: roleSummary, transcript: transcriptOf(messages), answers: null });
           const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction: revisionInstruction ?? undefined });

@@ -23,6 +23,17 @@ export interface DesignSummaryData {
   lines: string[];
 }
 
+/** A real, honest "this slow thing is happening right now" signal, written
+ * the MOMENT a tool starts its slow work (before the generateObject call
+ * that actually takes several seconds) — not a fabricated fake step, and
+ * not raw model reasoning. Gives the Shimmer fallback a real label
+ * ("Preparing a few questions…", "Designing your challenge…") instead of
+ * a generic "Thinking…" for the whole wait. Superseded the instant the
+ * real result (questionnaire/challengeDraft) renders. */
+export interface ProgressData {
+  label: string;
+}
+
 /** One clarification question's answer, as submitted by the real shadcn
  * Questionnaire — never serialized into a giant chat-bubble string. A
  * `null` answer means the (optional) question was skipped; the app never
@@ -56,5 +67,6 @@ export type AssistantUIMessage = UIMessage<
     questionnaire: ClarificationQuestionsResult;
     challengeDraft: ChallengeDraft;
     designSummary: DesignSummaryData;
+    progress: ProgressData;
   }
 >;

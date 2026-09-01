@@ -306,7 +306,7 @@ export function AssistantWorkspace({
               aligns to the conversation's own right edge, not the
               dashboard's. */}
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-            {messages.map((message, index) => {
+            {messages.map((message) => {
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
             const questionnaires = message.parts.filter(
               (p): p is Extract<typeof p, { type: "data-questionnaire" }> & { id: string } =>
@@ -322,17 +322,13 @@ export function AssistantWorkspace({
             );
             const textParts = message.parts.filter((p) => p.type === "text");
             const responseText = textParts.map((p) => p.text).join("");
+            const progress = message.parts.findLast((p): p is Extract<typeof p, { type: "data-progress" }> => p.type === "data-progress");
             const isLastAssistant = message.role === "assistant" && message.id === messages.at(-1)?.id;
             // Never show "How I checked this" and "How this challenge was
             // designed" on the same message — a challenge-generation turn
             // always wins that choice, since it's the more specific and
             // more relevant disclosure for what actually happened.
             const isGrounded = steps.length > 0 && designSummaries.length === 0;
-            // The preceding user message is a real questionnaire submit
-            // (structured metadata, never inferred from text) — while this
-            // assistant turn is still streaming its answer, that's the
-            // honest thing to call the wait, not a generic "Thinking…".
-            const isDesigningChallenge = messages[index - 1]?.metadata?.intent === "questionnaire_answer";
 
             return (
               <Message key={message.id} from={message.role}>
@@ -361,7 +357,7 @@ export function AssistantWorkspace({
                       isLastAssistant &&
                       isStreaming &&
                       !questionnaires.length &&
-                      !challengeDrafts.length && <Shimmer>{isDesigningChallenge ? "Designing challenge…" : "Thinking…"}</Shimmer>
+                      !challengeDrafts.length && <Shimmer>{progress?.data.label ?? "Thinking…"}</Shimmer>
                     )}
 
                     {questionnaires.map((q) => (
@@ -440,6 +436,21 @@ export function AssistantWorkspace({
               </Message>
             );
             })}
+            {/* The instant, pre-response placeholder: `status` flips to
+                "submitted" synchronously on sendMessage, before any server
+                bytes exist — so this renders in the same tick as the
+                click, well under the 100-200ms target. Gated on there
+                being no assistant message yet at all (not just "no text
+                yet") so it can never double up with the per-message
+                Shimmer above once the real assistant message shell
+                arrives. */}
+            {status === "submitted" && messages.at(-1)?.role !== "assistant" && (
+              <Message from="assistant">
+                <MessageContent className="w-full max-w-none">
+                  <Shimmer>Thinking…</Shimmer>
+                </MessageContent>
+              </Message>
+            )}
           </div>
         </ConversationContent>
         <ConversationScrollButton />
