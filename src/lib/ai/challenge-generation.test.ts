@@ -1,21 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { buildDesignSummary, formatQuestionnaireAnswers } from "./challenge-generation";
-import type { ChallengeDraft } from "./challenge-clarification-schemas";
+import { attachDraftIdentity, buildDesignSummary, formatQuestionnaireAnswers } from "./challenge-generation";
+import type { ChallengeDraft, ChallengeDraftGenerated } from "./challenge-clarification-schemas";
 import type { QuestionnaireAnswer } from "./assistant-messages";
 
-function draft(overrides: Partial<ChallengeDraft> = {}): ChallengeDraft {
+function draft(overrides: Partial<ChallengeDraftGenerated> = {}): ChallengeDraftGenerated {
   return {
     title: "Customer Data Investigation",
     role: "Database Intern",
     scenario: "A fictional retailer has duplicate customer records.",
-    objective: "Assess SQL correctness and data-quality reasoning.",
-    competencies: [{ name: "SQL", reason: "Core work" }],
-    materials: [{ name: "customers.csv", description: "Synthetic customer records" }],
-    sections: [{ title: "Investigation", items: [{ kind: "code_task", title: "Write queries", prompt: "Write SQL." }] }],
-    deliverables: ["A short handoff"],
-    estimatedMinutes: 60,
-    candidateInstructions: "Work through the sandbox database.",
-    evaluationRubric: [{ criterion: "SQL correctness", weightPercent: 100, description: "Queries are correct." }],
+    skills: ["SQL"],
+    materials: [{ name: "customers.csv", type: "csv", description: "Synthetic customer records" }],
+    tasks: [{ title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" }],
+    durationMinutes: 60,
+    rubric: [{ criterion: "SQL correctness", weight: 100, description: "Queries are correct." }],
+    assumptions: [],
+    safetyNotes: [],
     ...overrides,
   };
 }
@@ -52,7 +51,7 @@ describe("buildDesignSummary", () => {
   });
 
   it("omits safety-notes/assumptions lines entirely when the draft has none, rather than showing empty bullets", () => {
-    const lines = buildDesignSummary(draft({ safetyNotes: undefined, assumptions: undefined }));
+    const lines = buildDesignSummary(draft({ safetyNotes: [], assumptions: [] }));
     expect(lines.some((l) => l.startsWith("Keeping it a safe simulation"))).toBe(false);
     expect(lines.some((l) => l.startsWith("Assumptions"))).toBe(false);
   });
@@ -60,5 +59,27 @@ describe("buildDesignSummary", () => {
   it("includes a safety line when the draft has safety notes (e.g. a pharmacy challenge)", () => {
     const lines = buildDesignSummary(draft({ safetyNotes: ["Never handle real patient data."] }));
     expect(lines.some((l) => l.includes("Never handle real patient data."))).toBe(true);
+  });
+});
+
+describe("attachDraftIdentity", () => {
+  it("mints a fresh id when there is no existing draft", () => {
+    const result = attachDraftIdentity(draft(), null);
+    expect(result.id).toBeTruthy();
+    expect(result.status).toBe("draft");
+  });
+
+  it("REUSES the existing draft's id on a revision — a chat edit must update the SAME draft, never start a disconnected new one", () => {
+    const first = attachDraftIdentity(draft(), null);
+    const revised = attachDraftIdentity(draft({ title: "Revised title" }), first as ChallengeDraft);
+    expect(revised.id).toBe(first.id);
+    expect(revised.title).toBe("Revised title");
+  });
+
+  it("assigns a real id to every task/material/rubric row", () => {
+    const result = attachDraftIdentity(draft(), null);
+    expect(result.tasks.every((t) => Boolean(t.id))).toBe(true);
+    expect(result.materials.every((m) => Boolean(m.id))).toBe(true);
+    expect(result.rubric.every((r) => Boolean(r.id))).toBe(true);
   });
 });

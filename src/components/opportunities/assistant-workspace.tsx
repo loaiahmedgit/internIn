@@ -40,6 +40,7 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { AskInternInQuestionnaire } from "@/components/opportunities/ask-internin-questionnaire";
 import { ChallengeDraftCard } from "@/components/opportunities/challenge-draft-card";
 import type { AssistantStepData, AssistantUIMessage } from "@/lib/ai/assistant-messages";
+import type { ChallengeDraft } from "@/lib/ai/challenge-clarification-schemas";
 
 const ALL_HIRING_SUGGESTIONS = [
   "What needs my attention?",
@@ -129,9 +130,28 @@ export function AssistantWorkspace({
   // becomes read-only so it can't be answered twice.
   const [answeredQuestionnaireIds, setAnsweredQuestionnaireIds] = useState<Set<string>>(new Set());
 
-  const { messages, sendMessage, status, regenerate, stop, error, clearError } = useChat<AssistantUIMessage>({
+  const { messages, setMessages, sendMessage, status, regenerate, stop, error, clearError } = useChat<AssistantUIMessage>({
     transport: new DefaultChatTransport({ api: "/api/assistant", body: { opportunityId } }),
   });
+
+  /** Writes a manually-edited ChallengeDraft back into the SAME message
+   * part it came from — never a disconnected copy. A later chat edit
+   * ("make it 45 minutes") reads the conversation's messages on the
+   * server (latestChallengeDraft), so a manual edit that never lands back
+   * in `messages` would be silently overwritten by the next AI revision;
+   * this keeps manual and chat-based editing consistent with each other. */
+  const handleManualDraftSave = useCallback(
+    (messageId: string, partId: string, next: ChallengeDraft) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id !== messageId
+            ? m
+            : { ...m, parts: m.parts.map((p) => (p.type === "data-challengeDraft" && p.id === partId ? { ...p, data: next } : p)) },
+        ),
+      );
+    },
+    [setMessages],
+  );
 
   const handleScopeChange = useCallback(
     (next: unknown) => {
@@ -303,7 +323,11 @@ export function AssistantWorkspace({
             const textParts = message.parts.filter((p) => p.type === "text");
             const responseText = textParts.map((p) => p.text).join("");
             const isLastAssistant = message.role === "assistant" && message.id === messages.at(-1)?.id;
-            const isGrounded = steps.length > 0;
+            // Never show "How I checked this" and "How this challenge was
+            // designed" on the same message — a challenge-generation turn
+            // always wins that choice, since it's the more specific and
+            // more relevant disclosure for what actually happened.
+            const isGrounded = steps.length > 0 && designSummaries.length === 0;
             // The preceding user message is a real questionnaire submit
             // (structured metadata, never inferred from text) — while this
             // assistant turn is still streaming its answer, that's the
@@ -373,7 +397,14 @@ export function AssistantWorkspace({
                     ))}
 
                     {challengeDrafts.map((d) => (
-                      <ChallengeDraftCard key={d.id} draft={d.data} opportunityId={opportunityId} />
+                      <ChallengeDraftCard
+                        key={d.id}
+                        draft={d.data}
+                        opportunityId={opportunityId}
+                        disabled={isStreaming}
+                        onRequestAiEdit={(instruction) => sendMessage({ text: instruction })}
+                        onManualSave={(next) => handleManualDraftSave(message.id, d.id, next)}
+                      />
                     ))}
                     {responseText && (
                       <>

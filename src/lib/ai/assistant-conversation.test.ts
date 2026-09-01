@@ -14,17 +14,18 @@ function userMessage(overrides: Partial<AssistantUIMessage> = {}): AssistantUIMe
 
 function minimalDraft(title: string): ChallengeDraft {
   return {
+    id: "draft-1",
+    status: "draft",
     title,
     role: "Database Intern",
     scenario: "A fictional retail company has messy customer data that needs investigation.",
-    objective: "Assess SQL reasoning.",
-    competencies: [{ name: "SQL", reason: "Core work" }],
+    skills: ["SQL"],
     materials: [],
-    sections: [{ title: "Investigation", items: [{ kind: "code_task", title: "Write queries", prompt: "Write SQL." }] }],
-    deliverables: ["A short summary"],
-    estimatedMinutes: 60,
-    candidateInstructions: "Work through the sandbox database.",
-    evaluationRubric: [{ criterion: "SQL correctness", weightPercent: 100, description: "Queries are correct." }],
+    tasks: [{ id: "t1", title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" }],
+    durationMinutes: 60,
+    rubric: [{ id: "r1", criterion: "SQL correctness", weight: 100, description: "Queries are correct." }],
+    assumptions: [],
+    safetyNotes: [],
   };
 }
 

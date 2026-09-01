@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ClarificationQuestionSchema, ClarificationQuestionsResultSchema, ChallengeDraftSchema } from "./challenge-clarification-schemas";
+import { ClarificationQuestionSchema, ClarificationQuestionsResultSchema, ChallengeDraftGeneratedSchema, ChallengeDraftSchema } from "./challenge-clarification-schemas";
 
 /**
  * Weaker structured-output models routinely emit an explicit `null` for
@@ -7,8 +7,7 @@ import { ClarificationQuestionSchema, ClarificationQuestionsResultSchema, Challe
  * that (Zod treats `null` as an invalid value for an optional field),
  * which was one real, reproduced cause of "the draft never appears" — see
  * challenge-generation.ts. Every genuinely-optional field must tolerate
- * both `undefined` (omitted) and an explicit `null`, normalizing to
- * `undefined` either way.
+ * both `undefined` (omitted) and an explicit `null`.
  */
 describe("ClarificationQuestionSchema — null-tolerant optional fields", () => {
   const base = { id: "level", prompt: "What year are you targeting?", type: "single" as const, required: false };
@@ -40,36 +39,60 @@ describe("ClarificationQuestionsResultSchema — min/max question count", () => 
   });
 });
 
-describe("ChallengeDraftSchema — null-tolerant optional fields", () => {
-  function base() {
-    return {
-      title: "Database Data Quality Investigation",
-      role: "Database Intern",
-      scenario: "A fictional retailer has duplicate customer records that need investigation.",
-      objective: "Assess SQL correctness and data-quality reasoning.",
-      competencies: [{ name: "SQL", reason: "Core work" }],
-      materials: [],
-      sections: [{ title: "Investigation", items: [{ kind: "code_task", title: "Write queries", prompt: "Write SQL to find duplicates." }] }],
-      deliverables: ["A short handoff summary"],
-      estimatedMinutes: 60,
-      candidateInstructions: "Work through the sandbox database and answer each task.",
-      evaluationRubric: [{ criterion: "SQL correctness", weightPercent: 100, description: "Queries return correct results." }],
-    };
-  }
+function generatedDraft() {
+  return {
+    role: "Database Intern",
+    title: "Database Data Quality Investigation",
+    scenario: "A fictional retailer has duplicate customer records that need investigation.",
+    skills: ["SQL"],
+    tasks: [{ title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" }],
+    materials: [],
+    rubric: [{ criterion: "SQL correctness", weight: 100, description: "Queries return correct results." }],
+    assumptions: [],
+    safetyNotes: [],
+  };
+}
 
-  it("accepts explicit null for aiUsagePolicy/safetyNotes/assumptions without throwing", () => {
-    const result = ChallengeDraftSchema.parse({ ...base(), aiUsagePolicy: null, safetyNotes: null, assumptions: null });
+describe("ChallengeDraftGeneratedSchema — the shape the model actually outputs", () => {
+  it("accepts explicit null for durationMinutes/aiUsagePolicy without throwing", () => {
+    const result = ChallengeDraftGeneratedSchema.parse({ ...generatedDraft(), durationMinutes: null, aiUsagePolicy: null });
+    expect(result.durationMinutes).toBeNull();
     expect(result.aiUsagePolicy).toBeNull();
-    expect(result.safetyNotes).toBeNull();
-    expect(result.assumptions).toBeNull();
   });
 
   it("accepts an empty materials array (not every challenge needs external materials)", () => {
-    expect(() => ChallengeDraftSchema.parse(base())).not.toThrow();
+    expect(() => ChallengeDraftGeneratedSchema.parse(generatedDraft())).not.toThrow();
+  });
+
+  it("requires assumptions/safetyNotes to be arrays (empty is fine, but never optional/null — no null-tolerance headache needed for these two)", () => {
+    expect(() => ChallengeDraftGeneratedSchema.parse({ ...generatedDraft(), assumptions: undefined })).toThrow();
   });
 
   it("does not constrain free-text content like a database vendor name to any enum — 'Oracle' is just prose", () => {
-    const withOracle = { ...base(), scenario: `${base().scenario} The company uses an Oracle database.` };
-    expect(() => ChallengeDraftSchema.parse(withOracle)).not.toThrow();
+    const withOracle = { ...generatedDraft(), scenario: `${generatedDraft().scenario} The company uses an Oracle database.` };
+    expect(() => ChallengeDraftGeneratedSchema.parse(withOracle)).not.toThrow();
+  });
+});
+
+describe("ChallengeDraftSchema — the full, id-carrying app-facing shape", () => {
+  function fullDraft() {
+    return {
+      id: "draft-1",
+      status: "draft" as const,
+      ...generatedDraft(),
+      tasks: [{ id: "t1", title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" as const }],
+      materials: [],
+      rubric: [{ id: "r1", criterion: "SQL correctness", weight: 100, description: "Queries return correct results." }],
+    };
+  }
+
+  it("parses a real, complete draft without throwing", () => {
+    expect(() => ChallengeDraftSchema.parse(fullDraft())).not.toThrow();
+  });
+
+  it("rejects a task with no id — ids are a control field the model never supplies, but a saved draft must always have them", () => {
+    expect(() =>
+      ChallengeDraftSchema.parse({ ...fullDraft(), tasks: [{ title: "Write queries", instructions: "x", deliverableType: "code" }] }),
+    ).toThrow();
   });
 });

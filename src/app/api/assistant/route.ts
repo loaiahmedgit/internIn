@@ -4,16 +4,24 @@ import { requireCurrentCompanyMember } from "@/lib/auth";
 import { getModel } from "@/lib/ai/gemma-provider";
 import { buildCompanyHiringFacts, buildInternshipFacts } from "@/lib/company/internship-facts";
 import { ClarificationQuestionsResultSchema } from "@/lib/ai/challenge-clarification-schemas";
-import { CHALLENGE_POLICY, CLARIFICATION_POLICY, buildDesignSummary, formatQuestionnaireAnswers, generateChallengeDraftObject } from "@/lib/ai/challenge-generation";
+import {
+  CHALLENGE_POLICY,
+  CLARIFICATION_POLICY,
+  attachDraftIdentity,
+  buildDesignSummary,
+  buildEmployerContext,
+  generateChallengeDraftObject,
+} from "@/lib/ai/challenge-generation";
 import { latestChallengeDraft, latestQuestionnaireAnswers, transcriptOf } from "@/lib/ai/assistant-conversation";
 import type { AssistantUIMessage } from "@/lib/ai/assistant-messages";
 
-// Generous, not arbitrary: a real draftOrReviseChallenge call has been
-// observed taking ~90-130s on its own, and generateChallengeDraftObject
-// can make two such attempts. The old value (60) was shorter than a single
-// normal attempt — the Vercel function was being killed mid-generation,
-// which is what actually produced the generic "An error occurred".
-export const maxDuration = 240;
+// Generous, not arbitrary: generateChallengeDraftObject makes up to 3
+// attempts at 75s each (225s worst case) plus context-building and the
+// closing ack call. 280 stays under Vercel's current 300s ceiling with
+// margin. The old value (60) was shorter than a single normal attempt —
+// the Vercel function was being killed mid-generation, which is what
+// actually produced the generic "An error occurred".
+export const maxDuration = 280;
 
 const RequestSchema = z.object({
   messages: z.array(z.record(z.string(), z.unknown())),
@@ -54,9 +62,21 @@ export async function POST(req: Request) {
   const messages = body.messages as unknown as AssistantUIMessage[];
   const opportunityId = body.opportunityId;
   const scopeLabel = opportunityId ? "this internship's pipeline" : "your hiring workspace";
+  const requestId = crypto.randomUUID();
 
   const stream = createUIMessageStream<AssistantUIMessage>({
     execute: async ({ writer }) => {
+      // Per-request idempotency guards (see AGENTS request item 17: "the
+      // same challenge is generated twice"). Challenge generation is a
+      // deterministic, single-shot pipeline (extract context -> generate
+      // -> attach identity -> render) that the MODEL decides to trigger at
+      // most once per turn — these flags reject a second trigger within
+      // the same request outright, rather than trusting the model's own
+      // step loop not to call a generation tool twice. One request = one
+      // generation, guaranteed at the code level, not by convention.
+      let draftGenerated: { title: string; taskCount: number } | null = null;
+      let questionnaireAsked = false;
+
       // Deterministic continuation: the Questionnaire's own submit button
       // IS the decision to proceed to drafting — asking the model to
       // freely re-decide whether to draft here would be slower and less
@@ -67,15 +87,19 @@ export async function POST(req: Request) {
       // below untouched.
       const forcedAnswers = latestQuestionnaireAnswers(messages);
       if (forcedAnswers) {
-        const roleSummary = transcriptOf(messages.slice(0, -1)).slice(-400) || "Internship role described in this conversation";
-        const contextBlock = `The employer just answered clarification questions about this role:\n${formatQuestionnaireAnswers(forcedAnswers)}\n\nFull conversation so far:\n${transcriptOf(messages)}`;
+        const generationId = crypto.randomUUID();
+        const originalRequest = transcriptOf(messages.slice(0, -1)).split("\n").find((line) => line.startsWith("Employer:")) ?? "Internship role described in this conversation";
+        console.log(`[assistant] generation start requestId=${requestId} generationId=${generationId} trigger=questionnaire`);
 
         writer.write({ type: "data-step", id: "designing", data: { label: "Designing challenge…", status: "active" } });
         let draft;
         try {
-          draft = await generateChallengeDraftObject({ roleSummary, contextBlock, existingDraft: latestChallengeDraft(messages) });
+          const context = await buildEmployerContext({ originalRequest, transcript: transcriptOf(messages), answers: forcedAnswers });
+          const existingDraft = latestChallengeDraft(messages);
+          const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction: existingDraft ? "Incorporate the employer's latest answers." : undefined });
+          draft = attachDraftIdentity(generated, existingDraft);
         } catch (error) {
-          console.error("[assistant] deterministic draft generation failed:", error instanceof Error ? error.message : error);
+          console.error(`[assistant] generation failed requestId=${requestId} generationId=${generationId}:`, error instanceof Error ? error.message : error);
           writer.write({ type: "data-step", id: "designing", data: { label: "Couldn't finish designing the challenge", status: "complete" } });
           throw new Error("We couldn't finish generating the challenge. Your answers are saved — try again.");
         }
@@ -83,13 +107,14 @@ export async function POST(req: Request) {
         writer.write({ type: "data-step", id: "designing", data: { label: "Designed challenge", status: "complete" } });
         writer.write({ type: "data-designSummary", id: "designing", data: { lines: buildDesignSummary(draft) } });
         writer.write({ type: "data-challengeDraft", id: crypto.randomUUID(), data: draft });
+        console.log(`[assistant] generation complete requestId=${requestId} generationId=${generationId} draftId=${draft.id} taskCount=${draft.tasks.length}`);
 
         // One short, natural sentence introducing the draft the app just
         // rendered as a real component — never a restatement of its
         // contents, and no tools needed for this single sentence.
         const ack = streamText({
           model: getModel(),
-          system: `You just designed an internship challenge draft titled "${draft.title}" based on the employer's answers. Write exactly one short, natural sentence introducing it (e.g. "Here's a draft based on what you told me."). The app renders the draft itself as a card below — do not restate or summarize its contents.`,
+          system: `You just designed an internship challenge draft titled "${draft.title}" based on the employer's answers. Write exactly one short, natural sentence introducing it (e.g. "I've drafted the challenge based on your answers. Review it below — nothing has been published yet."). The app renders the draft itself as a real, editable component below — do not restate or summarize its contents.`,
           prompt: "Write the introductory sentence now.",
         });
         writer.merge(ack.toUIMessageStream());
@@ -135,6 +160,8 @@ export async function POST(req: Request) {
           roleSummary: z.string().describe("One sentence summarizing the internship role/work as described so far"),
         }),
         execute: async ({ roleSummary }) => {
+          if (questionnaireAsked) return { askedQuestionCount: 0, note: "Already asked in this turn." };
+          questionnaireAsked = true;
           const { object } = await generateObject({
             model: getModel(),
             schema: ClarificationQuestionsResultSchema,
@@ -153,16 +180,24 @@ export async function POST(req: Request) {
           "Create or update a realistic, structured internship challenge draft (never a flat quiz) once there's enough real context about the actual work — either because the employer's description already had it, or clarifying questions were just answered. If a draft already exists in this conversation and the employer is giving feedback on it (\"make it easier\", \"remove a task\", \"add an Excel part\"), this updates that SAME draft using their feedback.",
         inputSchema: z.object({
           roleSummary: z.string().describe("One sentence summarizing the internship role/work"),
+          revisionInstruction: z.string().nullable().optional().describe("If revising an existing draft, the employer's exact feedback verbatim. Omit when creating a new draft."),
         }),
-        execute: async ({ roleSummary }) => {
-          const draft = await generateChallengeDraftObject({
-            roleSummary,
-            contextBlock: `Full conversation so far (includes any clarification Q&A):\n${transcriptOf(messages)}`,
-            existingDraft: latestChallengeDraft(messages),
-          });
+        execute: async ({ roleSummary, revisionInstruction }) => {
+          if (draftGenerated) return { title: draftGenerated.title, taskCount: draftGenerated.taskCount, note: "Already generated in this turn." };
+
+          const generationId = crypto.randomUUID();
+          console.log(`[assistant] generation start requestId=${requestId} generationId=${generationId} trigger=tool`);
+          const existingDraft = latestChallengeDraft(messages);
+          const context = await buildEmployerContext({ originalRequest: roleSummary, transcript: transcriptOf(messages), answers: null });
+          const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction: revisionInstruction ?? undefined });
+          const draft = attachDraftIdentity(generated, existingDraft);
+
           writer.write({ type: "data-designSummary", id: "designing", data: { lines: buildDesignSummary(draft) } });
           writer.write({ type: "data-challengeDraft", id: crypto.randomUUID(), data: draft });
-          return { title: draft.title, sectionCount: draft.sections.length };
+          console.log(`[assistant] generation complete requestId=${requestId} generationId=${generationId} draftId=${draft.id} taskCount=${draft.tasks.length}`);
+
+          draftGenerated = { title: draft.title, taskCount: draft.tasks.length };
+          return draftGenerated;
         },
       });
 
@@ -176,8 +211,8 @@ ${CHALLENGE_POLICY}
 
 You have three tools:
 - checkWorkspaceData: looks up real, current facts about ${scopeLabel}. Call it ONLY when the message actually requires real workspace data (applicant counts, stages, deadlines, activity, an internship's status). For a greeting, thanks, small talk, "what can you do?", or a general question, answer directly — do NOT call it.
-- askClarifyingQuestions: see above.
-- draftOrReviseChallenge: see above.
+- askClarifyingQuestions: ask 2-4 short questions before drafting, only when real substantive context about the role is missing. Do not call this if the employer's message already gives enough detail — call draftOrReviseChallenge directly instead.
+- draftOrReviseChallenge: create or update a realistic challenge draft once there's enough context. Call this AT MOST ONCE per message, even if you want to double-check something — a second call in the same turn is rejected, not retried.
 
 When you call checkWorkspaceData, treat its result as the ONLY source for any number, date, or count in your answer — never invent, estimate, or round a figure it didn't give you. When askClarifyingQuestions or draftOrReviseChallenge run, the app renders the real structured result itself — you don't need to restate it in prose, just write one short natural sentence around it (e.g. "I can turn that into a realistic work challenge. I just need a few details first." before a questionnaire, or "Here's a draft based on what you described." before a challenge card).
 

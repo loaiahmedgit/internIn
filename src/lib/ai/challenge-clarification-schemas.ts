@@ -10,11 +10,11 @@ import { z } from "zod";
 // output models routinely emit an explicit `null` for "nothing here"
 // instead of omitting the key, and plain `.optional()` rejects that — one
 // real cause of "the draft never appears". `.optional()` outermost keeps
-// the object key itself omittable in TypeScript (so code building a
-// ChallengeDraft can still leave it out entirely); `.nullable()` inside
-// makes an explicit `null` value valid too. Every genuinely-optional field
-// in this file uses this pattern so the *contract* tolerates it, rather
-// than patching individual call sites.
+// the object key itself omittable in TypeScript (so code building a value
+// can still leave it out entirely); `.nullable()` inside makes an explicit
+// `null` value valid too. Every genuinely-optional field in this file uses
+// this pattern so the *contract* tolerates it, rather than patching
+// individual call sites.
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 const optionalFlag = () => z.boolean().nullable().optional();
 
@@ -50,99 +50,144 @@ export const ClarificationQuestionsResultSchema = z.object({
 export type ClarificationQuestionsResult = z.infer<typeof ClarificationQuestionsResultSchema>;
 
 /**
- * A realistic internship challenge draft — deliberately NOT a flat quiz.
- * `sections` hold a mix of item kinds (practical task, code, spreadsheet,
- * open-ended question, etc.) chosen per-profession, never one universal
- * question type. This is the AUTHORING-TIME shape used inside the Ask
- * internIn conversation; when the employer saves it, it's mapped onto the
- * app's real `Challenge`/`ChallengeSchema` (src/lib/ai/schemas.ts) and
- * persisted through the existing saveChallengeVersionAction — the same
- * real approval pipeline every other challenge in the app goes through.
+ * The ONE canonical structured record of what the employer told internIn,
+ * built once (from the original message + any questionnaire answers) and
+ * consumed directly by challenge generation — never reconstructed by
+ * re-reading a giant serialized chat transcript at generation time. Every
+ * array here reports exactly what was selected/said; an empty array means
+ * "not specified", never a guess.
  */
-export const ChallengeCompetencySchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  reason: z.string().trim().min(1).max(240),
+export const EmployerContextSchema = z.object({
+  originalRequest: z.string().trim().min(1).max(500),
+  role: z.string().trim().min(2).max(160),
+  level: optionalText(160),
+  responsibilities: z.array(z.string().trim().min(1).max(160)).max(10),
+  tools: z.array(z.string().trim().min(1).max(80)).max(10),
+  restrictions: z.array(z.string().trim().min(1).max(300)).max(10),
+  additionalContext: optionalText(500),
 });
-export type ChallengeCompetency = z.infer<typeof ChallengeCompetencySchema>;
+export type EmployerContext = z.infer<typeof EmployerContextSchema>;
 
-export const ChallengeMaterialSchema = z.object({
-  name: z.string().trim().min(1).max(160),
-  description: z.string().trim().min(1).max(400),
-});
-export type ChallengeMaterial = z.infer<typeof ChallengeMaterialSchema>;
-
-export const ChallengeItemKindSchema = z.enum([
-  "practical_task",
-  "open_ended_question",
-  "single_choice_question",
-  "multiple_choice_question",
-  "file_review_task",
-  "code_task",
-  "spreadsheet_task",
-  "design_task",
-  "written_deliverable",
+/**
+ * A realistic internship challenge draft — deliberately NOT a flat quiz,
+ * and deliberately NOT primarily Markdown: this is real structured
+ * application state, not an AI message. This is the AUTHORING-TIME shape
+ * used inside the Ask internIn conversation; when the employer uses it,
+ * it's mapped onto the app's real `Challenge`/`ChallengeSchema`
+ * (src/lib/ai/schemas.ts) and persisted through the existing
+ * saveChallengeVersionAction — the same real approval pipeline every other
+ * challenge in the app goes through.
+ *
+ * Control fields (`id`, per-item `id`s, `status`) follow the project's
+ * existing rule (see gemma-provider.ts) that such fields are never trusted
+ * from the model: `ChallengeDraftGeneratedSchema` is what generateObject
+ * actually validates against, and `attachDraftIdentity` (challenge-
+ * generation.ts) is the ONLY place ids/status get attached — reusing the
+ * SAME draft id across a revision, never minting a new one, so a chat edit
+ * updates the one active draft instead of starting a disconnected new one.
+ */
+export const ChallengeTaskDeliverableTypeSchema = z.enum([
+  "written",
+  "file",
+  "code",
+  "spreadsheet",
+  "design",
+  "presentation",
+  "other",
 ]);
-export type ChallengeItemKind = z.infer<typeof ChallengeItemKindSchema>;
+export type ChallengeTaskDeliverableType = z.infer<typeof ChallengeTaskDeliverableTypeSchema>;
 
-export const ChallengeItemSchema = z.object({
-  kind: ChallengeItemKindSchema,
-  title: z.string().trim().min(1).max(160),
-  prompt: z.string().trim().min(1).max(2000),
-  /** Only meaningful for the two choice-question kinds. */
-  choices: z.array(z.string().trim().min(1).max(200)).max(8).optional(),
-});
-export type ChallengeItem = z.infer<typeof ChallengeItemSchema>;
-
-export const ChallengeSectionSchema = z.object({
-  title: z.string().trim().min(1).max(160),
-  items: z.array(ChallengeItemSchema).min(1).max(8),
-});
-export type ChallengeSection = z.infer<typeof ChallengeSectionSchema>;
-
-export const RubricCriterionWeightedSchema = z.object({
-  criterion: z.string().trim().min(1).max(160),
-  weightPercent: z.number().int().min(0).max(100),
-  description: z.string().trim().min(1).max(400),
-});
-export type RubricCriterionWeighted = z.infer<typeof RubricCriterionWeightedSchema>;
-
-export const ChallengeAiUsagePolicySchema = z.enum([
-  "not_allowed",
-  "research_only",
-  "allowed_disclose",
-  "fully_allowed",
-]);
-export type ChallengeAiUsagePolicy = z.infer<typeof ChallengeAiUsagePolicySchema>;
-
-/** Shared display label for each item kind — used by both the in-chat
- * ChallengeDraftCard and the mapping into the app's real Challenge shape,
- * so the two never drift apart. */
-export const CHALLENGE_ITEM_KIND_LABEL: Record<ChallengeItemKind, string> = {
-  practical_task: "Practical task",
-  open_ended_question: "Open-ended question",
-  single_choice_question: "Single-choice question",
-  multiple_choice_question: "Multiple-choice question",
-  file_review_task: "File/document review",
-  code_task: "Code task",
-  spreadsheet_task: "Spreadsheet task",
-  design_task: "Design task",
-  written_deliverable: "Written deliverable",
+export const DELIVERABLE_TYPE_LABEL: Record<ChallengeTaskDeliverableType, string> = {
+  written: "Written response",
+  file: "File/document review",
+  code: "Code",
+  spreadsheet: "Spreadsheet",
+  design: "Design",
+  presentation: "Presentation",
+  other: "Other",
 };
 
-export const ChallengeDraftSchema = z.object({
-  title: z.string().trim().min(2).max(180),
+const GeneratedTaskSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  instructions: z.string().trim().min(1).max(2000),
+  deliverableType: ChallengeTaskDeliverableTypeSchema,
+});
+
+const GeneratedMaterialSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  type: z.string().trim().min(1).max(60),
+  description: optionalText(400),
+});
+
+const GeneratedRubricCriterionSchema = z.object({
+  criterion: z.string().trim().min(1).max(160),
+  weight: z.number().int().min(0).max(100),
+  description: optionalText(400),
+});
+
+export const ChallengeAiUsagePolicyModeSchema = z.enum([
+  "not_allowed",
+  "research_only",
+  "allowed_with_disclosure",
+  "fully_allowed",
+  "custom",
+]);
+export type ChallengeAiUsagePolicyMode = z.infer<typeof ChallengeAiUsagePolicyModeSchema>;
+
+export const AI_USAGE_MODE_LABEL: Record<ChallengeAiUsagePolicyMode, string> = {
+  not_allowed: "AI not allowed",
+  research_only: "AI allowed for research only",
+  allowed_with_disclosure: "AI allowed, must disclose",
+  fully_allowed: "AI fully allowed",
+  custom: "Custom AI usage policy",
+};
+
+const GeneratedAiUsagePolicySchema = z.object({
+  mode: ChallengeAiUsagePolicyModeSchema,
+  customText: optionalText(300),
+});
+
+/** What generateObject actually validates the model's output against — no
+ * ids, no status. See the block comment above for why. */
+export const ChallengeDraftGeneratedSchema = z.object({
   role: z.string().trim().min(2).max(160),
+  title: z.string().trim().min(2).max(180),
   scenario: z.string().trim().min(20).max(3000),
-  objective: z.string().trim().min(10).max(500),
-  competencies: z.array(ChallengeCompetencySchema).min(1).max(8),
-  materials: z.array(ChallengeMaterialSchema).max(10),
-  sections: z.array(ChallengeSectionSchema).min(1).max(6),
-  deliverables: z.array(z.string().trim().min(1).max(300)).min(1).max(10),
-  estimatedMinutes: z.number().int().min(10).max(480),
-  candidateInstructions: z.string().trim().min(10).max(2000),
-  aiUsagePolicy: ChallengeAiUsagePolicySchema.nullable().optional(),
-  evaluationRubric: z.array(RubricCriterionWeightedSchema).min(1).max(8),
-  safetyNotes: z.array(z.string().trim().min(1).max(300)).max(6).nullable().optional(),
-  assumptions: z.array(z.string().trim().min(1).max(300)).max(6).nullable().optional(),
+  skills: z.array(z.string().trim().min(1).max(80)).min(1).max(10),
+  tasks: z.array(GeneratedTaskSchema).min(1).max(10),
+  materials: z.array(GeneratedMaterialSchema).max(10),
+  durationMinutes: z.number().int().min(10).max(480).nullable().optional(),
+  rubric: z.array(GeneratedRubricCriterionSchema).min(1).max(8),
+  aiUsagePolicy: GeneratedAiUsagePolicySchema.nullable().optional(),
+  /** Always present as an array — empty means none, never omitted/null,
+   * so consuming code never needs a null-check for these two. */
+  assumptions: z.array(z.string().trim().min(1).max(300)).max(6),
+  safetyNotes: z.array(z.string().trim().min(1).max(300)).max(6),
+});
+export type ChallengeDraftGenerated = z.infer<typeof ChallengeDraftGeneratedSchema>;
+
+const idField = () => z.string().trim().min(1).max(80);
+
+export const ChallengeDraftTaskSchema = GeneratedTaskSchema.extend({ id: idField() });
+export type ChallengeDraftTask = z.infer<typeof ChallengeDraftTaskSchema>;
+
+export const ChallengeDraftMaterialSchema = GeneratedMaterialSchema.extend({ id: idField() });
+export type ChallengeDraftMaterial = z.infer<typeof ChallengeDraftMaterialSchema>;
+
+export const ChallengeDraftRubricCriterionSchema = GeneratedRubricCriterionSchema.extend({ id: idField() });
+export type ChallengeDraftRubricCriterion = z.infer<typeof ChallengeDraftRubricCriterionSchema>;
+
+/** The full, app-facing draft — `id` is the stable identity a revision
+ * targets (see attachDraftIdentity in challenge-generation.ts); `status`
+ * is local, cosmetic state ("Draft" vs "Used" badge), never fed back
+ * through the model. This is the schema validated at the save-action
+ * boundary (challenge-draft-actions.ts) — a client-supplied draft is
+ * never trusted without it, same as every other server action here. */
+export const ChallengeDraftSchema = ChallengeDraftGeneratedSchema.omit({ tasks: true, materials: true, rubric: true }).extend({
+  id: idField(),
+  status: z.enum(["draft", "approved"]),
+  tasks: z.array(ChallengeDraftTaskSchema).min(1).max(10),
+  materials: z.array(ChallengeDraftMaterialSchema).max(10),
+  rubric: z.array(ChallengeDraftRubricCriterionSchema).min(1).max(8),
 });
 export type ChallengeDraft = z.infer<typeof ChallengeDraftSchema>;

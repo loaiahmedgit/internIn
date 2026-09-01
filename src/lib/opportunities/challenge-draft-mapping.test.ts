@@ -5,35 +5,26 @@ import type { ChallengeDraft } from "@/lib/ai/challenge-clarification-schemas";
 
 function draft(overrides: Partial<ChallengeDraft> = {}): ChallengeDraft {
   return {
-    title: "Database Quality Investigation",
+    id: "draft-1",
+    status: "draft",
     role: "Database Intern",
+    title: "Database Quality Investigation",
     scenario: "A fictional ecommerce database has duplicate customers and inconsistent order totals.",
-    objective: "Assess SQL and data-quality reasoning.",
-    competencies: [{ name: "SQL", reason: "Core daily work" }],
-    materials: [{ name: "customers.csv", description: "Synthetic customer records" }],
-    sections: [
-      {
-        title: "Investigation",
-        items: [
-          { kind: "practical_task", title: "Find duplicates", prompt: "Identify duplicate customer rows." },
-          { kind: "code_task", title: "Write queries", prompt: "Write SQL to detect the issues." },
-        ],
-      },
-      {
-        title: "Write-up",
-        items: [{ kind: "written_deliverable", title: "Handoff note", prompt: "Summarize findings in 200 words." }],
-      },
+    skills: ["SQL"],
+    tasks: [
+      { id: "t1", title: "Find duplicates", instructions: "Identify duplicate customer rows.", deliverableType: "code" },
+      { id: "t2", title: "Write queries", instructions: "Write SQL to detect the issues.", deliverableType: "code" },
+      { id: "t3", title: "Handoff note", instructions: "Summarize findings in 200 words.", deliverableType: "written" },
     ],
-    deliverables: ["A short handoff document"],
-    estimatedMinutes: 75,
-    candidateInstructions: "Work through the sandbox database and answer each task.",
-    aiUsagePolicy: "research_only",
-    evaluationRubric: [
-      { criterion: "SQL correctness", weightPercent: 60, description: "Queries return correct results." },
-      { criterion: "Communication", weightPercent: 40, description: "Findings are clearly written." },
+    materials: [{ id: "m1", name: "customers.csv", type: "csv", description: "Synthetic customer records" }],
+    durationMinutes: 75,
+    aiUsagePolicy: { mode: "research_only" },
+    rubric: [
+      { id: "r1", criterion: "SQL correctness", weight: 60, description: "Queries return correct results." },
+      { id: "r2", criterion: "Communication", weight: 40, description: "Findings are clearly written." },
     ],
-    safetyNotes: undefined,
     assumptions: ["Candidates have basic PostgreSQL familiarity."],
+    safetyNotes: [],
     ...overrides,
   };
 }
@@ -44,10 +35,11 @@ describe("mapChallengeDraftToChallenge", () => {
     expect(() => ChallengeSchema.parse(mapped)).not.toThrow();
   });
 
-  it("flattens every section's items into tasks, in order, none dropped", () => {
+  it("maps every task in order, none dropped, description tagged with its deliverable type", () => {
     const mapped = mapChallengeDraftToChallenge(draft());
     expect(mapped.tasks).toHaveLength(3);
     expect(mapped.tasks.map((t) => t.title)).toEqual(["Find duplicates", "Write queries", "Handoff note"]);
+    expect(mapped.tasks[2].description).toContain("[Written response]");
   });
 
   it("always saves as ai_generated, never a published/approved status", () => {
@@ -67,8 +59,18 @@ describe("mapChallengeDraftToChallenge", () => {
     expect(mapped.scenario).toContain("Candidates have basic PostgreSQL familiarity.");
   });
 
-  it("maps competencies to the flat skills list the rest of the app reads", () => {
+  it("maps skills straight through to the flat skills list the rest of the app reads", () => {
     const mapped = mapChallengeDraftToChallenge(draft());
     expect(mapped.skills).toEqual(["SQL"]);
+  });
+
+  it("falls back to 60 minutes when durationMinutes is absent, never crashing on a missing optional field", () => {
+    const mapped = mapChallengeDraftToChallenge(draft({ durationMinutes: null }));
+    expect(mapped.estimatedMinutes).toBe(60);
+  });
+
+  it("uses the custom AI usage text when the mode is custom", () => {
+    const mapped = mapChallengeDraftToChallenge(draft({ aiUsagePolicy: { mode: "custom", customText: "Only for research, never to generate the final SQL." } }));
+    expect(mapped.scenario).toContain("Only for research, never to generate the final SQL.");
   });
 });
