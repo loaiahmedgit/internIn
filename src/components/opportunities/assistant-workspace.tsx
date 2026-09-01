@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
@@ -36,6 +36,8 @@ import { Conversation, ConversationContent, ConversationScrollButton } from "@/c
 import { Message, MessageContent, MessageResponse, MessageActions, MessageAction } from "@/components/ai-elements/message";
 import { ChainOfThought, ChainOfThoughtHeader, ChainOfThoughtContent, ChainOfThoughtStep } from "@/components/ai-elements/chain-of-thought";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { AskInternInQuestionnaire } from "@/components/opportunities/ask-internin-questionnaire";
+import { ChallengeDraftCard } from "@/components/opportunities/challenge-draft-card";
 import type { AssistantStepData, AssistantUIMessage } from "@/lib/ai/assistant-messages";
 
 const ALL_HIRING_SUGGESTIONS = [
@@ -121,6 +123,10 @@ export function AssistantWorkspace({
   const searchParams = useSearchParams();
   const composerRef = useRef<HTMLDivElement>(null);
   const speechSupported = useSpeechSupported();
+  // Ids of clarification questionnaires already submitted — a submitted
+  // questionnaire stays visible (it's part of the real transcript) but
+  // becomes read-only so it can't be answered twice.
+  const [answeredQuestionnaireIds, setAnsweredQuestionnaireIds] = useState<Set<string>>(new Set());
 
   const { messages, sendMessage, status, regenerate, stop, error, clearError } = useChat<AssistantUIMessage>({
     transport: new DefaultChatTransport({ api: "/api/assistant", body: { opportunityId } }),
@@ -281,6 +287,14 @@ export function AssistantWorkspace({
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
             {messages.map((message) => {
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
+            const questionnaires = message.parts.filter(
+              (p): p is Extract<typeof p, { type: "data-questionnaire" }> & { id: string } =>
+                p.type === "data-questionnaire" && typeof p.id === "string",
+            );
+            const challengeDrafts = message.parts.filter(
+              (p): p is Extract<typeof p, { type: "data-challengeDraft" }> & { id: string } =>
+                p.type === "data-challengeDraft" && typeof p.id === "string",
+            );
             const textParts = message.parts.filter((p) => p.type === "text");
             const responseText = textParts.map((p) => p.text).join("");
             const isLastAssistant = message.role === "assistant" && message.id === messages.at(-1)?.id;
@@ -310,8 +324,24 @@ export function AssistantWorkspace({
                         <MessageResponse>{responseText}</MessageResponse>
                       </div>
                     ) : (
-                      isLastAssistant && isStreaming && <Shimmer>Thinking…</Shimmer>
+                      isLastAssistant && isStreaming && !questionnaires.length && !challengeDrafts.length && <Shimmer>Thinking…</Shimmer>
                     )}
+
+                    {questionnaires.map((q) => (
+                      <AskInternInQuestionnaire
+                        key={q.id}
+                        result={q.data}
+                        disabled={answeredQuestionnaireIds.has(q.id)}
+                        onSubmit={(answersSummary) => {
+                          setAnsweredQuestionnaireIds((prev) => new Set(prev).add(q.id));
+                          sendMessage({ text: answersSummary });
+                        }}
+                      />
+                    ))}
+
+                    {challengeDrafts.map((d) => (
+                      <ChallengeDraftCard key={d.id} draft={d.data} opportunityId={opportunityId} />
+                    ))}
                     {responseText && (
                       <>
                         <MessageActions>
