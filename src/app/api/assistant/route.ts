@@ -1,16 +1,15 @@
 import { z } from "zod";
-import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, generateObject, stepCountIs, streamText, tool } from "ai";
+import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, stepCountIs, streamText, tool } from "ai";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { getModel } from "@/lib/ai/gemma-provider";
 import { buildCompanyHiringFacts, buildInternshipFacts } from "@/lib/company/internship-facts";
-import { ClarificationQuestionsResultSchema } from "@/lib/ai/challenge-clarification-schemas";
 import {
   CHALLENGE_POLICY,
-  CLARIFICATION_POLICY,
   attachDraftIdentity,
   buildDesignSummary,
   buildEmployerContext,
   generateChallengeDraftObject,
+  generateClarificationQuestions,
 } from "@/lib/ai/challenge-generation";
 import { latestChallengeDraft, latestQuestionnaireAnswers, transcriptOf } from "@/lib/ai/assistant-conversation";
 import type { AssistantUIMessage } from "@/lib/ai/assistant-messages";
@@ -37,6 +36,14 @@ Never fabricate: internship details, applicants, company policies, candidate evi
 Never frame candidate evaluation in absolute terms ("definitely hire", "guaranteed top performer", a success percentage) and never rank candidates across different, unrelated internships. Hiring decisions are always the human's.`;
 
 export async function POST(req: Request) {
+  // Real stage timing (T0-T2 of the requested timeline), not a guess —
+  // logged so a slow request is diagnosable from Vercel function logs
+  // instead of speculated about. The generation calls themselves log their
+  // own per-attempt timing (see withGenerateRetries in challenge-
+  // generation.ts).
+  const t0 = Date.now();
+  const requestId = crypto.randomUUID();
+
   // Auth and body validation happen before the stream starts, so a failure
   // here can't be surfaced through createUIMessageStream's onError (that
   // only covers errors inside execute) — without this try/catch, an
@@ -50,6 +57,7 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : "Not signed in.";
     return new Response(message, { status: 401 });
   }
+  console.log(`[assistant] requestId=${requestId} auth completed at +${Date.now() - t0}ms`);
 
   let body: z.infer<typeof RequestSchema>;
   try {
@@ -62,7 +70,7 @@ export async function POST(req: Request) {
   const messages = body.messages as unknown as AssistantUIMessage[];
   const opportunityId = body.opportunityId;
   const scopeLabel = opportunityId ? "this internship's pipeline" : "your hiring workspace";
-  const requestId = crypto.randomUUID();
+  console.log(`[assistant] requestId=${requestId} body parsed at +${Date.now() - t0}ms, ${messages.length} messages`);
 
   const stream = createUIMessageStream<AssistantUIMessage>({
     execute: async ({ writer }) => {
@@ -89,7 +97,7 @@ export async function POST(req: Request) {
       if (forcedAnswers) {
         const generationId = crypto.randomUUID();
         const originalRequest = transcriptOf(messages.slice(0, -1)).split("\n").find((line) => line.startsWith("Employer:")) ?? "Internship role described in this conversation";
-        console.log(`[assistant] generation start requestId=${requestId} generationId=${generationId} trigger=questionnaire`);
+        console.log(`[assistant] requestId=${requestId} generationId=${generationId} trigger=questionnaire generation start at +${Date.now() - t0}ms`);
 
         // Written BEFORE the slow generateObject call, not after — this is
         // the actual fix for the "blank dead wait" complaint: the client
@@ -103,13 +111,13 @@ export async function POST(req: Request) {
           const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction: existingDraft ? "Incorporate the employer's latest answers." : undefined });
           draft = attachDraftIdentity(generated, existingDraft);
         } catch (error) {
-          console.error(`[assistant] generation failed requestId=${requestId} generationId=${generationId}:`, error instanceof Error ? error.message : error);
+          console.error(`[assistant] requestId=${requestId} generationId=${generationId} generation failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
           throw new Error("We couldn't finish generating the challenge. Your answers are saved — try again.");
         }
 
         writer.write({ type: "data-designSummary", id: "designing", data: { lines: buildDesignSummary(draft) } });
         writer.write({ type: "data-challengeDraft", id: crypto.randomUUID(), data: draft });
-        console.log(`[assistant] generation complete requestId=${requestId} generationId=${generationId} draftId=${draft.id} taskCount=${draft.tasks.length}`);
+        console.log(`[assistant] requestId=${requestId} generationId=${generationId} generation complete at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
 
         // One short, natural sentence introducing the draft the app just
         // rendered as a real component — never a restatement of its
@@ -136,6 +144,7 @@ export async function POST(req: Request) {
           : "Look up real, current hiring data across the whole company: active internship count, applicant/review/offer counts, weekly application activity, and internships closing soon. Call this ONLY when the hiring manager's question genuinely needs real workspace data. Never call it for greetings, small talk, thanks, or general questions about how internIn or hiring concepts work.",
         inputSchema: z.object({}),
         execute: async () => {
+          console.log(`[assistant] requestId=${requestId} model decided to call checkWorkspaceData at +${Date.now() - t0}ms`);
           writer.write({ type: "data-step", id: "load", data: { label: `Checking ${scopeLabel}`, status: "active" } });
           const facts = opportunityId
             ? await buildInternshipFacts(opportunityId, membership.companyId)
@@ -145,6 +154,7 @@ export async function POST(req: Request) {
             id: "load",
             data: { label: `Checked ${scopeLabel}`, description: facts.split("\n")[0], status: "complete" },
           });
+          console.log(`[assistant] requestId=${requestId} checkWorkspaceData complete at +${Date.now() - t0}ms`);
           return facts;
         },
       });
@@ -164,14 +174,11 @@ export async function POST(req: Request) {
         execute: async ({ roleSummary }) => {
           if (questionnaireAsked) return { askedQuestionCount: 0, note: "Already asked in this turn." };
           questionnaireAsked = true;
+          console.log(`[assistant] requestId=${requestId} model decided to call askClarifyingQuestions at +${Date.now() - t0}ms`);
           writer.write({ type: "data-progress", id: "progress", data: { label: "Preparing a few questions…" } });
-          const { object } = await generateObject({
-            model: getModel(),
-            schema: ClarificationQuestionsResultSchema,
-            system: `You write short, plain-language clarification questions for a hiring manager who wants an internship work challenge designed. ${CLARIFICATION_POLICY} Avoid HR jargon (say "What will they spend most of their time doing?", never "Select the primary competency domain").`,
-            prompt: `Internship role so far: ${roleSummary}\n\nFull conversation:\n${transcriptOf(messages)}`,
-            abortSignal: AbortSignal.timeout(60_000),
-          });
+          const genT0 = Date.now();
+          const object = await generateClarificationQuestions({ roleSummary, transcript: transcriptOf(messages) });
+          console.log(`[assistant] requestId=${requestId} askClarifyingQuestions generation=${Date.now() - genT0}ms total=+${Date.now() - t0}ms questions=${object.questions.length}`);
           const id = crypto.randomUUID();
           writer.write({ type: "data-questionnaire", id, data: object });
           return { askedQuestionCount: object.questions.length };
@@ -189,7 +196,7 @@ export async function POST(req: Request) {
           if (draftGenerated) return { title: draftGenerated.title, taskCount: draftGenerated.taskCount, note: "Already generated in this turn." };
 
           const generationId = crypto.randomUUID();
-          console.log(`[assistant] generation start requestId=${requestId} generationId=${generationId} trigger=tool`);
+          console.log(`[assistant] requestId=${requestId} generationId=${generationId} trigger=tool model decided to call draftOrReviseChallenge at +${Date.now() - t0}ms`);
           writer.write({ type: "data-progress", id: "progress", data: { label: "Designing your challenge…" } });
           const existingDraft = latestChallengeDraft(messages);
           const context = await buildEmployerContext({ originalRequest: roleSummary, transcript: transcriptOf(messages), answers: null });
@@ -198,7 +205,7 @@ export async function POST(req: Request) {
 
           writer.write({ type: "data-designSummary", id: "designing", data: { lines: buildDesignSummary(draft) } });
           writer.write({ type: "data-challengeDraft", id: crypto.randomUUID(), data: draft });
-          console.log(`[assistant] generation complete requestId=${requestId} generationId=${generationId} draftId=${draft.id} taskCount=${draft.tasks.length}`);
+          console.log(`[assistant] requestId=${requestId} generationId=${generationId} generation complete at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
 
           draftGenerated = { title: draft.title, taskCount: draft.tasks.length };
           return draftGenerated;

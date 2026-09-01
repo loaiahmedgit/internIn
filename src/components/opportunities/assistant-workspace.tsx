@@ -349,16 +349,24 @@ export function AssistantWorkspace({
                         </ChainOfThoughtContent>
                       </ChainOfThought>
                     )}
-                    {responseText ? (
+                    {responseText && (
                       <div className="typeset typeset-docs">
                         <MessageResponse>{responseText}</MessageResponse>
                       </div>
-                    ) : (
-                      isLastAssistant &&
+                    )}
+                    {/* NOT an `else` of the block above: the model routinely
+                        writes a short lead-in ("I just need a few more
+                        details first.") BEFORE the slow tool call that
+                        actually prepares the questionnaire/draft — an
+                        `if (responseText) show text ELSE show shimmer`
+                        here hides the shimmer for the entire rest of that
+                        wait the instant any text exists, which is exactly
+                        the "responds, then a dead minute" bug. Text and
+                        the progress shimmer can both be true at once. */}
+                    {isLastAssistant &&
                       isStreaming &&
                       !questionnaires.length &&
-                      !challengeDrafts.length && <Shimmer>{progress?.data.label ?? "Thinking…"}</Shimmer>
-                    )}
+                      !challengeDrafts.length && <Shimmer>{progress?.data.label ?? "Thinking…"}</Shimmer>}
 
                     {questionnaires.map((q) => (
                       <AskInternInQuestionnaire

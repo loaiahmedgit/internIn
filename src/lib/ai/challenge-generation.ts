@@ -2,12 +2,39 @@ import { generateObject } from "ai";
 import { getModel } from "./gemma-provider";
 import {
   ChallengeDraftGeneratedSchema,
+  ClarificationQuestionsResultSchema,
   EmployerContextSchema,
   type ChallengeDraft,
   type ChallengeDraftGenerated,
+  type ClarificationQuestionsResult,
   type EmployerContext,
 } from "./challenge-clarification-schemas";
 import type { QuestionnaireAnswer } from "./assistant-messages";
+
+/**
+ * Runs `run` up to `attempts.length` times, returning the first success.
+ * Real, logged timings per attempt — this model has shown genuine
+ * unreliability (not just slowness: a bad draw can hang indefinitely
+ * rather than merely run long), so several independent attempts at a
+ * moderate timeout recover better than one long wait. Shared by both
+ * clarification-question and challenge-draft generation so the retry
+ * behavior — and its logging — never drifts between the two.
+ */
+async function withGenerateRetries<T, A>(label: string, attempts: readonly A[], run: (attempt: A, attemptIndex: number) => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts.length; i++) {
+    const t0 = Date.now();
+    try {
+      const result = await run(attempts[i], i);
+      console.log(`[assistant] ${label} succeeded on attempt ${i + 1}/${attempts.length} in ${Date.now() - t0}ms`);
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.error(`[assistant] ${label} attempt ${i + 1}/${attempts.length} failed after ${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`${label} failed.`);
+}
 
 export const CHALLENGE_POLICY = `When an employer describes an internship role (even vaguely) and wants a work challenge / assessment / task for it, you can help design one — this is core to what you do.
 
@@ -41,6 +68,9 @@ export function formatQuestionnaireAnswers(answers: QuestionnaireAnswer[]): stri
   return answers.map((a) => `- ${a.prompt} — ${a.answer ?? "(not specified — use your best professional judgment)"}`).join("\n");
 }
 
+const CONTEXT_TIMEOUT_MS = 30_000;
+const CONTEXT_ATTEMPTS = [{}, {}] as const;
+
 /**
  * Builds the ONE canonical structured record of what the employer actually
  * said — the challenge generator consumes THIS, never a re-read of the raw
@@ -51,14 +81,40 @@ export function formatQuestionnaireAnswers(answers: QuestionnaireAnswer[]): stri
 export async function buildEmployerContext(params: { originalRequest: string; transcript: string; answers: QuestionnaireAnswer[] | null }): Promise<EmployerContext> {
   const { originalRequest, transcript, answers } = params;
   const answersBlock = answers?.length ? `\n\nThe employer's answers to clarification questions:\n${formatQuestionnaireAnswers(answers)}` : "";
-  const { object } = await generateObject({
-    model: getModel(),
-    schema: EmployerContextSchema,
-    system: `Extract a factual, structured record of an internship role from a hiring conversation. Report ONLY what was actually said or selected — an empty array means "not specified", never a guess. Do not invent a responsibility, tool, or restriction that wasn't mentioned.`,
-    prompt: `Original request: ${originalRequest}${answersBlock}\n\nFull conversation:\n${transcript}`,
-    abortSignal: AbortSignal.timeout(45_000),
+  return withGenerateRetries("buildEmployerContext", CONTEXT_ATTEMPTS, async () => {
+    const { object } = await generateObject({
+      model: getModel(),
+      schema: EmployerContextSchema,
+      system: `Extract a factual, structured record of an internship role from a hiring conversation. Report ONLY what was actually said or selected — an empty array means "not specified", never a guess. Do not invent a responsibility, tool, or restriction that wasn't mentioned.`,
+      prompt: `Original request: ${originalRequest}${answersBlock}\n\nFull conversation:\n${transcript}`,
+      abortSignal: AbortSignal.timeout(CONTEXT_TIMEOUT_MS),
+    });
+    return object;
   });
-  return object;
+}
+
+const CLARIFICATION_TIMEOUT_MS = 30_000;
+const CLARIFICATION_ATTEMPTS = [{}, {}] as const;
+
+/**
+ * Generates the 2-4 clarification questions for a vague role description.
+ * Two independent attempts at a moderate timeout (was one 60s attempt) —
+ * this schema is small and has historically finished in a few seconds, so
+ * a bad draw here is exactly the kind of hang a fresh retry recovers from
+ * faster than a longer wait would.
+ */
+export async function generateClarificationQuestions(params: { roleSummary: string; transcript: string }): Promise<ClarificationQuestionsResult> {
+  const { roleSummary, transcript } = params;
+  return withGenerateRetries("generateClarificationQuestions", CLARIFICATION_ATTEMPTS, async () => {
+    const { object } = await generateObject({
+      model: getModel(),
+      schema: ClarificationQuestionsResultSchema,
+      system: `You write short, plain-language clarification questions for a hiring manager who wants an internship work challenge designed. ${CLARIFICATION_POLICY} Avoid HR jargon (say "What will they spend most of their time doing?", never "Select the primary competency domain").`,
+      prompt: `Internship role so far: ${roleSummary}\n\nFull conversation:\n${transcript}`,
+      abortSignal: AbortSignal.timeout(CLARIFICATION_TIMEOUT_MS),
+    });
+    return object;
+  });
 }
 
 /** A safe, user-visible "why this looks the way it does" summary, derived
@@ -131,26 +187,17 @@ export async function generateChallengeDraftObject(params: {
     ? `${contextBlockFrom(context)}\n\nCurrent draft (JSON):\n${JSON.stringify(existingDraft)}\n\nThe employer's revision instruction: ${revisionInstruction}\n\nReturn the FULL updated draft (not a diff), reusing everything the employer didn't ask to change.`
     : `${contextBlockFrom(context)}\n\nDesign a new challenge draft for this role.`;
 
-  let lastError: unknown;
-  for (const attempt of ATTEMPTS) {
-    try {
-      const { object } = await generateObject({
-        model: getModel(),
-        schema: ChallengeDraftGeneratedSchema,
-        system: `${CHALLENGE_POLICY}\n\nKeep every field concise — a few sentences at most — so the whole object fits comfortably; never pad or repeat text.`,
-        prompt: basePrompt + attempt.extraInstruction,
-        temperature: attempt.temperature,
-        abortSignal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
-      });
-      return object;
-    } catch (error) {
-      lastError = error;
-      // Real failure detail belongs server-side only — never surfaced to
-      // the client as raw stack/JSON.
-      console.error("[assistant] challenge draft generation attempt failed:", error instanceof Error ? error.message : error);
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error("Challenge draft generation failed.");
+  return withGenerateRetries("generateChallengeDraftObject", ATTEMPTS, async (attempt) => {
+    const { object } = await generateObject({
+      model: getModel(),
+      schema: ChallengeDraftGeneratedSchema,
+      system: `${CHALLENGE_POLICY}\n\nKeep every field concise — a few sentences at most — so the whole object fits comfortably; never pad or repeat text.`,
+      prompt: basePrompt + attempt.extraInstruction,
+      temperature: attempt.temperature,
+      abortSignal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
+    });
+    return object;
+  });
 }
 
 /** Attaches the control fields the model never touches. Reuses the
