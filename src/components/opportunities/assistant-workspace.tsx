@@ -35,6 +35,7 @@ import { SpeechInput } from "@/components/ai-elements/speech-input";
 import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse, MessageActions, MessageAction } from "@/components/ai-elements/message";
 import { ChainOfThought, ChainOfThoughtHeader, ChainOfThoughtContent, ChainOfThoughtStep } from "@/components/ai-elements/chain-of-thought";
+import { Reasoning, ReasoningTrigger, ReasoningContent } from "@/components/ai-elements/reasoning";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { AskInternInQuestionnaire } from "@/components/opportunities/ask-internin-questionnaire";
 import { ChallengeDraftCard } from "@/components/opportunities/challenge-draft-card";
@@ -285,7 +286,7 @@ export function AssistantWorkspace({
               aligns to the conversation's own right edge, not the
               dashboard's. */}
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-            {messages.map((message) => {
+            {messages.map((message, index) => {
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
             const questionnaires = message.parts.filter(
               (p): p is Extract<typeof p, { type: "data-questionnaire" }> & { id: string } =>
@@ -295,10 +296,19 @@ export function AssistantWorkspace({
               (p): p is Extract<typeof p, { type: "data-challengeDraft" }> & { id: string } =>
                 p.type === "data-challengeDraft" && typeof p.id === "string",
             );
+            const designSummaries = message.parts.filter(
+              (p): p is Extract<typeof p, { type: "data-designSummary" }> & { id: string } =>
+                p.type === "data-designSummary" && typeof p.id === "string",
+            );
             const textParts = message.parts.filter((p) => p.type === "text");
             const responseText = textParts.map((p) => p.text).join("");
             const isLastAssistant = message.role === "assistant" && message.id === messages.at(-1)?.id;
             const isGrounded = steps.length > 0;
+            // The preceding user message is a real questionnaire submit
+            // (structured metadata, never inferred from text) — while this
+            // assistant turn is still streaming its answer, that's the
+            // honest thing to call the wait, not a generic "Thinking…".
+            const isDesigningChallenge = messages[index - 1]?.metadata?.intent === "questionnaire_answer";
 
             return (
               <Message key={message.id} from={message.role}>
@@ -324,7 +334,10 @@ export function AssistantWorkspace({
                         <MessageResponse>{responseText}</MessageResponse>
                       </div>
                     ) : (
-                      isLastAssistant && isStreaming && !questionnaires.length && !challengeDrafts.length && <Shimmer>Thinking…</Shimmer>
+                      isLastAssistant &&
+                      isStreaming &&
+                      !questionnaires.length &&
+                      !challengeDrafts.length && <Shimmer>{isDesigningChallenge ? "Designing challenge…" : "Thinking…"}</Shimmer>
                     )}
 
                     {questionnaires.map((q) => (
@@ -332,11 +345,31 @@ export function AssistantWorkspace({
                         key={q.id}
                         result={q.data}
                         disabled={answeredQuestionnaireIds.has(q.id)}
-                        onSubmit={(answersSummary) => {
+                        onSubmit={(answers) => {
                           setAnsweredQuestionnaireIds((prev) => new Set(prev).add(q.id));
-                          sendMessage({ text: answersSummary });
+                          // Compact acknowledgement in the transcript, not a
+                          // giant serialized answers bubble — the
+                          // Questionnaire above already shows what was
+                          // answered. The real answers ride on `metadata`,
+                          // which also deterministically continues the
+                          // workflow straight into drafting (see route.ts).
+                          sendMessage({
+                            text: `Answered ${answers.length} clarification question${answers.length === 1 ? "" : "s"}.`,
+                            metadata: { intent: "questionnaire_answer", questionnaireAnswers: answers },
+                          });
                         }}
                       />
+                    ))}
+
+                    {designSummaries.map((d) => (
+                      <Reasoning key={d.id} isStreaming={isLastAssistant && isStreaming && !challengeDrafts.length} className="not-typeset">
+                        <ReasoningTrigger
+                          getThinkingMessage={(streaming) =>
+                            streaming ? <Shimmer duration={1}>Designing challenge…</Shimmer> : <p>How this challenge was designed</p>
+                          }
+                        />
+                        <ReasoningContent>{d.data.lines.map((l) => `- ${l}`).join("\n")}</ReasoningContent>
+                      </Reasoning>
                     ))}
 
                     {challengeDrafts.map((d) => (

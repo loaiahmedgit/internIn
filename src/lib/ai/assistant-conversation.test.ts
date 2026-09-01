@@ -1,0 +1,94 @@
+import { describe, it, expect } from "vitest";
+import { transcriptOf, latestChallengeDraft, latestQuestionnaireAnswers } from "./assistant-conversation";
+import type { AssistantUIMessage } from "./assistant-messages";
+import type { ChallengeDraft } from "./challenge-clarification-schemas";
+
+function userMessage(overrides: Partial<AssistantUIMessage> = {}): AssistantUIMessage {
+  return {
+    id: "u1",
+    role: "user",
+    parts: [{ type: "text", text: "I want a student to work in a database role" }],
+    ...overrides,
+  } as AssistantUIMessage;
+}
+
+function minimalDraft(title: string): ChallengeDraft {
+  return {
+    title,
+    role: "Database Intern",
+    scenario: "A fictional retail company has messy customer data that needs investigation.",
+    objective: "Assess SQL reasoning.",
+    competencies: [{ name: "SQL", reason: "Core work" }],
+    materials: [],
+    sections: [{ title: "Investigation", items: [{ kind: "code_task", title: "Write queries", prompt: "Write SQL." }] }],
+    deliverables: ["A short summary"],
+    estimatedMinutes: 60,
+    candidateInstructions: "Work through the sandbox database.",
+    evaluationRubric: [{ criterion: "SQL correctness", weightPercent: 100, description: "Queries are correct." }],
+  };
+}
+
+describe("transcriptOf", () => {
+  it("labels user/assistant text parts and drops parts with no text", () => {
+    const messages = [
+      userMessage(),
+      { id: "a1", role: "assistant", parts: [{ type: "text", text: "Sure, one moment." }] } as AssistantUIMessage,
+      { id: "u2", role: "user", parts: [{ type: "data-questionnaire", id: "q1", data: {} }] } as AssistantUIMessage,
+    ];
+    const transcript = transcriptOf(messages);
+    expect(transcript).toBe("Employer: I want a student to work in a database role\nAssistant: Sure, one moment.");
+  });
+});
+
+describe("latestChallengeDraft", () => {
+  it("returns null when no draft exists yet", () => {
+    expect(latestChallengeDraft([userMessage()])).toBeNull();
+  });
+
+  it("returns the MOST RECENT draft when a conversation has revised one", () => {
+    const first = minimalDraft("First draft");
+    const second = minimalDraft("Revised draft");
+    const messages = [
+      userMessage(),
+      { id: "a1", role: "assistant", parts: [{ type: "data-challengeDraft", id: "d1", data: first }] } as AssistantUIMessage,
+      { id: "u2", role: "user", parts: [{ type: "text", text: "make it easier" }] } as AssistantUIMessage,
+      { id: "a2", role: "assistant", parts: [{ type: "data-challengeDraft", id: "d2", data: second }] } as AssistantUIMessage,
+    ];
+    expect(latestChallengeDraft(messages)?.title).toBe("Revised draft");
+  });
+});
+
+describe("latestQuestionnaireAnswers", () => {
+  it("returns null for an ordinary chat message (no metadata)", () => {
+    expect(latestQuestionnaireAnswers([userMessage()])).toBeNull();
+  });
+
+  it("returns null when the last message is from the assistant, even with stray metadata", () => {
+    const messages = [
+      userMessage(),
+      { id: "a1", role: "assistant", parts: [], metadata: { intent: "questionnaire_answer", questionnaireAnswers: [] } } as AssistantUIMessage,
+    ];
+    expect(latestQuestionnaireAnswers(messages)).toBeNull();
+  });
+
+  it("returns the structured answers when the last user message is a real questionnaire submit", () => {
+    const messages = [
+      userMessage(),
+      {
+        id: "u2",
+        role: "user",
+        parts: [{ type: "text", text: "Answered 2 clarification questions." }],
+        metadata: {
+          intent: "questionnaire_answer",
+          questionnaireAnswers: [
+            { prompt: "Which database?", answer: "PostgreSQL" },
+            { prompt: "Experience level?", answer: null },
+          ],
+        },
+      } as AssistantUIMessage,
+    ];
+    const answers = latestQuestionnaireAnswers(messages);
+    expect(answers).toHaveLength(2);
+    expect(answers?.[1].answer).toBeNull();
+  });
+});

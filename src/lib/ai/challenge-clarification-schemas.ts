@@ -6,23 +6,35 @@ import { z } from "zod";
  * Rendering is entirely owned by the app (AskInternInQuestionnaire), which
  * maps this onto the real shadcn Questionnaire primitive.
  */
+// `.nullable().optional()`, not plain `.optional()`: weaker structured-
+// output models routinely emit an explicit `null` for "nothing here"
+// instead of omitting the key, and plain `.optional()` rejects that — one
+// real cause of "the draft never appears". `.optional()` outermost keeps
+// the object key itself omittable in TypeScript (so code building a
+// ChallengeDraft can still leave it out entirely); `.nullable()` inside
+// makes an explicit `null` value valid too. Every genuinely-optional field
+// in this file uses this pattern so the *contract* tolerates it, rather
+// than patching individual call sites.
+const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
+const optionalFlag = () => z.boolean().nullable().optional();
+
 export const ClarificationChoiceSchema = z.object({
   value: z.string().trim().min(1).max(60),
   label: z.string().trim().min(1).max(120),
-  description: z.string().trim().max(200).optional(),
+  description: optionalText(200),
 });
 export type ClarificationChoice = z.infer<typeof ClarificationChoiceSchema>;
 
 export const ClarificationQuestionSchema = z.object({
   id: z.string().trim().min(1).max(60),
   prompt: z.string().trim().min(4).max(200),
-  description: z.string().trim().max(300).optional(),
+  description: optionalText(300),
   type: z.enum(["single", "multiple", "freeform"]),
   required: z.boolean(),
   /** Only present for "single"/"multiple" — a "freeform" question has none. */
-  choices: z.array(ClarificationChoiceSchema).max(8).optional(),
+  choices: z.array(ClarificationChoiceSchema).max(8).nullable().optional(),
   /** Adds an "Other: ___" free-text choice alongside the fixed ones. */
-  allowOther: z.boolean().optional(),
+  allowOther: optionalFlag(),
 });
 export type ClarificationQuestion = z.infer<typeof ClarificationQuestionSchema>;
 
@@ -128,9 +140,9 @@ export const ChallengeDraftSchema = z.object({
   deliverables: z.array(z.string().trim().min(1).max(300)).min(1).max(10),
   estimatedMinutes: z.number().int().min(10).max(480),
   candidateInstructions: z.string().trim().min(10).max(2000),
-  aiUsagePolicy: ChallengeAiUsagePolicySchema.optional(),
+  aiUsagePolicy: ChallengeAiUsagePolicySchema.nullable().optional(),
   evaluationRubric: z.array(RubricCriterionWeightedSchema).min(1).max(8),
-  safetyNotes: z.array(z.string().trim().min(1).max(300)).max(6).optional(),
-  assumptions: z.array(z.string().trim().min(1).max(300)).max(6).optional(),
+  safetyNotes: z.array(z.string().trim().min(1).max(300)).max(6).nullable().optional(),
+  assumptions: z.array(z.string().trim().min(1).max(300)).max(6).nullable().optional(),
 });
 export type ChallengeDraft = z.infer<typeof ChallengeDraftSchema>;

@@ -18,6 +18,7 @@ import {
   QuestionnaireTitle,
 } from "@/components/ui/questionnaire";
 import type { ClarificationQuestionsResult } from "@/lib/ai/challenge-clarification-schemas";
+import type { QuestionnaireAnswer } from "@/lib/ai/assistant-messages";
 
 const OTHER_VALUE = "__other__";
 
@@ -26,6 +27,12 @@ const OTHER_VALUE = "__other__";
  * Questionnaire primitive — no hand-rolled radio/checkbox UI. The model
  * only ever produces the validated ClarificationQuestionsResult data;
  * this component owns every pixel of how it's presented.
+ *
+ * `onSubmit` receives structured answers, never a giant serialized chat
+ * bubble — the Questionnaire itself already visually represents what was
+ * answered; the conversation shows a compact acknowledgement instead (see
+ * assistant-workspace.tsx). A skipped optional question reports `answer:
+ * null`, never a placeholder string.
  */
 export function AskInternInQuestionnaire({
   result,
@@ -33,7 +40,7 @@ export function AskInternInQuestionnaire({
   disabled,
 }: {
   result: ClarificationQuestionsResult;
-  onSubmit: (answersSummary: string) => void;
+  onSubmit: (answers: QuestionnaireAnswer[]) => void;
   disabled?: boolean;
 }) {
   const items = result.questions.map((q) => ({
@@ -45,15 +52,15 @@ export function AskInternInQuestionnaire({
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const lines = result.questions.map((q) => {
+    const answers: QuestionnaireAnswer[] = result.questions.map((q) => {
       const raw = q.type === "multiple" ? formData.getAll(q.id).map(String) : [String(formData.get(q.id) ?? "")];
       const answered = raw
         .filter(Boolean)
         .map((v) => (v === OTHER_VALUE ? null : (q.choices?.find((c) => c.value === v)?.label ?? v)))
         .filter((v): v is string => v !== null);
-      return `${q.prompt} — ${answered.length ? answered.join(", ") : "(skipped)"}`;
+      return { prompt: q.prompt, answer: answered.length ? answered.join(", ") : null };
     });
-    onSubmit(`Here are my answers:\n${lines.join("\n")}`);
+    onSubmit(answers);
   }
 
   return (
