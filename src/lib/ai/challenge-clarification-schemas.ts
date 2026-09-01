@@ -142,13 +142,17 @@ export const AI_USAGE_MODE_LABEL: Record<ChallengeAiUsagePolicyMode, string> = {
   custom: "Custom AI usage policy",
 };
 
-const GeneratedAiUsagePolicySchema = z.object({
-  mode: ChallengeAiUsagePolicyModeSchema,
-  customText: optionalText(300),
-});
-
 /** What generateObject actually validates the model's output against — no
- * ids, no status. See the block comment above for why. */
+ * ids, no status. See the block comment above for why.
+ *
+ * AI usage policy is two flat sibling fields (aiUsagePolicyMode /
+ * aiUsagePolicyCustomText), not one nested `{mode, customText}` object.
+ * Real, isolated diagnostic testing found that a nullable/optional OBJECT
+ * schema — as opposed to a nullable/optional primitive or array — reliably
+ * triggered this model into hanging or degenerating on this exact field
+ * (confirmed by removing it and getting a clean, fast success on an
+ * otherwise-identical schema/prompt). Every other optional value here is a
+ * primitive or an array, which never showed this failure. */
 export const ChallengeDraftGeneratedSchema = z.object({
   role: z.string().trim().min(2).max(160),
   title: z.string().trim().min(2).max(180),
@@ -158,7 +162,8 @@ export const ChallengeDraftGeneratedSchema = z.object({
   materials: z.array(GeneratedMaterialSchema).max(10),
   durationMinutes: z.number().int().min(10).max(480).nullable().optional(),
   rubric: z.array(GeneratedRubricCriterionSchema).min(1).max(8),
-  aiUsagePolicy: GeneratedAiUsagePolicySchema.nullable().optional(),
+  aiUsagePolicyMode: ChallengeAiUsagePolicyModeSchema.nullable().optional(),
+  aiUsagePolicyCustomText: optionalText(300),
   /** Always present as an array — empty means none, never omitted/null,
    * so consuming code never needs a null-check for these two. */
   assumptions: z.array(z.string().trim().min(1).max(300)).max(6),

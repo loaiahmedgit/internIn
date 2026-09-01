@@ -173,8 +173,8 @@ export function ChallengeDraftCard({
               {draft.durationMinutes} minutes
             </span>
           )}
-          {draft.aiUsagePolicy && (
-            <span>{draft.aiUsagePolicy.mode === "custom" && draft.aiUsagePolicy.customText ? draft.aiUsagePolicy.customText : AI_USAGE_MODE_LABEL[draft.aiUsagePolicy.mode]}</span>
+          {draft.aiUsagePolicyMode && (
+            <span>{draft.aiUsagePolicyMode === "custom" && draft.aiUsagePolicyCustomText ? draft.aiUsagePolicyCustomText : AI_USAGE_MODE_LABEL[draft.aiUsagePolicyMode]}</span>
           )}
         </div>
 

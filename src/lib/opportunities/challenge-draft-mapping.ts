@@ -26,8 +26,8 @@ export function mapChallengeDraftToChallenge(draft: ChallengeDraft): Challenge {
 
   const scenarioParts = [
     draft.scenario,
-    draft.aiUsagePolicy
-      ? `AI usage policy: ${draft.aiUsagePolicy.mode === "custom" && draft.aiUsagePolicy.customText ? draft.aiUsagePolicy.customText : AI_USAGE_MODE_LABEL[draft.aiUsagePolicy.mode]}`
+    draft.aiUsagePolicyMode
+      ? `AI usage policy: ${draft.aiUsagePolicyMode === "custom" && draft.aiUsagePolicyCustomText ? draft.aiUsagePolicyCustomText : AI_USAGE_MODE_LABEL[draft.aiUsagePolicyMode]}`
       : null,
     draft.safetyNotes.length ? `Safety notes: ${draft.safetyNotes.join(" ")}` : null,
     draft.assumptions.length ? `Assumptions (ask internIn to change any of these if wrong): ${draft.assumptions.join(" ")}` : null,

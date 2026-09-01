@@ -169,8 +169,8 @@ export function ChallengeDraftEditForm({
       <div className="space-y-1.5">
         <Label htmlFor="draft-ai-usage">AI usage policy</Label>
         <Select
-          value={form.aiUsagePolicy?.mode ?? "not_allowed"}
-          onValueChange={(v) => setForm((p) => ({ ...p, aiUsagePolicy: { mode: v as ChallengeAiUsagePolicyMode, customText: p.aiUsagePolicy?.customText } }))}
+          value={form.aiUsagePolicyMode ?? "not_allowed"}
+          onValueChange={(v) => setForm((p) => ({ ...p, aiUsagePolicyMode: v as ChallengeAiUsagePolicyMode }))}
         >
           <SelectTrigger id="draft-ai-usage" className="w-64"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -179,11 +179,11 @@ export function ChallengeDraftEditForm({
             ))}
           </SelectContent>
         </Select>
-        {form.aiUsagePolicy?.mode === "custom" && (
+        {form.aiUsagePolicyMode === "custom" && (
           <Textarea
             rows={2}
-            value={form.aiUsagePolicy.customText ?? ""}
-            onChange={(e) => setForm((p) => ({ ...p, aiUsagePolicy: { mode: "custom", customText: e.target.value } }))}
+            value={form.aiUsagePolicyCustomText ?? ""}
+            onChange={(e) => setForm((p) => ({ ...p, aiUsagePolicyCustomText: e.target.value }))}
             placeholder="Describe the custom AI usage policy…"
           />
         )}

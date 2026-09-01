@@ -54,10 +54,10 @@ function generatedDraft() {
 }
 
 describe("ChallengeDraftGeneratedSchema — the shape the model actually outputs", () => {
-  it("accepts explicit null for durationMinutes/aiUsagePolicy without throwing", () => {
-    const result = ChallengeDraftGeneratedSchema.parse({ ...generatedDraft(), durationMinutes: null, aiUsagePolicy: null });
+  it("accepts explicit null for durationMinutes/aiUsagePolicyMode without throwing", () => {
+    const result = ChallengeDraftGeneratedSchema.parse({ ...generatedDraft(), durationMinutes: null, aiUsagePolicyMode: null });
     expect(result.durationMinutes).toBeNull();
-    expect(result.aiUsagePolicy).toBeNull();
+    expect(result.aiUsagePolicyMode).toBeNull();
   });
 
   it("accepts an empty materials array (not every challenge needs external materials)", () => {

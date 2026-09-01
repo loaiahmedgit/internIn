@@ -18,7 +18,7 @@ function draft(overrides: Partial<ChallengeDraft> = {}): ChallengeDraft {
     ],
     materials: [{ id: "m1", name: "customers.csv", type: "csv", description: "Synthetic customer records" }],
     durationMinutes: 75,
-    aiUsagePolicy: { mode: "research_only" },
+    aiUsagePolicyMode: "research_only",
     rubric: [
       { id: "r1", criterion: "SQL correctness", weight: 60, description: "Queries return correct results." },
       { id: "r2", criterion: "Communication", weight: 40, description: "Findings are clearly written." },
@@ -70,7 +70,7 @@ describe("mapChallengeDraftToChallenge", () => {
   });
 
   it("uses the custom AI usage text when the mode is custom", () => {
-    const mapped = mapChallengeDraftToChallenge(draft({ aiUsagePolicy: { mode: "custom", customText: "Only for research, never to generate the final SQL." } }));
+    const mapped = mapChallengeDraftToChallenge(draft({ aiUsagePolicyMode: "custom", aiUsagePolicyCustomText: "Only for research, never to generate the final SQL." }));
     expect(mapped.scenario).toContain("Only for research, never to generate the final SQL.");
   });
 });
