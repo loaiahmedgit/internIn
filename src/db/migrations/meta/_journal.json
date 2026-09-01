@@ -99,6 +99,13 @@
       "when": 1788208574212,
       "tag": "0013_windy_mockingbird",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788301925425,
+      "tag": "0014_secure_public_tables_rls",
+      "breakpoints": true
     }
   ]
 }
