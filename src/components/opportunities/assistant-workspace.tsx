@@ -308,15 +308,21 @@ export function AssistantWorkspace({
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
             {messages.map((message) => {
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
-            const questionnaires = message.parts.filter(
+            // .findLast, not .filter: there is exactly ONE questionnaire /
+            // challenge draft / design summary per message, ever — even if
+            // something upstream ever wrote more than one part of a kind
+            // (a retried/duplicated request, a stray double write), the
+            // UI renders only the most recent one. One source of truth,
+            // enforced at render time, not just by convention upstream.
+            const questionnaire = message.parts.findLast(
               (p): p is Extract<typeof p, { type: "data-questionnaire" }> & { id: string } =>
                 p.type === "data-questionnaire" && typeof p.id === "string",
             );
-            const challengeDrafts = message.parts.filter(
+            const challengeDraft = message.parts.findLast(
               (p): p is Extract<typeof p, { type: "data-challengeDraft" }> & { id: string } =>
                 p.type === "data-challengeDraft" && typeof p.id === "string",
             );
-            const designSummaries = message.parts.filter(
+            const designSummary = message.parts.findLast(
               (p): p is Extract<typeof p, { type: "data-designSummary" }> & { id: string } =>
                 p.type === "data-designSummary" && typeof p.id === "string",
             );
@@ -328,7 +334,7 @@ export function AssistantWorkspace({
             // designed" on the same message — a challenge-generation turn
             // always wins that choice, since it's the more specific and
             // more relevant disclosure for what actually happened.
-            const isGrounded = steps.length > 0 && designSummaries.length === 0;
+            const isGrounded = steps.length > 0 && !designSummary;
 
             return (
               <Message key={message.id} from={message.role}>
@@ -365,16 +371,16 @@ export function AssistantWorkspace({
                         the progress shimmer can both be true at once. */}
                     {isLastAssistant &&
                       isStreaming &&
-                      !questionnaires.length &&
-                      !challengeDrafts.length && <Shimmer>{progress?.data.label ?? "Thinking…"}</Shimmer>}
+                      !questionnaire &&
+                      !challengeDraft && <Shimmer>{progress?.data.label ?? "Thinking…"}</Shimmer>}
 
-                    {questionnaires.map((q) => (
+                    {questionnaire && (
                       <AskInternInQuestionnaire
-                        key={q.id}
-                        result={q.data}
-                        disabled={answeredQuestionnaireIds.has(q.id)}
+                        key={questionnaire.id}
+                        result={questionnaire.data}
+                        disabled={answeredQuestionnaireIds.has(questionnaire.id)}
                         onSubmit={(answers) => {
-                          setAnsweredQuestionnaireIds((prev) => new Set(prev).add(q.id));
+                          setAnsweredQuestionnaireIds((prev) => new Set(prev).add(questionnaire.id));
                           // Compact acknowledgement in the transcript, not a
                           // giant serialized answers bubble — the
                           // Questionnaire above already shows what was
@@ -387,29 +393,29 @@ export function AssistantWorkspace({
                           });
                         }}
                       />
-                    ))}
+                    )}
 
-                    {designSummaries.map((d) => (
-                      <Reasoning key={d.id} isStreaming={isLastAssistant && isStreaming && !challengeDrafts.length} className="not-typeset">
+                    {designSummary && (
+                      <Reasoning key={designSummary.id} isStreaming={isLastAssistant && isStreaming && !challengeDraft} className="not-typeset">
                         <ReasoningTrigger
                           getThinkingMessage={(streaming) =>
                             streaming ? <Shimmer duration={1}>Designing challenge…</Shimmer> : <p>How this challenge was designed</p>
                           }
                         />
-                        <ReasoningContent>{d.data.lines.map((l) => `- ${l}`).join("\n")}</ReasoningContent>
+                        <ReasoningContent>{designSummary.data.lines.map((l) => `- ${l}`).join("\n")}</ReasoningContent>
                       </Reasoning>
-                    ))}
+                    )}
 
-                    {challengeDrafts.map((d) => (
+                    {challengeDraft && (
                       <ChallengeDraftCard
-                        key={d.id}
-                        draft={d.data}
+                        key={challengeDraft.id}
+                        draft={challengeDraft.data}
                         opportunityId={opportunityId}
                         disabled={isStreaming}
                         onRequestAiEdit={(instruction) => sendMessage({ text: instruction })}
-                        onManualSave={(next) => handleManualDraftSave(message.id, d.id, next)}
+                        onManualSave={(next) => handleManualDraftSave(message.id, challengeDraft.id, next)}
                       />
-                    ))}
+                    )}
                     {responseText && (
                       <>
                         <MessageActions>

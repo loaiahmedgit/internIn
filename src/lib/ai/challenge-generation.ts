@@ -20,7 +20,7 @@ import type { QuestionnaireAnswer } from "./assistant-messages";
  * clarification-question and challenge-draft generation so the retry
  * behavior — and its logging — never drifts between the two.
  */
-async function withGenerateRetries<T, A>(label: string, attempts: readonly A[], run: (attempt: A, attemptIndex: number) => Promise<T>): Promise<T> {
+export async function withGenerateRetries<T, A>(label: string, attempts: readonly A[], run: (attempt: A, attemptIndex: number) => Promise<T>): Promise<T> {
   let lastError: unknown;
   for (let i = 0; i < attempts.length; i++) {
     const t0 = Date.now();

@@ -1,17 +1,10 @@
 import { z } from "zod";
-import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText } from "ai";
+import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText, type UIMessageStreamWriter } from "ai";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { getModel } from "@/lib/ai/gemma-provider";
 import { buildCompanyHiringFacts, buildInternshipFacts } from "@/lib/company/internship-facts";
 import { classifyAssistantRequest } from "@/lib/ai/assistant-router";
-import {
-  CHALLENGE_POLICY,
-  attachDraftIdentity,
-  buildDesignSummary,
-  buildEmployerContext,
-  generateChallengeDraftObject,
-  generateClarificationQuestions,
-} from "@/lib/ai/challenge-generation";
+import { CHALLENGE_POLICY, attachDraftIdentity, buildDesignSummary, buildEmployerContext, generateChallengeDraftObject } from "@/lib/ai/challenge-generation";
 import { latestChallengeDraft, latestQuestionnaireAnswers, transcriptOf } from "@/lib/ai/assistant-conversation";
 import type { AssistantUIMessage } from "@/lib/ai/assistant-messages";
 
@@ -31,6 +24,16 @@ const RequestSchema = z.object({
 const SCOPE_POLICY = `Ask internIn is a specialized internship hiring and internship-program assistant. It helps employers with workflows connected to: internship creation, internship challenges, applicants, candidate evidence, CVs, portfolios, hiring pipelines, evaluation criteria, recruiting, offers, hiring communication, internship program setup, internship analytics, company hiring data, and internIn's own features.
 
 Never fabricate: internship details, applicants, company policies, candidate evidence, or challenge results. Never frame candidate evaluation in absolute terms ("definitely hire", "guaranteed top performer", a success percentage) and never rank candidates across different, unrelated internships. Hiring decisions are always the human's. Never display your internal reasoning, a "chain of thought", or a numbered reasoning process. Keep answers short and plain; use markdown only when it genuinely helps readability.`;
+
+/** Writes a complete plain-text response part with no model call at all —
+ * used when the text is already known (e.g. the router already generated
+ * a clarification intro in the same structured call). Saves an entire
+ * extra model round-trip for the most latency-sensitive path. */
+function writePlainText(writer: UIMessageStreamWriter<AssistantUIMessage>, id: string, text: string) {
+  writer.write({ type: "text-start", id });
+  writer.write({ type: "text-delta", id, delta: text });
+  writer.write({ type: "text-end", id });
+}
 
 export async function POST(req: Request) {
   // Real stage timing, not a guess — logged so a slow request is
@@ -66,7 +69,15 @@ export async function POST(req: Request) {
   const messages = body.messages as unknown as AssistantUIMessage[];
   const opportunityId = body.opportunityId;
   const scopeLabel = opportunityId ? "this internship's pipeline" : "your hiring workspace";
-  console.log(`[assistant] requestId=${requestId} body parsed at +${Date.now() - t0}ms, ${messages.length} messages`);
+  // The triggering user message's own (client-generated, stable) id — used
+  // to derive deterministic data-part ids below. If a retried/duplicated
+  // request ever re-executes for the SAME logical turn (a network retry,
+  // a reconnect), a second write with the SAME id updates the existing
+  // part in place (AI SDK v5 data-part reconciliation) instead of adding
+  // a second, independent part that would render as a duplicate
+  // Questionnaire/ChallengeDraftCard.
+  const turnId = messages.at(-1)?.id ?? requestId;
+  console.log(`[assistant] requestId=${requestId} body parsed at +${Date.now() - t0}ms, ${messages.length} messages, turnId=${turnId}`);
 
   const stream = createUIMessageStream<AssistantUIMessage>({
     execute: async ({ writer }) => {
@@ -93,8 +104,8 @@ export async function POST(req: Request) {
           throw new Error("We couldn't finish generating the challenge. Your answers are saved — try again.");
         }
 
-        writer.write({ type: "data-designSummary", id: "designing", data: { lines: buildDesignSummary(draft) } });
-        writer.write({ type: "data-challengeDraft", id: crypto.randomUUID(), data: draft });
+        writer.write({ type: "data-designSummary", id: `designSummary:${turnId}`, data: { lines: buildDesignSummary(draft) } });
+        writer.write({ type: "data-challengeDraft", id: `challengeDraft:${turnId}`, data: draft });
         console.log(`[assistant] requestId=${requestId} generationId=${generationId} generation complete at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
 
         writer.merge(
@@ -108,18 +119,14 @@ export async function POST(req: Request) {
       }
 
       // ONE canonical routing decision, forced structured output (see
-      // assistant-router.ts) — this is the fix for a real, reproduced
-      // regression where agentic tool-calling let the model skip
-      // askClarifyingQuestions entirely and narrate clarification
-      // questions as plain numbered Markdown instead. There is no code
-      // path below where the model can emit clarification questions or a
-      // challenge draft as text: every action is a deterministic branch
-      // that calls the real generation pipeline directly and writes the
-      // structured data part itself. Also removes the need for the old
-      // "questionnaireAsked"/"draftGenerated" duplicate-call guards —
-      // there is now exactly one classification and one branch per
-      // request, so a duplicate call within a single turn is structurally
-      // impossible rather than merely rejected at runtime.
+      // assistant-router.ts). No agentic tool-calling: the model can
+      // never emit clarification questions or a challenge draft as text —
+      // every action below is a deterministic branch that calls the real
+      // generation pipeline directly and writes the structured data part
+      // itself. When action is ask_clarifying_questions, THIS SAME call
+      // already produced the actual questions — there is no separate
+      // second generateObject call for that path (that redundant
+      // round-trip was real, unnecessary latency for a 2-4 question form).
       const transcript = transcriptOf(messages);
       let decision;
       try {
@@ -153,9 +160,9 @@ export async function POST(req: Request) {
       }
 
       if (decision.action === "check_data") {
-        writer.write({ type: "data-step", id: "load", data: { label: `Checking ${scopeLabel}`, status: "active" } });
+        writer.write({ type: "data-step", id: `load:${turnId}`, data: { label: `Checking ${scopeLabel}`, status: "active" } });
         const facts = opportunityId ? await buildInternshipFacts(opportunityId, membership.companyId) : await buildCompanyHiringFacts(membership.companyId);
-        writer.write({ type: "data-step", id: "load", data: { label: `Checked ${scopeLabel}`, description: facts.split("\n")[0], status: "complete" } });
+        writer.write({ type: "data-step", id: `load:${turnId}`, data: { label: `Checked ${scopeLabel}`, description: facts.split("\n")[0], status: "complete" } });
         console.log(`[assistant] requestId=${requestId} check_data complete at +${Date.now() - t0}ms`);
         writer.merge(
           streamText({
@@ -168,25 +175,27 @@ export async function POST(req: Request) {
       }
 
       if (decision.action === "ask_clarifying_questions") {
-        writer.write({ type: "data-progress", id: "progress", data: { label: "Preparing a few questions…" } });
-        const roleSummary = decision.roleSummary ?? transcript;
-        let questions;
-        try {
-          questions = await generateClarificationQuestions({ roleSummary, transcript });
-        } catch (error) {
-          console.error(`[assistant] requestId=${requestId} ask_clarifying_questions failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
+        // Never a text fallback: if the router claimed clarification was
+        // needed but didn't actually produce questions in the same
+        // response, that's a real generation failure — show the same
+        // graceful "try again" every other generation failure shows,
+        // never raw prose standing in for the form.
+        if (!decision.clarificationQuestions?.length) {
+          console.error(`[assistant] requestId=${requestId} ask_clarifying_questions returned no questions at +${Date.now() - t0}ms`);
           throw new Error("We couldn't prepare the clarification form — try again.");
         }
-        console.log(`[assistant] requestId=${requestId} ask_clarifying_questions complete at +${Date.now() - t0}ms questions=${questions.questions.length}`);
-        const id = crypto.randomUUID();
-        writer.write({ type: "data-questionnaire", id, data: questions });
-        writer.merge(
-          streamText({
-            model: getModel(),
-            system: `Write exactly one short, natural sentence telling the employer you need a few details before building the challenge (e.g. "I can help with that — I just need a few details first."). The app renders the actual questions as a real form below — do NOT list, number, or restate them yourself.`,
-            prompt: "Write the introductory sentence now.",
-          }).toUIMessageStream(),
-        );
+        console.log(`[assistant] requestId=${requestId} ask_clarifying_questions complete at +${Date.now() - t0}ms questions=${decision.clarificationQuestions.length}`);
+        writer.write({
+          type: "data-questionnaire",
+          id: `questionnaire:${turnId}`,
+          data: {
+            intro: decision.clarificationIntro ?? "I can help with that — I just need a few details first.",
+            questions: decision.clarificationQuestions,
+          },
+        });
+        // No second model call for this sentence — the router already
+        // generated it in the same structured response above.
+        writePlainText(writer, `intro:${turnId}`, decision.clarificationIntro ?? "I can help with that — I just need a few details first.");
         return;
       }
 
@@ -205,8 +214,8 @@ export async function POST(req: Request) {
         throw new Error("We couldn't finish generating the challenge — try again.");
       }
 
-      writer.write({ type: "data-designSummary", id: "designing", data: { lines: buildDesignSummary(draft) } });
-      writer.write({ type: "data-challengeDraft", id: crypto.randomUUID(), data: draft });
+      writer.write({ type: "data-designSummary", id: `designSummary:${turnId}`, data: { lines: buildDesignSummary(draft) } });
+      writer.write({ type: "data-challengeDraft", id: `challengeDraft:${turnId}`, data: draft });
       console.log(`[assistant] requestId=${requestId} generationId=${generationId} generation complete at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
       writer.merge(
         streamText({
