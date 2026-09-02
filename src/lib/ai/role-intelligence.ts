@@ -351,39 +351,56 @@ function endsWithOrganizationalNoun(phrase: string): boolean {
 const ORGANIZATIONAL_FILLER_TOKENS = new Set([...DOMAIN_SUFFIX_WORDS].flatMap((word) => [...tokens(word)]));
 
 /**
+ * All tokens from every piece of concrete evidence the employer actually
+ * gave (activities/problems/outcomes) — not just the 2-3 items chosen for
+ * the question's display text. A candidate "broader" phrase must be
+ * checked against everything known, not only the shortened display list:
+ * an employer's own wording (e.g. "accounts payable", from a `problems`
+ * entry) can be the exact same work as a differently-worded activity
+ * phrase, and only surfaces as an overlap once the full evidence is
+ * considered.
+ */
+function fullEvidenceTokens(need: WorkNeedProfile): Set<string> {
+  return new Set([...need.activities, ...need.problems, ...need.desiredOutcomes].flatMap((phrase) => [...tokens(phrase)]));
+}
+
+/**
  * Rejects a "broader" candidate that does not actually add a new scope
- * dimension beyond the narrow cluster — a paraphrase or parent label of
- * the same work (e.g. "medication inventory management" over narrow
- * "medication inventory records, expiry tracking, restocking") sounds
- * specific but does not reduce uncertainty about which role is needed.
- * Two purely structural checks, neither aware of what profession or
- * domain is involved:
+ * dimension beyond what's already known — a paraphrase or parent label of
+ * the same work (e.g. "medication inventory management" over "reconcile
+ * medication inventory records, track expiry dates, monitor restocking",
+ * or "accounts payable" over "process vendor invoices, match receipts to
+ * purchase orders") sounds specific but does not reduce uncertainty about
+ * which role is needed. Two purely structural checks against the full
+ * evidence, neither aware of what profession or domain is involved:
  *
  * 1. Overlap ratio: if most of the candidate's own tokens are already
- *    present in the narrow cluster, it is substantially the same phrase.
- * 2. Residual content: after removing narrow-cluster tokens AND generic
+ *    present in the employer's own evidence, it is substantially the same
+ *    phrase in different words.
+ * 2. Residual content: after removing already-known tokens AND generic
  *    organizational filler, at least one real content word must remain —
- *    otherwise the candidate is just the narrow work plus a bigger-
+ *    otherwise the candidate is just the known work plus a bigger-
  *    sounding suffix.
  */
-function addsGenuineScope(candidate: string, narrow: string[]): boolean {
+function addsGenuineScope(candidate: string, need: WorkNeedProfile): boolean {
   const candidateTokens = tokens(candidate);
   if (!candidateTokens.size) return false;
-  const narrowTokens = new Set(narrow.flatMap((phrase) => [...tokens(phrase)]));
-  const overlapping = [...candidateTokens].filter((token) => narrowTokens.has(token)).length;
+  const knownTokens = fullEvidenceTokens(need);
+  const overlapping = [...candidateTokens].filter((token) => knownTokens.has(token)).length;
   if (overlapping / candidateTokens.size >= 0.6) return false;
-  const residual = [...candidateTokens].filter((token) => !narrowTokens.has(token) && !ORGANIZATIONAL_FILLER_TOKENS.has(token));
+  const residual = [...candidateTokens].filter((token) => !knownTokens.has(token) && !ORGANIZATIONAL_FILLER_TOKENS.has(token));
   return residual.length > 0;
 }
 
 /**
  * The validated domain phrase for the "or also support broader X" side of
  * a contrast — null when nothing in domainSignals actually adds a new
- * scope dimension beyond the narrow cluster (see addsGenuineScope). Signals
- * are tried most-distinct-first (zero token overlap, then ascending
- * length as a tiebreak, since a short phrase is usually the broader
- * category), and the first one that survives validation wins. No
- * profession-specific casing: only token overlap and vocabulary size.
+ * scope dimension beyond what's already known (see addsGenuineScope).
+ * Signals are tried most-distinct-first (zero overlap with the narrow
+ * display cluster, then ascending length as a tiebreak, since a short
+ * phrase is usually the broader category), and the first one that
+ * survives full-evidence validation wins. No profession-specific casing:
+ * only token overlap and vocabulary size.
  */
 function broaderDomainPhrase(need: WorkNeedProfile, narrow: string[]): string | null {
   const narrowTokens = new Set(narrow.flatMap((phrase) => [...tokens(phrase)]));
@@ -395,7 +412,7 @@ function broaderDomainPhrase(need: WorkNeedProfile, narrow: string[]): string | 
     }))
     .sort((left, right) => Number(left.overlaps) - Number(right.overlaps) || left.size - right.size);
 
-  const validated = signals.find(({ signal }) => addsGenuineScope(signal, narrow));
+  const validated = signals.find(({ signal }) => addsGenuineScope(signal, need));
   if (!validated) return null;
   // A signal with zero token overlap already reads as a clean, standalone
   // domain name — leave it untouched. Only a signal that survived

@@ -300,6 +300,31 @@ describe("clarification quality after role-discovery abstention (held out)", () 
         bannedPhrase: /medication inventory management/i,
       },
       {
+        domain: "healthcare/pharmacy operations (caught live in production)",
+        // "stock" appears only in `problems`, not in the narrow activities
+        // list used for the question's display text — the domain signal
+        // still names the same work, just via a `problems`-only word.
+        workNeed: need({
+          problems: ["medication inventory records are inconsistent", "stock discrepancies"],
+          activities: ["reconcile medication inventory records", "track medication expiry dates", "monitor restocking needs"],
+          domainSignals: ["stock management"],
+        }),
+        bannedPhrase: /stock management/i,
+      },
+      {
+        domain: "finance/accounting (caught live in production)",
+        // Same pattern with completely different vocabulary: "accounts
+        // payable" IS the narrow work (processing vendor invoices,
+        // matching receipts to purchase orders), not a wider field around
+        // it, even though it shares no tokens with the activity phrasing.
+        workNeed: need({
+          problems: ["accounts payable process is a mess", "vendor invoices are paid late", "receipts don't match purchase orders"],
+          activities: ["process vendor invoices", "match receipts to purchase orders"],
+          domainSignals: ["accounts payable"],
+        }),
+        bannedPhrase: /accounts payable/i,
+      },
+      {
         domain: "IT support",
         workNeed: need({
           activities: ["troubleshoot employee laptops", "resolve login issues"],
