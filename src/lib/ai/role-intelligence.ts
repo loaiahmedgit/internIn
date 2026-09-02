@@ -259,33 +259,78 @@ function sentenceList(items: string[]): string {
   return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
 }
 
+function cleanPhrase(value: string): string {
+  return value.trim().replace(/[.?!]+$/u, "");
+}
+
 /**
- * The employer's own domain/work evidence, for grounding a fallback
- * clarification instead of a bare generic one. Requires at least two
- * distinct signals: a lone `problems` entry is often just the employer's
- * whole ambiguous sentence restated, which is not meaningful evidence to
- * quote back — it is the ambiguity itself, not a resolution of it.
+ * All of the employer's own domain/work evidence, deduplicated. Used only
+ * as an evidence-richness gate: a single entry (typically the employer's
+ * whole ambiguous sentence sitting alone in `problems`) is the ambiguity
+ * itself, not evidence to build a contrast from.
  */
-function groundedEvidencePhrases(need: WorkNeedProfile): string[] {
-  const pool = [...need.domainSignals, ...need.activities, ...need.problems, ...need.desiredOutcomes]
-    .map((value) => value.trim().replace(/[.?!]+$/u, ""))
+function evidencePool(need: WorkNeedProfile): string[] {
+  const pool = [...need.activities, ...need.problems, ...need.desiredOutcomes, ...need.domainSignals]
+    .map(cleanPhrase)
     .filter(Boolean);
-  const unique = [...new Set(pool)];
-  return unique.length >= 2 ? unique.slice(0, 3) : [];
+  return [...new Set(pool)];
+}
+
+/**
+ * The specific, already-known cluster of work — what a clarification
+ * should name as the "narrow" side of a contrast. Concrete activities are
+ * preferred (most action-shaped); outcomes/problems only pad the list when
+ * there aren't at least two activities. Domain signals are the last
+ * resort, only when nothing more concrete was extracted at all.
+ */
+function narrowActivityCluster(need: WorkNeedProfile): string[] {
+  const activities = need.activities.map(cleanPhrase).filter(Boolean);
+  const padded = activities.length >= 2
+    ? activities
+    : [...activities, ...need.desiredOutcomes.map(cleanPhrase), ...need.problems.map(cleanPhrase)].filter(Boolean);
+  const narrow = [...new Set(padded)].slice(0, 3);
+  return narrow.length ? narrow : [...new Set(need.domainSignals.map(cleanPhrase).filter(Boolean))].slice(0, 3);
+}
+
+/**
+ * A domain signal genuinely broader than the narrow cluster — one whose
+ * tokens are not already covered by it — for the "or also support
+ * broader X" side of the contrast. A pure token-overlap check: it never
+ * looks at what profession or industry is involved, only whether this
+ * phrase adds information the narrow cluster doesn't already have.
+ */
+function broaderDomainSignal(need: WorkNeedProfile, narrow: string[]): string | null {
+  const narrowTokens = new Set(narrow.flatMap((phrase) => [...tokens(phrase)]));
+  return (
+    need.domainSignals
+      .map(cleanPhrase)
+      .filter(Boolean)
+      .find((signal) => {
+        const signalTokens = tokens(signal);
+        return signalTokens.size > 0 && ![...signalTokens].some((token) => narrowTokens.has(token));
+      }) ?? null
+  );
 }
 
 /**
  * Used whenever retrieval can't support a real discriminating choice
- * (too few candidates, incoherent families, no distinctive activities).
- * Still grounds the question in whatever domain/work evidence the employer
- * already gave, rather than discarding it for a one-size-fits-all prompt —
- * per-profession wording is never hardcoded here, only the employer's own
- * extracted phrases are reflected back.
+ * between retrieved role profiles (too few candidates, incoherent
+ * families, no distinctive activities). Still asks a genuine binary
+ * contrast — a specific known activity cluster versus a broader domain not
+ * yet confirmed in scope — instead of restating the evidence as a
+ * sentence and appending a generic question. Per-profession wording is
+ * never hardcoded: only token overlap against the employer's own
+ * extracted phrases decides the split.
  */
 function groundedFallbackQuestion(need: WorkNeedProfile): string {
-  const phrases = groundedEvidencePhrases(need);
-  if (!phrases.length) return GENERIC_CLARIFICATION_QUESTION;
-  return `You mentioned ${sentenceList(phrases)}. What kind of work should they mainly focus on day to day?`;
+  if (evidencePool(need).length < 2) return GENERIC_CLARIFICATION_QUESTION;
+  const narrow = narrowActivityCluster(need);
+  if (!narrow.length) return GENERIC_CLARIFICATION_QUESTION;
+  const narrowPhrase = sentenceList(narrow.map((phrase) => phrase.toLocaleLowerCase("en")));
+  const broader = broaderDomainSignal(need, narrow);
+  return broader
+    ? `Will they mainly ${narrowPhrase}, or will they also support broader ${broader}?`
+    : `Will they mainly ${narrowPhrase}, or take on broader responsibilities in this area?`;
 }
 
 function buildClarificationQuestion(scored: ScoredProfile[], weights: CorpusWeights, need: WorkNeedProfile): string {

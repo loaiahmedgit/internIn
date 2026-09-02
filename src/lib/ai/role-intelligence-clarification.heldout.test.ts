@@ -131,7 +131,7 @@ describe("clarification quality after role-discovery abstention (held out)", () 
       expectSubstringOneOf: ["approval", "workflow", "handoff", "process"],
     },
   ])(
-    "grounds the clarification in the employer's own $domain evidence instead of the generic fallback",
+    "asks a discriminating contrast grounded in the employer's own $domain evidence, not a generic fallback or a bare restatement",
     ({ workNeed, expectSubstringOneOf }) => {
       const result = recommendRoleFromProfiles(workNeed, NO_RETRIEVAL);
 
@@ -139,7 +139,14 @@ describe("clarification quality after role-discovery abstention (held out)", () 
       expect(result.clarificationNeeded).toBe(true);
       expect(result.clarificationQuestion).not.toBe(GENERIC);
       expect(result.clarificationQuestion).not.toBeNull();
-      const question = (result.clarificationQuestion ?? "").toLocaleLowerCase("en");
+      const raw = result.clarificationQuestion ?? "";
+      // The banned pattern: repeating extracted phrases back and appending
+      // a generic tail question adds no discrimination between role
+      // boundaries — a real clarification must contrast two possibilities.
+      expect(raw).not.toMatch(/^you mentioned/i);
+      expect(raw).toMatch(/will they mainly/i);
+      expect(raw).toMatch(/\bor\b/i);
+      const question = raw.toLocaleLowerCase("en");
       expect(expectSubstringOneOf.some((needle) => question.includes(needle))).toBe(true);
     },
   );
