@@ -5,7 +5,7 @@ import { classifyAssistantRequest } from "./assistant-router";
 
 /**
  * Real, live calls to classifyAssistantRequest — the actual natural-
- * language extraction behavior these 4 scenarios prove (whether a message
+ * language extraction behavior these 5 scenarios prove (whether a message
  * already answers a slot, whether the model correctly treats "no minimum
  * number of clarification questions" as real) is not something a pure
  * unit test of deterministic code can demonstrate; it's a property of the
@@ -18,12 +18,12 @@ const maybe = hasCredentials ? describe : describe.skip;
 
 maybe("classifyAssistantRequest — real clarification-detection behavior (live model)", () => {
   it(
-    "1. Fully specified request -> draft_challenge directly, zero clarification questions",
+    "1. Fully specified hiring request -> offer_next_action directly, zero clarification questions",
     async () => {
       const transcript = `Employer: I want a technical student to fix computers when small problems happen. School, university, or graduate doesn't matter. Mostly normal computer and software issues.`;
       const decision = await classifyAssistantRequest(transcript);
-      expect(decision.action).toBe("draft_challenge");
-      // Zero clarification questions IS the point — draft_challenge carries
+      expect(decision.action).toBe("offer_next_action");
+      // Zero clarification questions IS the point — offer_next_action carries
       // no missingSlots at all, there is nothing left to resolve.
       expect(decision.missingSlots ?? []).toHaveLength(0);
     },
@@ -49,7 +49,7 @@ maybe("classifyAssistantRequest — real clarification-detection behavior (live 
         // campaigns — responsibilities must never be re-asked.
         expect(slots).not.toContain("responsibilities");
       } else {
-        expect(decision.action).toBe("draft_challenge");
+        expect(decision.action).toBe("offer_next_action");
       }
     },
     60_000,

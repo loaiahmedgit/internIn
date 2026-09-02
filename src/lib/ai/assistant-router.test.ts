@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { AssistantRouterDecisionSchema } from "./assistant-router";
+import { AssistantRouterDecisionSchema, normalizeAssistantRouterDecision } from "./assistant-router";
 
 describe("AssistantRouterDecisionSchema", () => {
   it("accepts a minimal decision with just an action", () => {
@@ -26,11 +26,29 @@ describe("AssistantRouterDecisionSchema", () => {
     expect(() => AssistantRouterDecisionSchema.parse({ action: "do_something_else" })).toThrow();
   });
 
-  it("only recognizes the five canonical actions — one code path per action, no ambiguity", () => {
-    const actions = ["decline", "chat", "check_data", "ask_clarifying_questions", "draft_challenge"];
+  it("only recognizes the eight canonical actions — one code path per action, no ambiguity", () => {
+    const actions = ["decline", "chat", "check_data", "ask_clarifying_questions", "offer_next_action", "draft_challenge", "edit_existing_challenge", "edit_existing_internship"];
     for (const action of actions) {
       expect(() => AssistantRouterDecisionSchema.parse({ action })).not.toThrow();
     }
+  });
+
+  it("preserves whether a clarified creation request is internship-first or explicitly challenge-only", () => {
+    expect(
+      AssistantRouterDecisionSchema.parse({ action: "ask_clarifying_questions", creationTarget: "internship" }).creationTarget,
+    ).toBe("internship");
+    expect(
+      AssistantRouterDecisionSchema.parse({ action: "ask_clarifying_questions", creationTarget: "challenge" }).creationTarget,
+    ).toBe("challenge");
+  });
+
+  it("accepts targetRoleName for edit_existing_challenge — the employer's own wording, resolved to a real internship server-side, never guessed here", () => {
+    const result = AssistantRouterDecisionSchema.parse({
+      action: "edit_existing_challenge",
+      targetRoleName: "Database Intern",
+      revisionInstruction: "Make it easier",
+    });
+    expect(result.targetRoleName).toBe("Database Intern");
   });
 
   it("accepts normalizedRole, roleConfidence, and missingSlots for ask_clarifying_questions — the model only picks slots, never writes question text/choices", () => {
@@ -43,7 +61,7 @@ describe("AssistantRouterDecisionSchema", () => {
     expect(result.missingSlots).toEqual(["candidate_level", "responsibilities", "tools_technologies"]);
   });
 
-  it("rejects a slot outside the closed 8-value vocabulary — the model cannot invent a new kind of question", () => {
+  it("rejects a slot outside the closed vocabulary — the model cannot invent a new kind of question", () => {
     expect(() => AssistantRouterDecisionSchema.parse({ action: "ask_clarifying_questions", missingSlots: ["favorite_color"] })).toThrow();
   });
 
@@ -51,6 +69,43 @@ describe("AssistantRouterDecisionSchema", () => {
     const result = AssistantRouterDecisionSchema.parse({ action: "chat", normalizedRole: null, roleConfidence: null, missingSlots: null });
     expect(result.normalizedRole).toBeNull();
     expect(result.roleConfidence).toBeNull();
+    expect(result.missingSlots).toBeNull();
+  });
+});
+
+describe("normalizeAssistantRouterDecision", () => {
+  it("removes stale question slots from non-question actions", () => {
+    expect(
+      normalizeAssistantRouterDecision(
+        { action: "offer_next_action", missingSlots: ["expected_deliverables"] },
+        "Employer: Create an IT support internship.",
+      ).missingSlots,
+    ).toBeNull();
+  });
+
+  it("never asks for deliverables or work environment", () => {
+    expect(
+      normalizeAssistantRouterDecision(
+        {
+          action: "ask_clarifying_questions",
+          missingSlots: ["expected_deliverables", "work_environment", "responsibilities"],
+        },
+        "Employer: I need an intern.",
+      ).missingSlots,
+    ).toEqual(["responsibilities"]);
+  });
+
+  it("does not re-ask candidate level when the employer explicitly says it does not matter", () => {
+    const result = normalizeAssistantRouterDecision(
+      {
+        action: "ask_clarifying_questions",
+        normalizedRole: "IT Support Intern",
+        roleConfidence: "high",
+        missingSlots: ["role_domain", "candidate_level"],
+      },
+      "Employer: School, university, or graduate doesn't matter.",
+    );
+    expect(result.action).toBe("offer_next_action");
     expect(result.missingSlots).toBeNull();
   });
 });

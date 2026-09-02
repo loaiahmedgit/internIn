@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { transcriptOf, latestChallengeDraft, latestQuestionnaireAnswers } from "./assistant-conversation";
+import { transcriptOf, latestChallengeDraft, latestQuestionnaireAnswers, latestQuestionnaireSubmission } from "./assistant-conversation";
 import type { AssistantUIMessage } from "./assistant-messages";
 import type { ChallengeDraft } from "./challenge-clarification-schemas";
 
@@ -83,6 +83,8 @@ describe("latestQuestionnaireAnswers", () => {
         parts: [{ type: "text", text: "Answered 2 clarification questions." }],
         metadata: {
           intent: "questionnaire_answer",
+          questionnaireContinuation: "offer_next_action",
+          roleSummary: "Database Intern",
           questionnaireAnswers: [
             { prompt: "Which database?", answer: "PostgreSQL" },
             { prompt: "Experience level?", answer: null },
@@ -93,5 +95,9 @@ describe("latestQuestionnaireAnswers", () => {
     const answers = latestQuestionnaireAnswers(messages);
     expect(answers).toHaveLength(2);
     expect(answers?.[1].answer).toBeNull();
+    expect(latestQuestionnaireSubmission(messages)).toMatchObject({
+      continuation: "offer_next_action",
+      roleSummary: "Database Intern",
+    });
   });
 });

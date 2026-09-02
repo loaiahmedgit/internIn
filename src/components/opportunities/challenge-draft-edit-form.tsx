@@ -144,7 +144,7 @@ export function ChallengeDraftEditForm({
           <Label htmlFor="draft-duration-label">Estimated time</Label>
           <Input
             id="draft-duration-label"
-            placeholder="e.g. 3–4 hours"
+            placeholder="e.g. 30-60 minutes"
             value={form.estimatedDurationLabel ?? ""}
             onChange={(e) => setForm((p) => ({ ...p, estimatedDurationLabel: e.target.value || null }))}
           />

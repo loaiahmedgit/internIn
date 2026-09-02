@@ -20,7 +20,7 @@ export default async function AssistantPage({
   const requestedId = typeof query.opportunity === "string" ? query.opportunity : "all";
   const opportunityId = requestedId !== "all" && opportunities.some((o) => o.id === requestedId) ? requestedId : null;
 
-  const opportunityOptions = [{ value: "all", label: "All hiring" }, ...opportunities.map((o) => ({ value: o.id, label: o.role }))];
+  const opportunityOptions = opportunities.map((o) => ({ value: o.id, label: o.role }));
 
   return (
     <div className="h-full min-h-0">

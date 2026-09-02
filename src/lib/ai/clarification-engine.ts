@@ -17,6 +17,16 @@ function toChoices(values: string[], max = 8): ClarificationChoice[] {
 
 function buildQuestion(slot: InformationSlot, profile: RoleProfile): ClarificationQuestion | null {
   switch (slot) {
+    case "role_domain":
+      return {
+        id: slot,
+        slot,
+        prompt: "What kind of work or professional area do you mean?",
+        description: "For example: a chemistry lab, biology research, or a computer lab.",
+        type: "freeform",
+        required: true,
+      };
+
     case "candidate_level":
       // Universal — this is the same question for every profession, on
       // purpose (Part 5 of the request: "The AI does NOT need to
@@ -80,16 +90,9 @@ function buildQuestion(slot: InformationSlot, profile: RoleProfile): Clarificati
       };
 
     case "expected_deliverables":
-      if (profile.typicalDeliverables.length === 0) return null;
-      return {
-        id: slot,
-        slot,
-        prompt: "What should they produce or hand off by the end?",
-        type: "multiple",
-        required: false,
-        choices: toChoices(profile.typicalDeliverables),
-        allowOther: true,
-      };
+      // Deliverables are part of internIn's challenge-design job. An empty
+      // deliverables slot must never turn into a blocking employer question.
+      return null;
 
     case "access_level":
       // Universal — genuinely the same regardless of profession; what
@@ -132,7 +135,7 @@ function buildQuestion(slot: InformationSlot, profile: RoleProfile): Clarificati
 /** Slots whose question text and choices are universal — hardcoded in
  * buildQuestion above, never pulled from a RoleProfile. Safe to ask even
  * when the role itself is too ambiguous to have matched a real profile. */
-const PROFILE_INDEPENDENT_SLOTS: readonly InformationSlot[] = ["candidate_level", "access_level", "restrictions", "special_company_context"];
+const PROFILE_INDEPENDENT_SLOTS: readonly InformationSlot[] = ["role_domain", "candidate_level", "access_level", "restrictions", "special_company_context"];
 
 /**
  * NEVER invents a slot the router didn't actually flag, and never enforces
@@ -151,7 +154,9 @@ const PROFILE_INDEPENDENT_SLOTS: readonly InformationSlot[] = ["candidate_level"
 export function resolveMissingSlots(roleConfidence: "high" | "low" | null | undefined, modelMissingSlots: InformationSlot[] | null | undefined): InformationSlot[] {
   const flagged = modelMissingSlots ?? [];
   if (roleConfidence !== "low") return flagged;
-  return flagged.filter((slot) => PROFILE_INDEPENDENT_SLOTS.includes(slot));
+  const safe = flagged.filter((slot) => PROFILE_INDEPENDENT_SLOTS.includes(slot));
+  const withRoleDomain: InformationSlot[] = ["role_domain", ...safe.filter((slot) => slot !== "role_domain")];
+  return withRoleDomain.slice(0, 4);
 }
 
 export function buildClarificationQuestions(missingSlots: InformationSlot[], profile: RoleProfile): ClarificationQuestion[] {

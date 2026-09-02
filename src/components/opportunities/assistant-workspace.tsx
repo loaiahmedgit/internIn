@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
@@ -9,7 +8,6 @@ import { Paperclip, Copy, RotateCcw, Users, FileText, PenSquare, BarChart3, Brie
 
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { Button } from "@/components/ui/button";
-import { SelectGroup } from "@/components/ui/select";
 import {
   PromptInput,
   PromptInputBody,
@@ -21,11 +19,6 @@ import {
   PromptInputActionMenuContent,
   PromptInputActionAddAttachments,
   PromptInputActionAddScreenshot,
-  PromptInputSelect,
-  PromptInputSelectTrigger,
-  PromptInputSelectValue,
-  PromptInputSelectContent,
-  PromptInputSelectItem,
   PromptInputSubmit,
   usePromptInputAttachments,
   type PromptInputMessage,
@@ -39,7 +32,13 @@ import { ChainOfThought, ChainOfThoughtHeader, ChainOfThoughtContent, ChainOfTho
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { AskInternInQuestionnaire } from "@/components/opportunities/ask-internin-questionnaire";
 import { ChallengeDraftCard } from "@/components/opportunities/challenge-draft-card";
-import type { AssistantStepData, AssistantUIMessage } from "@/lib/ai/assistant-messages";
+import {
+  AssistantActionOfferCard,
+  AssistantInternshipEditProposalCard,
+  AssistantInternshipChoiceCard,
+  AssistantInternshipCreatedCard,
+} from "@/components/opportunities/assistant-action-cards";
+import type { AssistantMessageMetadata, AssistantStepData, AssistantUIMessage } from "@/lib/ai/assistant-messages";
 import type { ChallengeDraft } from "@/lib/ai/challenge-clarification-schemas";
 
 const ALL_HIRING_SUGGESTIONS = [
@@ -147,10 +146,8 @@ export function AssistantWorkspace({
   opportunityOptions: { value: string; label: string }[];
   opportunityId: string | null;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const composerRef = useRef<HTMLDivElement>(null);
+  const handledActionIdsRef = useRef<Set<string>>(new Set());
   const speechSupported = useSpeechSupported();
   // Ids of clarification questionnaires already submitted — a submitted
   // questionnaire stays visible (it's part of the real transcript) but
@@ -188,17 +185,17 @@ export function AssistantWorkspace({
   const handleStartOver = useCallback(() => {
     setMessages([]);
     setAnsweredQuestionnaireIds(new Set());
+    handledActionIdsRef.current.clear();
   }, [setMessages]);
 
-  const handleScopeChange = useCallback(
-    (next: unknown) => {
-      if (typeof next !== "string") return;
-      const params = new URLSearchParams(searchParams.toString());
-      if (next === "all") params.delete("opportunity");
-      else params.set("opportunity", next);
-      router.push(`${pathname}?${params.toString()}`);
+  const handleStructuredAction = useCallback(
+    (partId: string, text: string, metadata: AssistantMessageMetadata) => {
+      if (handledActionIdsRef.current.has(partId)) return;
+      handledActionIdsRef.current.add(partId);
+      clearError();
+      sendMessage({ text, metadata });
     },
-    [router, pathname, searchParams],
+    [clearError, sendMessage],
   );
 
   const handleSubmit = useCallback(
@@ -258,7 +255,7 @@ export function AssistantWorkspace({
     return map;
   }, [messages]);
 
-  /** The composer toolbar is identical in both states (attach + scope on
+  /** The composer toolbar is identical in both states (attachments on
    * the left, mic + submit on the right) — only the textarea's height
    * differs: roomy for the empty-state hero, compact once a real
    * conversation is underway (a ChatGPT/Claude-style persistent bar, not
@@ -290,22 +287,6 @@ export function AssistantWorkspace({
                   <PromptInputActionAddScreenshot />
                 </PromptInputActionMenuContent>
               </PromptInputActionMenu>
-              <PromptInputSelect value={opportunityId ?? "all"} onValueChange={handleScopeChange}>
-                <PromptInputSelectTrigger className="w-auto max-w-40" aria-label="Ask about">
-                  <PromptInputSelectValue className="min-w-0 truncate">
-                    {(value: string) => opportunityOptions.find((o) => o.value === value)?.label ?? value}
-                  </PromptInputSelectValue>
-                </PromptInputSelectTrigger>
-                <PromptInputSelectContent>
-                  <SelectGroup>
-                    {opportunityOptions.map((o) => (
-                      <PromptInputSelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </PromptInputSelectItem>
-                    ))}
-                  </SelectGroup>
-                </PromptInputSelectContent>
-              </PromptInputSelect>
             </PromptInputTools>
             <PromptInputTools>
               {speechSupported && <SpeechInput className="size-8" onTranscriptionChange={handleTranscript} />}
@@ -377,7 +358,14 @@ export function AssistantWorkspace({
             // "✓ N answered" summary already represents it. No fake user
             // bubble for it (the real answers still ride on this message's
             // metadata for the server; only the rendering is skipped).
-            if (message.role === "user" && message.metadata?.intent === "questionnaire_answer") return null;
+            if (
+              message.role === "user" &&
+              (message.metadata?.intent === "questionnaire_answer" ||
+                message.metadata?.intent === "create_internship_draft" ||
+                message.metadata?.intent === "create_challenge_only" ||
+                message.metadata?.intent === "internship_choice" ||
+                message.metadata?.intent === "confirm_internship_edit")
+            ) return null;
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
             // .findLast, not .filter: there is exactly ONE questionnaire /
             // challenge draft / design summary per message, ever — even if
@@ -397,6 +385,27 @@ export function AssistantWorkspace({
             const challengeDraft = message.parts.findLast(
               (p): p is Extract<typeof p, { type: "data-challengeDraft" }> & { id: string } =>
                 p.type === "data-challengeDraft" && typeof p.id === "string",
+            );
+            const actionOffer = message.parts.findLast(
+              (p): p is Extract<typeof p, { type: "data-actionOffer" }> & { id: string } =>
+                p.type === "data-actionOffer" && typeof p.id === "string",
+            );
+            const internshipCreated = message.parts.findLast(
+              (p): p is Extract<typeof p, { type: "data-internshipCreated" }> & { id: string } =>
+                p.type === "data-internshipCreated" && typeof p.id === "string",
+            );
+            const internshipChoice = message.parts.findLast(
+              (p): p is Extract<typeof p, { type: "data-internshipChoice" }> & { id: string } =>
+                p.type === "data-internshipChoice" && typeof p.id === "string",
+            );
+            const internshipEditProposal = message.parts.findLast(
+              (p): p is Extract<typeof p, { type: "data-internshipEditProposal" }> & { id: string } =>
+                p.type === "data-internshipEditProposal" && typeof p.id === "string",
+            );
+            const nextMessageMetadata = messages[index + 1]?.role === "user" ? messages[index + 1]?.metadata : undefined;
+            const questionnaireWasAnswered = Boolean(
+              questionnaire &&
+              (answeredQuestionnaireIds.has(questionnaire.id) || nextMessageMetadata?.intent === "questionnaire_answer"),
             );
             const generationError = message.parts.findLast(
               (p): p is Extract<typeof p, { type: "data-generationError" }> & { id: string } =>
@@ -448,7 +457,7 @@ export function AssistantWorkspace({
                       !generationError &&
                       (progress ? <DesigningStatus label={progress.data.label} /> : <Shimmer>Thinking…</Shimmer>)}
 
-                    {questionnaire && !answeredQuestionnaireIds.has(questionnaire.id) && (
+                    {questionnaire && !questionnaireWasAnswered && (
                       <AskInternInQuestionnaire
                         key={questionnaire.id}
                         result={questionnaire.data}
@@ -462,7 +471,12 @@ export function AssistantWorkspace({
                           // workflow straight into drafting (see route.ts).
                           sendMessage({
                             text: `Answered ${answers.length} clarification question${answers.length === 1 ? "" : "s"}.`,
-                            metadata: { intent: "questionnaire_answer", questionnaireAnswers: answers },
+                            metadata: {
+                              intent: "questionnaire_answer",
+                              questionnaireAnswers: answers,
+                              questionnaireContinuation: questionnaire.data.continuation,
+                              roleSummary: questionnaire.data.roleSummary,
+                            },
                           });
                         }}
                       />
@@ -471,7 +485,7 @@ export function AssistantWorkspace({
                     {/* Once answered, the full form is gone — a completed
                         Questionnaire is history, not something to keep
                         scanning past on every scroll. */}
-                    {questionnaire && answeredQuestionnaireIds.has(questionnaire.id) && (
+                    {questionnaire && questionnaireWasAnswered && (
                       <details className="not-typeset group w-fit rounded-md border border-navy/10 px-3 py-1.5">
                         <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-navy/60 select-none">
                           <CheckCircle2 className="size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
@@ -488,6 +502,61 @@ export function AssistantWorkspace({
                           </ul>
                         )}
                       </details>
+                    )}
+
+                    {actionOffer && (
+                      <AssistantActionOfferCard
+                        data={actionOffer.data}
+                        selected={
+                          nextMessageMetadata?.intent === "create_internship_draft" || nextMessageMetadata?.intent === "create_challenge_only"
+                            ? nextMessageMetadata.intent
+                            : null
+                        }
+                        disabled={isStreaming}
+                        onChoose={(choice) =>
+                          handleStructuredAction(
+                            actionOffer.id,
+                            choice === "create_internship_draft" ? "Create internship draft" : "Create challenge only",
+                            { intent: choice, roleSummary: actionOffer.data.generationContext ?? actionOffer.data.roleSummary },
+                          )
+                        }
+                      />
+                    )}
+
+                    {internshipChoice && (
+                      <AssistantInternshipChoiceCard
+                        data={internshipChoice.data}
+                        selectedOpportunityId={
+                          nextMessageMetadata?.intent === "internship_choice" ? nextMessageMetadata.chosenOpportunityId ?? null : null
+                        }
+                        disabled={isStreaming}
+                        onChoose={(chosenOpportunityId, role) =>
+                          handleStructuredAction(internshipChoice.id, `Use ${role}`, {
+                            intent: "internship_choice",
+                            chosenOpportunityId,
+                            revisionInstruction: internshipChoice.data.revisionInstruction,
+                            internshipChoiceOperation: internshipChoice.data.operation,
+                          })
+                        }
+                      />
+                    )}
+
+                    {internshipCreated && <AssistantInternshipCreatedCard data={internshipCreated.data} />}
+
+                    {internshipEditProposal && (
+                      <AssistantInternshipEditProposalCard
+                        data={internshipEditProposal.data}
+                        confirmed={nextMessageMetadata?.intent === "confirm_internship_edit"}
+                        disabled={isStreaming}
+                        onConfirm={() =>
+                          handleStructuredAction(internshipEditProposal.id, `Confirm update to ${internshipEditProposal.data.role}`, {
+                            intent: "confirm_internship_edit",
+                            chosenOpportunityId: internshipEditProposal.data.opportunityId,
+                            revisionInstruction: internshipEditProposal.data.revisionInstruction,
+                            internshipEditPatch: internshipEditProposal.data.patch,
+                          })
+                        }
+                      />
                     )}
 
                     {/* Only the LATEST version of this draft id gets the
@@ -523,7 +592,9 @@ export function AssistantWorkspace({
                       <div className="not-typeset flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4">
                         <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
                         <div className="min-w-0 flex-1 space-y-2">
-                          <p className="text-sm font-medium text-navy">Challenge generation failed</p>
+                          <p className="text-sm font-medium text-navy">
+                            {generationError.data.title ?? "Challenge generation failed"}
+                          </p>
                           <p className="text-sm text-navy/70">{generationError.data.message}</p>
                           <Button size="sm" variant="outline" onClick={() => regenerate()} disabled={isStreaming}>
                             <RotateCcw className="size-3.5" /> Try again

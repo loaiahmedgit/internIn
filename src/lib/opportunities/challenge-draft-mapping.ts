@@ -37,11 +37,11 @@ export function mapChallengeDraftToChallenge(draft: ChallengeDraft): Challenge {
   return {
     title: draft.title,
     scenario: scenarioParts.join("\n\n"),
-    // The human label ("4–6 hours") is canonical and always carried
+    // The human label (usually "30-60 minutes" or "60-90 minutes") is canonical and always carried
     // through untouched. estimatedMinutes only backs the database's
     // required numeric column — derived from that SAME label when the
     // model didn't also give a number, never an unrelated hardcoded
-    // default (that's the exact bug: a card showing "4–6 hours" while
+    // default (the old bug was a card showing one duration while
     // this used to silently fall back to a flat 60).
     estimatedMinutes: draft.durationMinutes ?? estimateMinutesFromLabel(draft.estimatedDurationLabel) ?? 60,
     estimatedDurationLabel: draft.estimatedDurationLabel ?? null,

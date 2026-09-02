@@ -163,7 +163,7 @@ export async function generateChallengeDraftObject(params: {
       const { object } = await generateObject({
         model: getModel(),
         schema: ChallengeDraftCoreSchema,
-        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the role, title, scenario, skills, duration, deliverables, AI usage policy, assumptions, and safety notes — not tasks/materials/rubric, those come from a separate step. Keep every field concise.\n\n"estimatedDurationLabel" is a short human range like "3–4 hours" or "60–90 minutes" — always fill it in. "deliverables" is a short list (2-4 items) of what the candidate actually hands in (e.g. "SQL scripts", "a one-page summary report"), not a restatement of the tasks.`,
+        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the role, title, scenario, skills, duration, deliverables, AI usage policy, assumptions, and safety notes — not tasks/materials/rubric, those come from a separate step. Keep every field concise.\n\nDefault to a focused 30-60 minute challenge. Use 60-90 minutes only when the work is genuinely complex. Go beyond 90 minutes only when the employer explicitly requested a substantial take-home project. Reduce scope instead of assigning an ordinary intern candidate several hours of work. "estimatedDurationLabel" is a short human range like "30-60 minutes" or "60-90 minutes" and must agree with durationMinutes. "deliverables" is a short list (2-4 items) of what the candidate actually hands in (e.g. "SQL scripts", "a one-page summary report"), not a restatement of the tasks.`,
         prompt: basePrompt + attempt.extraInstruction,
         temperature: attempt.temperature,
         maxOutputTokens: 1500,
@@ -185,7 +185,91 @@ export async function generateChallengeDraftObject(params: {
     }),
   ]);
 
-  return { ...core, rubric: normalizeRubricWeights(details.rubric), tasks: details.tasks, materials: details.materials };
+  return enforceChallengeDurationPolicy(
+    { ...core, rubric: normalizeRubricWeights(details.rubric), tasks: details.tasks, materials: details.materials },
+    context,
+  );
+}
+
+function explicitRequestedMinutes(context: EmployerContext): number | null {
+  const text = [context.originalRequest, context.additionalContext, ...context.restrictions].filter(Boolean).join(" ");
+  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*-?\s*(hours?|hrs?|minutes?|mins?)\b/gi)];
+  const values = matches.flatMap((match) => {
+    const trailing = text.slice((match.index ?? 0) + match[0].length, (match.index ?? 0) + match[0].length + 24);
+    // Internship availability such as "20 hours/week" is not a challenge
+    // time limit. Only standalone hour/minute values can override the
+    // focused challenge-duration policy.
+    if (/^\s*(?:\/|per\s+|a\s+|each\s+)(?:day|week|month)\b/i.test(trailing)) return [];
+    const amount = Number(match[1]);
+    const minutes = /^h/i.test(match[2]) ? Math.round(amount * 60) : Math.round(amount);
+    return Number.isFinite(minutes) && minutes > 0 ? [Math.min(minutes, 480)] : [];
+  });
+  return values.length ? Math.max(...values) : null;
+}
+
+function upperMinutesFromLabel(label: string | null | undefined): number | null {
+  if (!label) return null;
+  const match = label.match(/(\d+(?:\.\d+)?)\s*(?:[-–—]|to)?\s*(\d+(?:\.\d+)?)?\s*(hours?|hrs?|minutes?|mins?)/i);
+  if (!match) return null;
+  const amount = Number(match[2] ?? match[1]);
+  return /^h/i.test(match[3]) ? Math.round(amount * 60) : Math.round(amount);
+}
+
+function durationFitsLabel(minutes: number, label: string | null | undefined): boolean {
+  if (!label) return false;
+  const match = label.match(/(\d+(?:\.\d+)?)\s*(?:[-–—]|to)?\s*(\d+(?:\.\d+)?)?\s*(hours?|hrs?|minutes?|mins?)/i);
+  if (!match) return false;
+  const multiplier = /^h/i.test(match[3]) ? 60 : 1;
+  const low = Number(match[1]) * multiplier;
+  const high = Number(match[2] ?? match[1]) * multiplier;
+  return minutes >= Math.min(low, high) && minutes <= Math.max(low, high);
+}
+
+/** Deterministic product guardrail after model validation. It keeps an
+ * explicitly requested duration, but otherwise narrows ordinary hiring
+ * challenges to a focused 30-60 or 60-90 minute scope. Long generated
+ * drafts are actually reduced, not merely relabeled. */
+export function enforceChallengeDurationPolicy(
+  draft: ChallengeDraftGenerated,
+  context: EmployerContext,
+): ChallengeDraftGenerated {
+  const explicitlyRequested = explicitRequestedMinutes(context);
+  if (explicitlyRequested !== null) {
+    const maxTasks = explicitlyRequested <= 60 ? 3 : explicitlyRequested <= 90 ? 4 : draft.tasks.length;
+    return {
+      ...draft,
+      tasks: draft.tasks.slice(0, maxTasks),
+      deliverables: draft.deliverables.slice(0, maxTasks),
+      durationMinutes: explicitlyRequested,
+      estimatedDurationLabel: `${explicitlyRequested} minutes`,
+    };
+  }
+
+  const outputMinutes = Math.max(draft.durationMinutes ?? 0, upperMinutesFromLabel(draft.estimatedDurationLabel) ?? 0);
+  const isComplex = draft.tasks.length >= 4 || draft.deliverables.length >= 3 || draft.materials.length >= 3;
+  const maxTasks = isComplex ? 4 : 3;
+  const policyMinutes = isComplex ? 75 : 45;
+  const policyLabel = isComplex ? "60-90 minutes" : "30-60 minutes";
+
+  if (
+    outputMinutes <= 90 &&
+    draft.durationMinutes &&
+    durationFitsLabel(draft.durationMinutes, draft.estimatedDurationLabel)
+  ) {
+    return {
+      ...draft,
+      tasks: draft.tasks.slice(0, maxTasks),
+      deliverables: draft.deliverables.slice(0, maxTasks),
+    };
+  }
+
+  return {
+    ...draft,
+    tasks: draft.tasks.slice(0, maxTasks),
+    deliverables: draft.deliverables.slice(0, maxTasks),
+    durationMinutes: policyMinutes,
+    estimatedDurationLabel: policyLabel,
+  };
 }
 
 /**

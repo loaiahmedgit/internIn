@@ -44,6 +44,7 @@ export type ClarificationChoice = z.infer<typeof ClarificationChoiceSchema>;
  * a cross-module dependency in a foundational schema file; the two must
  * stay in sync (enforced by the shared unit tests). */
 const ClarificationSlotSchema = z.enum([
+  "role_domain",
   "candidate_level",
   "responsibilities",
   "tools_technologies",
@@ -79,7 +80,7 @@ export const ClarificationQuestionsResultSchema = z.object({
     .min(1)
     .max(240)
     .describe("One short, natural sentence telling the employer why you're asking before drafting the challenge."),
-  questions: z.array(ClarificationQuestionSchema).min(2).max(4),
+  questions: z.array(ClarificationQuestionSchema).min(1).max(4),
 });
 export type ClarificationQuestionsResult = z.infer<typeof ClarificationQuestionsResultSchema>;
 
@@ -204,7 +205,7 @@ export const ChallengeDraftGeneratedSchema = z.object({
   // no consuming code needs an undefined-check either way.
   materials: z.array(GeneratedMaterialSchema).max(10).default([]),
   durationMinutes: z.number().int().min(10).max(480).nullable().optional(),
-  // A short human duration RANGE ("3–4 hours") for display — separate
+  // A short human duration RANGE (normally "30-60 minutes") for display — separate
   // from durationMinutes (a single number other code already maps onto
   // Challenge.estimatedMinutes). Flat, nullable/optional primitive, not a
   // nested object — follows the established null-tolerant-field rule.

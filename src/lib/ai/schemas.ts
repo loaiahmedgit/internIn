@@ -54,7 +54,7 @@ export const ChallengeSchema = z.object({
   title: z.string().trim().min(2).max(180),
   scenario: z.string().trim().min(20).max(6000),
   estimatedMinutes: z.number().int().min(10).max(480),
-  /** Human duration range ("4–6 hours") — the canonical display value;
+  /** Human duration range (normally "30-60 minutes") — the canonical display value;
    * see challenge-duration.ts's formatChallengeDuration. Null for a
    * challenge from a path that never produced one. */
   estimatedDurationLabel: z.string().trim().max(40).nullable().optional(),

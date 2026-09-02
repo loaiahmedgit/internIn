@@ -1,7 +1,7 @@
 /**
  * ONE canonical challenge-duration display, used everywhere a challenge's
  * length is shown (Challenge Draft, Internship review, Challenge tab,
- * opportunity detail) — fixes the "4–6 hours" vs "60 min" mismatch: those
+ * opportunity detail) — fixes the old human-label vs numeric mismatch: those
  * were two independently-tracked values (a human label vs a hardcoded
  * numeric fallback). The human label, when the model gave one, always
  * wins; `estimatedMinutes` is only ever a fallback for older data that
@@ -13,7 +13,7 @@ export function formatChallengeDuration(estimatedMinutes: number, estimatedDurat
 }
 
 /**
- * Best-effort minutes estimate from a human label like "4–6 hours" or
+ * Best-effort minutes estimate from a human label like "60-90 minutes" or
  * "45-60 min" — ONLY used to fill the database's required numeric column
  * when the model didn't also give durationMinutes directly. Never the
  * value shown to a user (formatChallengeDuration always prefers the label

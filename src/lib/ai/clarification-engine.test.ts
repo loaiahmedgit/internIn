@@ -96,6 +96,11 @@ describe("buildClarificationQuestions — generalizes across all required profes
     expect(buildClarificationQuestions([], profile)).toEqual([]);
   });
 
+  it("never asks the employer to design expected deliverables", async () => {
+    const profile = await getRoleProfile("Database Intern");
+    expect(buildClarificationQuestions(["expected_deliverables"], profile)).toEqual([]);
+  });
+
   it("DYNAMIC COUNT: a genuinely vague 'web dev intern' request needs all 3 real questions, not just one — the exact reported under-asking bug", async () => {
     const profile = await getRoleProfile("Web Developer Intern"); // curated — no live model call
     const questions = buildClarificationQuestions(["responsibilities", "candidate_level", "tools_technologies"], profile);
@@ -134,20 +139,17 @@ describe("resolveMissingSlots", () => {
     expect(resolveMissingSlots("high", ["responsibilities", "tools_technologies"])).toEqual(["responsibilities", "tools_technologies"]);
   });
 
-  it("drops profile-dependent slots when confidence is low — never guesses role-specific choices from a mismatched profile", () => {
-    expect(resolveMissingSlots("low", ["responsibilities", "tools_technologies"])).toEqual([]);
+  it("replaces unsafe profile-dependent questions with one factual role-domain question when confidence is low", () => {
+    expect(resolveMissingSlots("low", ["responsibilities", "tools_technologies"])).toEqual(["role_domain"]);
   });
 
   it("keeps profile-independent slots when confidence is low — those never depended on the profile match", () => {
-    expect(resolveMissingSlots("low", ["candidate_level", "responsibilities", "restrictions"])).toEqual(["candidate_level", "restrictions"]);
+    expect(resolveMissingSlots("low", ["candidate_level", "responsibilities", "restrictions"])).toEqual(["role_domain", "candidate_level", "restrictions"]);
   });
 
-  it("never invents a slot the model didn't flag, even at low confidence", () => {
-    // Old behavior hardcoded ["candidate_level", "special_company_context"]
-    // regardless of what the model actually said — that's exactly the
-    // "required minimum" this must never do again.
-    expect(resolveMissingSlots("low", [])).toEqual([]);
-    expect(resolveMissingSlots("low", null)).toEqual([]);
+  it("asks only for the ambiguous profession itself when confidence is low and no safe slot was supplied", () => {
+    expect(resolveMissingSlots("low", [])).toEqual(["role_domain"]);
+    expect(resolveMissingSlots("low", null)).toEqual(["role_domain"]);
   });
 
   it("defaults to an empty array when nothing was provided", () => {

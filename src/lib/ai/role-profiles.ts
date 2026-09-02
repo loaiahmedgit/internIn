@@ -12,6 +12,7 @@ import { withGenerateRetries } from "./challenge-generation";
  * for a fixed slot, code does.
  */
 export const InformationSlotSchema = z.enum([
+  "role_domain",
   "candidate_level",
   "responsibilities",
   "tools_technologies",
@@ -29,6 +30,7 @@ export type InformationSlot = z.infer<typeof InformationSlotSchema>;
  * NOT in this map, so its type is resolved per-instance instead (see
  * resolveQuestionType). Every other slot's type is non-negotiable. */
 export const SLOT_FIXED_TYPE: Partial<Record<InformationSlot, "single" | "multiple" | "freeform">> = {
+  role_domain: "freeform",
   candidate_level: "single",
   responsibilities: "multiple",
   tools_technologies: "multiple",

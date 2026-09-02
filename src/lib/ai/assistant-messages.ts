@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
 import type { ChallengeDraft, ClarificationQuestionsResult } from "./challenge-clarification-schemas";
+import type { OpportunityEditPatch } from "./opportunity-edit";
 
 /**
  * Real, honest chain-of-thought progress step for the "Ask internIn"
@@ -42,6 +43,7 @@ export interface ProgressData {
  * message (still carrying its original questionnaire-answer metadata,
  * if any) — the questionnaire is never re-asked and no context is lost. */
 export interface GenerationErrorData {
+  title?: string;
   message: string;
 }
 
@@ -54,14 +56,75 @@ export interface QuestionnaireAnswer {
   answer: string | null;
 }
 
-/** Carried on the user message the Questionnaire's submit produces, so the
- * server can deterministically continue straight into drafting instead of
- * asking the model to re-decide what an explicit UI submit already
- * decided. This is a structured UI-driven signal, not text-based intent
- * guessing. */
+export type QuestionnaireContinuation = "offer_next_action" | "draft_challenge";
+
+/** The Questionnaire also carries the deterministic workflow it resumes.
+ * A general hiring request returns to the internship-first action offer;
+ * an explicit challenge-only request (or an internship already in URL
+ * context) continues directly to ChallengeDraft generation. */
+export interface AssistantQuestionnaireData extends ClarificationQuestionsResult {
+  continuation: QuestionnaireContinuation;
+  roleSummary: string;
+}
+
+/** Carried on the user message a UI action (not real typing) produces, so
+ * the server can deterministically continue instead of asking the model
+ * to re-decide what an explicit click already decided. Structured
+ * UI-driven signals, never text-based intent guessing:
+ * - questionnaire_answer: the Questionnaire's own submit.
+ * - create_internship_draft / create_challenge_only: the offer card's two
+ *   buttons (see ActionOfferData) — roleSummary carries the same context
+ *   forward so generation never re-reads/re-classifies the transcript.
+ * - internship_choice: the disambiguation picker's button (see
+ *   InternshipChoiceData) — chosenOpportunityId + the original
+ *   revisionInstruction, so the server can act on the right internship
+ *   without re-asking what the employer wanted changed. */
 export interface AssistantMessageMetadata {
-  intent?: "questionnaire_answer";
+  intent?: "questionnaire_answer" | "create_internship_draft" | "create_challenge_only" | "internship_choice" | "confirm_internship_edit";
   questionnaireAnswers?: QuestionnaireAnswer[];
+  questionnaireContinuation?: QuestionnaireContinuation;
+  roleSummary?: string;
+  chosenOpportunityId?: string;
+  revisionInstruction?: string;
+  internshipChoiceOperation?: "edit_challenge" | "edit_internship";
+  internshipEditPatch?: OpportunityEditPatch;
+}
+
+/** Written once enough context exists to act, but there's a real product
+ * choice to make first (Part 4/5: never silently assume challenge-only,
+ * never ask "internship or challenge?" as a cold technical question) —
+ * two buttons, "Create internship draft" primary. */
+export interface ActionOfferData {
+  roleSummary: string;
+  /** Full factual generation context when clarification answers exist.
+   * Kept separate so the compact card never dumps questionnaire prose. */
+  generationContext?: string;
+}
+
+/** Written after an internship is actually created from a draft — the
+ * conversation's own "it's ready" signal; the UI navigates to its real
+ * management page as its one visible next step, not a giant success
+ * screen inline in the chat. */
+export interface InternshipCreatedData {
+  opportunityId: string;
+  role: string;
+}
+
+/** A named existing internship ("make the Database Intern challenge
+ * easier") resolved to zero or several real company internships instead
+ * of exactly one — shown as a real choice, never guessed silently. */
+export interface InternshipChoiceData {
+  options: { id: string; role: string }[];
+  revisionInstruction: string;
+  operation: "edit_challenge" | "edit_internship";
+}
+
+export interface InternshipEditProposalData {
+  opportunityId: string;
+  role: string;
+  revisionInstruction: string;
+  patch: OpportunityEditPatch;
+  changes: { label: string; before: string; after: string }[];
 }
 
 /** The custom data parts this app streams. `step` is keyed by `id` so a
@@ -75,10 +138,14 @@ export type AssistantUIMessage = UIMessage<
   AssistantMessageMetadata,
   {
     step: AssistantStepData;
-    questionnaire: ClarificationQuestionsResult;
+    questionnaire: AssistantQuestionnaireData;
     challengeDraft: ChallengeDraft;
     designSummary: DesignSummaryData;
     progress: ProgressData;
     generationError: GenerationErrorData;
+    actionOffer: ActionOfferData;
+    internshipCreated: InternshipCreatedData;
+    internshipChoice: InternshipChoiceData;
+    internshipEditProposal: InternshipEditProposalData;
   }
 >;
