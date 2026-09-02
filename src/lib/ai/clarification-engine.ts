@@ -124,15 +124,29 @@ function buildQuestion(slot: InformationSlot, profile: RoleProfile): Clarificati
   }
 }
 
-/** When role normalization confidence is low (the profession itself is
- * too ambiguous — "someone for lab work"), ignore whatever slots the
- * model picked and ask what the role actually IS instead of guessing
- * role-specific responsibilities/tools from a profile that would just be
- * a fabricated match. candidate_level is always safe to ask regardless;
- * special_company_context doubles as "tell us more about this role". */
+/** Slots whose question text and choices are universal — hardcoded in
+ * buildQuestion above, never pulled from a RoleProfile. Safe to ask even
+ * when the role itself is too ambiguous to have matched a real profile. */
+const PROFILE_INDEPENDENT_SLOTS: readonly InformationSlot[] = ["candidate_level", "access_level", "restrictions", "special_company_context"];
+
+/**
+ * NEVER invents a slot the router didn't actually flag, and never enforces
+ * a minimum question count — "no minimum" is a real product requirement
+ * (see assistant-router.ts's ROUTER_SYSTEM: only ask what would materially
+ * change the challenge or risks inventing company context). The one real
+ * filter here: when role normalization confidence is low (the profession
+ * itself is too ambiguous — "someone for lab work"), a profile-DEPENDENT
+ * slot (responsibilities/tools_technologies/work_environment/
+ * expected_deliverables) would show choices pulled from a RoleProfile
+ * matched to a role we're not even confident about — those get dropped.
+ * Profile-independent slots (candidate_level, access_level, restrictions,
+ * special_company_context) stay exactly as the model flagged them; this
+ * function adds nothing it wasn't told.
+ */
 export function resolveMissingSlots(roleConfidence: "high" | "low" | null | undefined, modelMissingSlots: InformationSlot[] | null | undefined): InformationSlot[] {
-  if (roleConfidence === "low") return ["candidate_level", "special_company_context"];
-  return modelMissingSlots ?? [];
+  const flagged = modelMissingSlots ?? [];
+  if (roleConfidence !== "low") return flagged;
+  return flagged.filter((slot) => PROFILE_INDEPENDENT_SLOTS.includes(slot));
 }
 
 export function buildClarificationQuestions(missingSlots: InformationSlot[], profile: RoleProfile): ClarificationQuestion[] {

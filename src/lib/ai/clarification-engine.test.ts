@@ -89,6 +89,11 @@ describe("buildClarificationQuestions — generalizes across all 10 required pro
     expect(questions[0].type).toBe("freeform");
     expect(questions[0].description).toContain("diagnose");
   });
+
+  it("NO MINIMUM: zero missing slots produces zero questions — not an error, not a forced fallback question", async () => {
+    const profile = await getRoleProfile("Pharmacy Intern"); // curated — no live model call
+    expect(buildClarificationQuestions([], profile)).toEqual([]);
+  });
 });
 
 describe("resolveQuestionType", () => {
@@ -113,12 +118,29 @@ describe("resolveMissingSlots", () => {
     expect(resolveMissingSlots("high", ["responsibilities", "tools_technologies"])).toEqual(["responsibilities", "tools_technologies"]);
   });
 
-  it("overrides to a safe universal pair when confidence is low — never guesses role-specific slots", () => {
-    expect(resolveMissingSlots("low", ["responsibilities", "tools_technologies"])).toEqual(["candidate_level", "special_company_context"]);
+  it("drops profile-dependent slots when confidence is low — never guesses role-specific choices from a mismatched profile", () => {
+    expect(resolveMissingSlots("low", ["responsibilities", "tools_technologies"])).toEqual([]);
+  });
+
+  it("keeps profile-independent slots when confidence is low — those never depended on the profile match", () => {
+    expect(resolveMissingSlots("low", ["candidate_level", "responsibilities", "restrictions"])).toEqual(["candidate_level", "restrictions"]);
+  });
+
+  it("never invents a slot the model didn't flag, even at low confidence", () => {
+    // Old behavior hardcoded ["candidate_level", "special_company_context"]
+    // regardless of what the model actually said — that's exactly the
+    // "required minimum" this must never do again.
+    expect(resolveMissingSlots("low", [])).toEqual([]);
+    expect(resolveMissingSlots("low", null)).toEqual([]);
   });
 
   it("defaults to an empty array when nothing was provided", () => {
     expect(resolveMissingSlots(null, null)).toEqual([]);
+  });
+
+  it("NO MINIMUM: a fully-specified request resolves to zero slots — this is the expected, common case, not a fallback failure", () => {
+    expect(resolveMissingSlots("high", [])).toEqual([]);
+    expect(resolveMissingSlots("high", null)).toEqual([]);
   });
 });
 

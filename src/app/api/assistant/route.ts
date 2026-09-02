@@ -37,6 +37,39 @@ function writePlainText(writer: UIMessageStreamWriter<AssistantUIMessage>, id: s
   writer.write({ type: "text-end", id });
 }
 
+/**
+ * Generates a challenge draft directly and writes it to the stream — the
+ * shared body behind both the real "draft_challenge" action AND
+ * "ask_clarifying_questions" resolving to zero actual questions (nothing
+ * was materially missing after all; see resolveMissingSlots). Two call
+ * sites, one implementation, so "there is no minimum number of
+ * clarification questions" never has to duplicate the generation logic to
+ * stay true.
+ */
+async function runDraftChallenge(
+  writer: UIMessageStreamWriter<AssistantUIMessage>,
+  params: { requestId: string; t0: number; turnId: string; originalRequest: string; transcript: string; existingDraft: ReturnType<typeof latestChallengeDraft>; revisionInstruction?: string },
+) {
+  const { requestId, t0, turnId, originalRequest, transcript, existingDraft, revisionInstruction } = params;
+  const generationId = crypto.randomUUID();
+  console.log(`[assistant] requestId=${requestId} generationId=${generationId} trigger=draft_challenge at +${Date.now() - t0}ms`);
+  writer.write({ type: "data-progress", id: "progress", data: { label: "Designing your challenge…" } });
+  let draft;
+  try {
+    const context = await buildEmployerContext({ originalRequest, transcript, answers: null });
+    const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction });
+    draft = attachDraftIdentity(generated, existingDraft);
+  } catch (error) {
+    console.error(`[assistant] requestId=${requestId} generationId=${generationId} generation failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
+    writer.write({ type: "data-generationError", id: `error:${turnId}`, data: { message: "We couldn't finish generating the challenge — try again." } });
+    return;
+  }
+
+  writer.write({ type: "data-challengeDraft", id: `challengeDraft:${turnId}`, data: draft });
+  console.log(`[assistant] requestId=${requestId} generationId=${generationId} generation complete at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
+  writePlainText(writer, `intro:${turnId}`, "Challenge draft ready\n\nHere's a draft challenge based on your request.");
+}
+
 export async function POST(req: Request) {
   // Real stage timing, not a guess — logged so a slow request is
   // diagnosable from Vercel function logs instead of speculated about.
@@ -201,13 +234,23 @@ export async function POST(req: Request) {
           throw new Error("We couldn't prepare the clarification form — try again.");
         }
 
-        // Never a text fallback: if the slot pipeline genuinely produced
-        // no usable questions, that's a real failure — show the same
-        // graceful "try again" every other generation failure shows,
-        // never raw prose standing in for the form.
+        // No forced minimum: resolveMissingSlots can legitimately resolve
+        // to zero questions (e.g. the router flagged only profile-
+        // dependent slots while role confidence was low — see its own
+        // comment) — that means nothing was ACTUALLY worth asking, not a
+        // failure. Draft directly instead of erroring or asking anyway.
         if (!questions.length) {
-          console.error(`[assistant] requestId=${requestId} ask_clarifying_questions produced no questions at +${Date.now() - t0}ms`);
-          throw new Error("We couldn't prepare the clarification form — try again.");
+          console.log(`[assistant] requestId=${requestId} ask_clarifying_questions resolved to zero real questions at +${Date.now() - t0}ms — drafting directly`);
+          await runDraftChallenge(writer, {
+            requestId,
+            t0,
+            turnId,
+            originalRequest: decision.roleSummary ?? transcript,
+            transcript,
+            existingDraft: latestChallengeDraft(messages),
+            revisionInstruction: decision.revisionInstruction ?? undefined,
+          });
+          return;
         }
         console.log(`[assistant] requestId=${requestId} ask_clarifying_questions complete at +${Date.now() - t0}ms role=${normalizedRole} questions=${questions.length}`);
 
@@ -220,24 +263,15 @@ export async function POST(req: Request) {
       }
 
       // decision.action === "draft_challenge"
-      const generationId = crypto.randomUUID();
-      console.log(`[assistant] requestId=${requestId} generationId=${generationId} trigger=draft_challenge at +${Date.now() - t0}ms`);
-      writer.write({ type: "data-progress", id: "progress", data: { label: "Designing your challenge…" } });
-      let draft;
-      try {
-        const existingDraft = latestChallengeDraft(messages);
-        const context = await buildEmployerContext({ originalRequest: decision.roleSummary ?? transcript, transcript, answers: null });
-        const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction: decision.revisionInstruction ?? undefined });
-        draft = attachDraftIdentity(generated, existingDraft);
-      } catch (error) {
-        console.error(`[assistant] requestId=${requestId} generationId=${generationId} generation failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
-        writer.write({ type: "data-generationError", id: `error:${turnId}`, data: { message: "We couldn't finish generating the challenge — try again." } });
-        return;
-      }
-
-      writer.write({ type: "data-challengeDraft", id: `challengeDraft:${turnId}`, data: draft });
-      console.log(`[assistant] requestId=${requestId} generationId=${generationId} generation complete at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
-      writePlainText(writer, `intro:${turnId}`, "Challenge draft ready\n\nHere's a draft challenge based on your request.");
+      await runDraftChallenge(writer, {
+        requestId,
+        t0,
+        turnId,
+        originalRequest: decision.roleSummary ?? transcript,
+        transcript,
+        existingDraft: latestChallengeDraft(messages),
+        revisionInstruction: decision.revisionInstruction ?? undefined,
+      });
     },
     onError: (error) => (error instanceof Error ? error.message : "Couldn't get an answer — try again."),
   });
