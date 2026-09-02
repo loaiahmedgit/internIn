@@ -340,43 +340,114 @@ function endsWithOrganizationalNoun(phrase: string): boolean {
  *    "medication inventory"), with a generic "operations" suffix added
  *    only if it doesn't already end in an organizational noun.
  */
-function broaderDomainPhrase(need: WorkNeedProfile, narrow: string[]): string | null {
-  const signals = need.domainSignals.map(cleanPhrase).filter(Boolean);
-  if (!signals.length) return null;
+/**
+ * Generic organizational vocabulary (the same closed word list as
+ * DOMAIN_SUFFIX_WORDS, stemmed) — excluded when checking whether a
+ * candidate "broader" phrase contributes real new content. A phrase that,
+ * once its narrow-cluster overlap AND this filler is stripped out, has
+ * nothing left is not a different scope — it is the narrow work wearing a
+ * bigger-sounding label.
+ */
+const ORGANIZATIONAL_FILLER_TOKENS = new Set([...DOMAIN_SUFFIX_WORDS].flatMap((word) => [...tokens(word)]));
 
+/**
+ * Rejects a "broader" candidate that does not actually add a new scope
+ * dimension beyond the narrow cluster — a paraphrase or parent label of
+ * the same work (e.g. "medication inventory management" over narrow
+ * "medication inventory records, expiry tracking, restocking") sounds
+ * specific but does not reduce uncertainty about which role is needed.
+ * Two purely structural checks, neither aware of what profession or
+ * domain is involved:
+ *
+ * 1. Overlap ratio: if most of the candidate's own tokens are already
+ *    present in the narrow cluster, it is substantially the same phrase.
+ * 2. Residual content: after removing narrow-cluster tokens AND generic
+ *    organizational filler, at least one real content word must remain —
+ *    otherwise the candidate is just the narrow work plus a bigger-
+ *    sounding suffix.
+ */
+function addsGenuineScope(candidate: string, narrow: string[]): boolean {
+  const candidateTokens = tokens(candidate);
+  if (!candidateTokens.size) return false;
   const narrowTokens = new Set(narrow.flatMap((phrase) => [...tokens(phrase)]));
-  const distinct = signals.find((signal) => {
-    const signalTokens = tokens(signal);
-    return signalTokens.size > 0 && ![...signalTokens].some((token) => narrowTokens.has(token));
-  });
-  if (distinct) return distinct;
-
-  const shortest = [...signals].sort((left, right) => tokens(left).size - tokens(right).size)[0];
-  return endsWithOrganizationalNoun(shortest) ? shortest : `${shortest} operations`;
+  const overlapping = [...candidateTokens].filter((token) => narrowTokens.has(token)).length;
+  if (overlapping / candidateTokens.size >= 0.6) return false;
+  const residual = [...candidateTokens].filter((token) => !narrowTokens.has(token) && !ORGANIZATIONAL_FILLER_TOKENS.has(token));
+  return residual.length > 0;
 }
 
 /**
- * Used whenever retrieval can't support a real discriminating choice
- * between retrieved role profiles (too few candidates, incoherent
- * families, no distinctive activities). Still asks a genuine binary
- * contrast — a specific known activity cluster versus a broader domain not
- * yet confirmed in scope — instead of restating the evidence as a
- * sentence and appending a generic question. Per-profession wording is
- * never hardcoded: only token overlap and a small verb-register map
- * against the employer's own extracted phrases decide the wording.
+ * The validated domain phrase for the "or also support broader X" side of
+ * a contrast — null when nothing in domainSignals actually adds a new
+ * scope dimension beyond the narrow cluster (see addsGenuineScope). Signals
+ * are tried most-distinct-first (zero token overlap, then ascending
+ * length as a tiebreak, since a short phrase is usually the broader
+ * category), and the first one that survives validation wins. No
+ * profession-specific casing: only token overlap and vocabulary size.
  */
-function groundedFallbackQuestion(need: WorkNeedProfile): string {
-  if (evidencePool(need).length < 2) return GENERIC_CLARIFICATION_QUESTION;
-  const narrow = narrowActivityCluster(need);
-  if (!narrow.length) return GENERIC_CLARIFICATION_QUESTION;
-  const narrowPhrase = sentenceList(narrow.map((phrase) => softenLeadingVerb(phrase.toLocaleLowerCase("en"))));
-  const broader = broaderDomainPhrase(need, narrow);
-  return broader
-    ? `Will they mainly ${narrowPhrase}, or will they also support broader ${broader}?`
-    : `Will they mainly ${narrowPhrase}, or take on broader responsibilities in this area?`;
+function broaderDomainPhrase(need: WorkNeedProfile, narrow: string[]): string | null {
+  const narrowTokens = new Set(narrow.flatMap((phrase) => [...tokens(phrase)]));
+  const signals = [...new Set(need.domainSignals.map(cleanPhrase).filter(Boolean))]
+    .map((signal) => ({
+      signal,
+      overlaps: [...tokens(signal)].some((token) => narrowTokens.has(token)),
+      size: tokens(signal).size,
+    }))
+    .sort((left, right) => Number(left.overlaps) - Number(right.overlaps) || left.size - right.size);
+
+  const validated = signals.find(({ signal }) => addsGenuineScope(signal, narrow));
+  if (!validated) return null;
+  // A signal with zero token overlap already reads as a clean, standalone
+  // domain name — leave it untouched. Only a signal that survived
+  // validation despite some overlap (the weaker fallback tier) gets a
+  // generic organizational suffix, and only if it doesn't already have one.
+  if (!validated.overlaps) return validated.signal;
+  return endsWithOrganizationalNoun(validated.signal) ? validated.signal : `${validated.signal} operations`;
 }
 
-function buildClarificationQuestion(scored: ScoredProfile[], weights: CorpusWeights, need: WorkNeedProfile): string {
+/**
+ * A genuine binary contrast built purely from the domain signal channel —
+ * a specific known activity cluster versus a broader domain that
+ * validation confirms is actually a different scope. Returns null (never
+ * a fake contrast) when no domain signal survives that check; the caller
+ * decides whether that means falling back to an honest generic question
+ * or, when a real role candidate already exists, recommending it instead
+ * of asking at all.
+ */
+function buildDomainContrastQuestion(need: WorkNeedProfile): string | null {
+  if (evidencePool(need).length < 2) return null;
+  const narrow = narrowActivityCluster(need);
+  if (!narrow.length) return null;
+  const broader = broaderDomainPhrase(need, narrow);
+  if (!broader) return null;
+  const narrowPhrase = sentenceList(narrow.map((phrase) => softenLeadingVerb(phrase.toLocaleLowerCase("en"))));
+  return `Will they mainly ${narrowPhrase}, or will they also support broader ${broader}?`;
+}
+
+/**
+ * The honest floor when no genuine second scope can be identified: still
+ * a binary contrast naming the known work, but the other side is openly
+ * generic rather than a fabricated specific-sounding alternative. Always
+ * returns a real string — used only where the caller has already decided
+ * a question must be asked regardless (nothing to recommend, or families
+ * genuinely conflict but couldn't be worded specifically).
+ */
+function honestBroadFallbackQuestion(need: WorkNeedProfile): string {
+  const narrow = narrowActivityCluster(need);
+  if (evidencePool(need).length < 2 || !narrow.length) return GENERIC_CLARIFICATION_QUESTION;
+  const narrowPhrase = sentenceList(narrow.map((phrase) => softenLeadingVerb(phrase.toLocaleLowerCase("en"))));
+  return `Will they mainly ${narrowPhrase}, or take on broader responsibilities in this area?`;
+}
+
+/**
+ * Attempts a REAL discriminating question — either two coherent retrieved
+ * role profiles with genuinely distinctive activities, or a validated
+ * domain-signal contrast. Returns null when neither is available: there
+ * is no genuine second scope to ask about, only similarly-worded evidence
+ * for the same one, which is not a distinction worth asking the employer
+ * to resolve.
+ */
+function buildDiscriminatingQuestion(scored: ScoredProfile[], weights: CorpusWeights, need: WorkNeedProfile): string | null {
   if (scored.length >= 2) {
     const anchor = scored[0].profile;
     // Use whatever coherent subset exists rather than discarding all of it
@@ -397,7 +468,14 @@ function buildClarificationQuestion(scored: ScoredProfile[], weights: CorpusWeig
       }
     }
   }
-  return groundedFallbackQuestion(need);
+  return buildDomainContrastQuestion(need);
+}
+
+/** Always returns a real question — the genuine one when available, the
+ * honest generic floor otherwise. Used only where the caller has already
+ * committed to asking (nothing eligible to recommend at all). */
+function buildClarificationQuestion(scored: ScoredProfile[], weights: CorpusWeights, need: WorkNeedProfile): string {
+  return buildDiscriminatingQuestion(scored, weights, need) ?? honestBroadFallbackQuestion(need);
 }
 
 export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleKnowledgeProfile[]): RoleRecommendationResult {
@@ -497,14 +575,26 @@ export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleK
   const weakAbsoluteEvidence = top.activityCoverage < 0.3 || top.score < 0.29 || confidence < 0.46;
 
   if (conflictingFamilies || weakAbsoluteEvidence) {
-    return RoleRecommendationResultSchema.parse({
-      recommendedRole: null,
-      alternatives: [],
-      ambiguity: "high",
-      clarificationNeeded: true,
-      clarificationQuestion: buildClarificationQuestion(plausible, weights, need),
-      roleSource: "inferred",
-    });
+    const discriminating = buildDiscriminatingQuestion(plausible, weights, need);
+    // A genuine second scope exists, or the families themselves genuinely
+    // conflict (still worth asking even when it can only be worded
+    // generically) — ask.
+    if (discriminating || conflictingFamilies) {
+      return RoleRecommendationResultSchema.parse({
+        recommendedRole: null,
+        alternatives: [],
+        ambiguity: "high",
+        clarificationNeeded: true,
+        clarificationQuestion: discriminating ?? honestBroadFallbackQuestion(need),
+        roleSource: "inferred",
+      });
+    }
+    // Only the confidence math was weak: one role family already
+    // dominates (familyCoherent) and no genuinely different second scope
+    // could be found. Asking here would only be "inventory work, or
+    // broader inventory work?" — that does not reduce uncertainty about
+    // which role is needed, so recommend the dominant family instead of
+    // forcing a fake clarification just to satisfy a threshold.
   }
 
   const alternatives = eligible

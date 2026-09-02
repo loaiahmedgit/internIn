@@ -237,7 +237,10 @@ describe("clarification quality after role-discovery abstention (held out)", () 
         workNeed: need({
           problems: ["employee data needs cleaning before go-live"],
           activities: ["map HR fields to Workday", "test the new system before go-live"],
-          domainSignals: ["Workday implementation", "HR systems"],
+          // "Workday implementation" is filler-only over this narrow work
+          // (see the material-difference tests below) — "ERP program
+          // delivery" is the genuinely distinct one that should win.
+          domainSignals: ["Workday implementation", "ERP program delivery"],
         }),
       },
       {
@@ -281,6 +284,206 @@ describe("clarification quality after role-discovery abstention (held out)", () 
       );
       const question = result.clarificationQuestion ?? "";
       expect(question.toLocaleLowerCase("en")).not.toMatch(/operations operations|operations and revenue process operations/i);
+    });
+  });
+
+  describe("material-difference validation (both sides of a contrast must be a genuinely different role scope)", () => {
+    it.each([
+      {
+        domain: "healthcare/pharmacy operations",
+        // The exact reported bug: only a domainSignal that is a parent
+        // label of the same narrow work is available.
+        workNeed: need({
+          activities: ["reconcile medication inventory records", "track medication expiry dates", "monitor restocking needs"],
+          domainSignals: ["medication inventory management"],
+        }),
+        bannedPhrase: /medication inventory management/i,
+      },
+      {
+        domain: "IT support",
+        workNeed: need({
+          activities: ["troubleshoot employee laptops", "resolve login issues"],
+          domainSignals: ["laptop and login troubleshooting"],
+        }),
+        bannedPhrase: /laptop and login troubleshooting/i,
+      },
+      {
+        domain: "ERP/business systems",
+        workNeed: need({
+          activities: ["map HR fields to Workday", "test the new system before go-live"],
+          domainSignals: ["Workday implementation"],
+        }),
+        bannedPhrase: /workday implementation/i,
+      },
+      {
+        domain: "finance/accounting",
+        workNeed: need({
+          activities: ["reconcile monthly bank statements", "follow up on overdue invoices"],
+          domainSignals: ["bank statement and invoice reconciliation"],
+        }),
+        bannedPhrase: /bank statement and invoice reconciliation/i,
+      },
+      {
+        domain: "marketing",
+        workNeed: need({
+          activities: ["schedule social posts", "track campaign performance"],
+          domainSignals: ["social post scheduling and performance tracking"],
+        }),
+        bannedPhrase: /social post scheduling and performance tracking/i,
+      },
+      {
+        domain: "logistics",
+        workNeed: need({
+          activities: ["track inbound shipments", "coordinate delivery schedules"],
+          domainSignals: ["shipment and delivery coordination"],
+        }),
+        bannedPhrase: /shipment and delivery coordination/i,
+      },
+      {
+        domain: "HR",
+        workNeed: need({
+          activities: ["organize onboarding paperwork", "track new-hire status"],
+          domainSignals: ["new-hire onboarding administration"],
+        }),
+        bannedPhrase: /new-hire onboarding administration/i,
+      },
+      {
+        domain: "software",
+        workNeed: need({
+          activities: ["fix dashboard UI bugs", "stabilize the API integration"],
+          domainSignals: ["dashboard and API bug fixing"],
+        }),
+        bannedPhrase: /dashboard and api bug fixing/i,
+      },
+      {
+        domain: "operations",
+        workNeed: need({
+          activities: ["map the approval workflow", "document the process"],
+          domainSignals: ["approval workflow documentation"],
+        }),
+        bannedPhrase: /approval workflow documentation/i,
+      },
+    ])(
+      "rejects a $domain 'broader' phrase that is only a paraphrase of the narrow cluster (A must differ from B in role scope)",
+      ({ workNeed, bannedPhrase }) => {
+        const result = recommendRoleFromProfiles(workNeed, []);
+        const question = result.clarificationQuestion ?? "";
+        // The fake-specific label must never appear...
+        expect(question).not.toMatch(bannedPhrase);
+        // ...and the question must still be a real, answerable one: either
+        // the honest generic floor, or the plain fallback — never nothing.
+        expect(question.length).toBeGreaterThan(0);
+      },
+    );
+
+    it("still uses a domain label when it is genuinely a different, wider scope than the narrow cluster", () => {
+      const result = recommendRoleFromProfiles(
+        need({
+          activities: ["track medication expiry dates", "manage restocking"],
+          problems: ["medication inventory records are inconsistent"],
+          domainSignals: ["pharmacy operations", "medication inventory"],
+        }),
+        [],
+      );
+      const question = result.clarificationQuestion ?? "";
+      expect(question).toMatch(/broader pharmacy operations/i);
+    });
+
+    it("recommends directly instead of asking a fake clarification when only one role family is supported and no genuinely different second scope exists", () => {
+      const empty = { alternateTitles: [], workEnvironments: [], competencies: [], safetyConstraints: [], sourceMappings: [] } satisfies Partial<RoleKnowledgeProfile>;
+      const onlyFamily: RoleKnowledgeProfile = {
+        ...empty,
+        id: "pharmacy-inventory-only",
+        kind: "internship_overlay",
+        canonicalTitle: "Pharmacy Inventory Assistant",
+        internshipTitle: "Pharmacy Inventory Assistant Intern",
+        occupationFamily: "Pharmacy and Healthcare Operations",
+        description: "Provides junior-level support for pharmacy inventory work.",
+        typicalTasks: ["Reconcile medication inventory counts", "Track expiry dates and stock levels"],
+        workActivities: ["Medication inventory control", "Expiry date tracking"],
+        skills: ["Medication inventory control", "Expiry date tracking"],
+        knowledge: ["Pharmacy operations"],
+        commonTools: ["Pharmacy inventory system"],
+        typicalDeliverables: ["Inventory reconciliation report"],
+      };
+
+      const result = recommendRoleFromProfiles(
+        need({
+          activityClarity: "clear",
+          activities: ["reconcile medication inventory counts", "track expiry dates"],
+          domainSignals: ["medication inventory management"],
+        }),
+        [onlyFamily],
+      );
+
+      // Only one coherent family was ever retrieved, and the only domain
+      // signal is a paraphrase of the same work — there is no genuine
+      // second scope to ask about, so this should recommend rather than
+      // force a fake "inventory work, or broader inventory work?" choice.
+      expect(result.clarificationNeeded).toBe(false);
+      expect(result.recommendedRole).not.toBeNull();
+      expect(result.recommendedRole?.title).toBe("Pharmacy Inventory Assistant Intern");
+    });
+
+    it("still asks when two genuinely different coherent role families are retrieved", () => {
+      const empty = { alternateTitles: [], workEnvironments: [], competencies: [], safetyConstraints: [], sourceMappings: [] } satisfies Partial<RoleKnowledgeProfile>;
+      const inventoryFocused: RoleKnowledgeProfile = {
+        ...empty,
+        id: "pharmacy-inventory-2",
+        kind: "internship_overlay",
+        canonicalTitle: "Pharmacy Inventory Assistant",
+        internshipTitle: "Pharmacy Inventory Assistant Intern",
+        occupationFamily: "Pharmacy and Healthcare Operations",
+        description: "Provides junior-level support for pharmacy inventory work.",
+        typicalTasks: ["Reconcile medication inventory counts", "Track expiry dates and stock levels", "Flag restocking needs"],
+        workActivities: ["Medication inventory control", "Expiry date tracking", "Restocking coordination"],
+        skills: ["Medication inventory control", "Expiry date tracking"],
+        knowledge: ["Pharmacy operations"],
+        commonTools: ["Pharmacy inventory system"],
+        typicalDeliverables: ["Inventory reconciliation report"],
+      };
+      const broaderOperations: RoleKnowledgeProfile = {
+        ...empty,
+        id: "pharmacy-operations-2",
+        kind: "internship_overlay",
+        canonicalTitle: "Pharmacy Operations Assistant",
+        internshipTitle: "Pharmacy Operations Assistant Intern",
+        occupationFamily: "Pharmacy and Healthcare Operations",
+        description: "Provides junior-level support for broader pharmacy operations.",
+        typicalTasks: ["Reconcile medication inventory counts", "Support daily pharmacy workflow", "Document dispensing workflow exceptions"],
+        workActivities: ["Medication inventory control", "Pharmacy workflow support", "Dispensing documentation"],
+        skills: ["Medication inventory control", "Pharmacy workflow support"],
+        knowledge: ["Pharmacy operations"],
+        commonTools: ["Pharmacy inventory system"],
+        typicalDeliverables: ["Exception log"],
+      };
+
+      const result = recommendRoleFromProfiles(
+        need({
+          activities: ["reconcile medication inventory counts"],
+          domainSignals: ["pharmacy operations"],
+        }),
+        [inventoryFocused, broaderOperations],
+      );
+
+      expect(result.clarificationNeeded).toBe(true);
+      expect(result.recommendedRole).toBeNull();
+      expect(result.clarificationQuestion).toMatch(/mainly/i);
+    });
+
+    it("preserves an explicit employer role even when no adjacent scope can be validated", () => {
+      const result = recommendRoleFromProfiles(
+        need({
+          explicitRoleTitle: "Pharmacy Inventory Intern",
+          activityClarity: "clear",
+          activities: ["reconcile medication inventory records"],
+          domainSignals: ["medication inventory management"],
+        }),
+        [],
+      );
+      expect(result.roleSource).toBe("explicit");
+      expect(result.recommendedRole?.title).toBe("Pharmacy Inventory Intern");
+      expect(result.clarificationNeeded).toBe(false);
     });
   });
 });
