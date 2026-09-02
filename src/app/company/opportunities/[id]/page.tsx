@@ -13,6 +13,7 @@ import { AskInternshipPanel } from "@/components/opportunities/ask-internship-pa
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { formatDeadline } from "@/lib/format-date";
+import { formatChallengeDuration } from "@/lib/opportunities/challenge-duration";
 import { ChevronRight, ExternalLink, PenSquare, FileText, Plus } from "lucide-react";
 
 type TabKey = "overview" | "candidates" | "listing" | "challenge" | "activity";
@@ -392,7 +393,7 @@ export default async function OpportunityDetailPage({
               <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">Expected duration</p>
-                  <p className="mt-1 text-navy">{challengeVersion!.estimatedMinutes} minutes</p>
+                  <p className="mt-1 text-navy">{formatChallengeDuration(challengeVersion!.estimatedMinutes, challengeVersion!.estimatedDurationLabel)}</p>
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">AI usage policy</p>

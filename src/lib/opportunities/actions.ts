@@ -143,6 +143,7 @@ export async function saveChallengeVersionAction(
       title: validatedChallenge.title,
       scenario: validatedChallenge.scenario,
       estimatedMinutes: validatedChallenge.estimatedMinutes,
+      estimatedDurationLabel: validatedChallenge.estimatedDurationLabel ?? null,
       skills: validatedChallenge.skills,
       tasks: validatedChallenge.tasks,
       deliverables: validatedChallenge.deliverables,

@@ -46,13 +46,15 @@ Skills assessed: ${draft.skills.join(", ")}
 Tasks in the challenge:
 ${taskLines}
 
-Write a real internship posting: a compelling title (usually "${draft.role}" or a close, natural variant — e.g. add "Intern" if it's not already in the role name), a one-sentence short description, a fuller role description (what the intern will actually do day to day — broader than just the challenge), what they'll learn, requirements (skills/background a candidate should have), and nice-to-have extras. Never mention logistics you don't know (location, hours, duration, dates) — that's handled separately.`;
+Write a real internship posting: a compelling title (usually "${draft.role}" or a close, natural variant — e.g. add "Intern" if it's not already in the role name), a one-sentence short description, a fuller role description (what the intern will actually do day to day — broader than just the challenge), what they'll learn, requirements (skills/background a candidate should have), and nice-to-have extras. Never mention logistics you don't know (location, hours, duration, dates) — that's handled separately.
+
+IMPORTANT — the scenario above may describe a FICTIONAL company/situation used only to make the challenge realistic (e.g. "a fictional mid-sized manufacturer"). That fictional detail is fine INSIDE the challenge, but the internship posting is about the REAL hiring company — never claim the intern will "work with our manufacturing teams", "our clients", "our delivery operation", or any other specific real-company fact you were not actually given. Describe the work in general, honest role terms instead (e.g. "you'll help analyze business processes and identify operational improvement opportunities"), not as if the fictional scenario were the employer's real business.`;
 
   return withGenerateRetries("generateOpportunityFromChallenge", ATTEMPTS, async () => {
     const { object } = await generateObject({
       model: getModel(),
       schema: OpportunityFromChallengeSchema,
-      system: "You write clear, honest internship postings for a hiring platform. Never fabricate a logistics detail (location, hours, dates) that wasn't given to you.",
+      system: "You write clear, honest internship postings for a hiring platform. Never fabricate a logistics detail (location, hours, dates) that wasn't given to you, and never state a fictional challenge scenario's details (a made-up company, clients, or operation) as if they were the real hiring employer's actual business.",
       prompt,
       temperature: 0.5,
       maxOutputTokens: 1200,

@@ -99,8 +99,8 @@ export function ChallengeDraftCard({
   // never a silent attach, per the same "no write before confirmation"
   // rule as the existing-internship Approve & attach dialog above.
   const [pickerStep, setPickerStep] = useState<"choose" | "list" | "confirm">("choose");
-  const [attachable, setAttachable] = useState<{ id: string; role: string; status: "draft" | "published" }[] | null>(null);
-  const [selectedTarget, setSelectedTarget] = useState<{ id: string; role: string } | null>(null);
+  const [attachable, setAttachable] = useState<{ id: string; role: string; status: "draft" | "published"; hasChallenge: boolean }[] | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<{ id: string; role: string; hasChallenge: boolean } | null>(null);
 
   function resetPicker() {
     setPickerStep("choose");
@@ -400,12 +400,15 @@ export function ChallengeDraftCard({
                         type="button"
                         className="flex w-full items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-muted"
                         onClick={() => {
-                          setSelectedTarget({ id: o.id, role: o.role });
+                          setSelectedTarget({ id: o.id, role: o.role, hasChallenge: o.hasChallenge });
                           setPickerStep("confirm");
                         }}
                       >
                         <span className="font-medium text-foreground">{o.role}</span>
-                        <Badge variant="secondary" className="font-normal capitalize">{o.status}</Badge>
+                        <span className="flex items-center gap-1.5">
+                          {o.hasChallenge && <Badge variant="outline" className="font-normal">Has challenge</Badge>}
+                          <Badge variant="secondary" className="font-normal capitalize">{o.status}</Badge>
+                        </span>
                       </button>
                     </li>
                   ))}
@@ -423,7 +426,11 @@ export function ChallengeDraftCard({
             <>
               <DialogHeader>
                 <DialogTitle>Attach &quot;{draft.title}&quot; to &quot;{selectedTarget.role}&quot;?</DialogTitle>
-                <DialogDescription>This replaces any existing challenge draft on that internship — it won&apos;t create a duplicate.</DialogDescription>
+                <DialogDescription>
+                  {selectedTarget.hasChallenge
+                    ? "This internship already has a challenge — attaching this one will replace it. No duplicate is created."
+                    : "This challenge will be attached to that internship."}
+                </DialogDescription>
               </DialogHeader>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setPickerStep("list")}>Cancel</Button>

@@ -127,6 +127,7 @@ export async function publishOpportunityFromReviewAction(opportunityId: string, 
         title: version.title,
         scenario: version.scenario,
         estimatedMinutes: version.estimatedMinutes,
+        estimatedDurationLabel: version.estimatedDurationLabel,
         skills: version.skills,
         tasks: version.tasks,
         deliverables: version.deliverables,
@@ -143,13 +144,16 @@ export async function publishOpportunityFromReviewAction(opportunityId: string, 
 
 /** For the "Attach to an existing internship" picker — the employer's own
  * draft/published internships only (a closed listing isn't accepting a new
- * challenge). */
-export async function listAttachableOpportunitiesAction(): Promise<{ id: string; role: string; status: "draft" | "published" }[]> {
+ * challenge). `hasChallenge` lets the confirm step warn specifically when
+ * attaching would replace one, instead of a generic disclaimer every time
+ * (Part 17: never silently overwrite). */
+export async function listAttachableOpportunitiesAction(): Promise<{ id: string; role: string; status: "draft" | "published"; hasChallenge: boolean }[]> {
   const { membership } = await requireCurrentCompanyMember("hiring_access");
   const db = getDb();
   const rows = await db
-    .select({ id: schema.opportunities.id, role: schema.opportunities.role, status: schema.opportunities.status })
+    .select({ id: schema.opportunities.id, role: schema.opportunities.role, status: schema.opportunities.status, challengeId: schema.challenges.id })
     .from(schema.opportunities)
+    .leftJoin(schema.challenges, eq(schema.challenges.opportunityId, schema.opportunities.id))
     .where(and(eq(schema.opportunities.companyId, membership.companyId), inArray(schema.opportunities.status, ["draft", "published"])));
-  return rows as { id: string; role: string; status: "draft" | "published" }[];
+  return rows.map((r) => ({ id: r.id, role: r.role, status: r.status as "draft" | "published", hasChallenge: r.challengeId !== null }));
 }

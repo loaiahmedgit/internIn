@@ -1,5 +1,6 @@
 import type { Challenge } from "@/lib/ai";
 import { AI_USAGE_MODE_LABEL, DELIVERABLE_TYPE_LABEL, type ChallengeDraft } from "@/lib/ai/challenge-clarification-schemas";
+import { estimateMinutesFromLabel } from "@/lib/opportunities/challenge-duration";
 
 /**
  * Maps Ask internIn's rich, authoring-time ChallengeDraft (flat typed
@@ -36,7 +37,14 @@ export function mapChallengeDraftToChallenge(draft: ChallengeDraft): Challenge {
   return {
     title: draft.title,
     scenario: scenarioParts.join("\n\n"),
-    estimatedMinutes: draft.durationMinutes ?? 60,
+    // The human label ("4–6 hours") is canonical and always carried
+    // through untouched. estimatedMinutes only backs the database's
+    // required numeric column — derived from that SAME label when the
+    // model didn't also give a number, never an unrelated hardcoded
+    // default (that's the exact bug: a card showing "4–6 hours" while
+    // this used to silently fall back to a flat 60).
+    estimatedMinutes: draft.durationMinutes ?? estimateMinutesFromLabel(draft.estimatedDurationLabel) ?? 60,
+    estimatedDurationLabel: draft.estimatedDurationLabel ?? null,
     skills: draft.skills,
     tasks,
     // Prefer the model's own explicit deliverables summary; only fall

@@ -365,6 +365,12 @@ export function AssistantWorkspace({
               dashboard's. */}
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
             {messages.map((message, index) => {
+            // A questionnaire submission is a UI action, not something the
+            // employer typed — the preceding assistant message's collapsed
+            // "✓ N answered" summary already represents it. No fake user
+            // bubble for it (the real answers still ride on this message's
+            // metadata for the server; only the rendering is skipped).
+            if (message.role === "user" && message.metadata?.intent === "questionnaire_answer") return null;
             const steps = message.parts.filter((p): p is Extract<typeof p, { type: "data-step" }> => p.type === "data-step");
             // .findLast, not .filter: there is exactly ONE questionnaire /
             // challenge draft / design summary per message, ever — even if

@@ -216,6 +216,11 @@ export const challengeVersions = pgTable(
     title: text("title").notNull(),
     scenario: text("scenario").notNull(),
     estimatedMinutes: integer("estimated_minutes").notNull(),
+    /** Human duration range ("4–6 hours") — the canonical display value
+     * everywhere a challenge's length is shown; estimatedMinutes is only a
+     * numeric fallback for code that predates this column. Null for
+     * versions saved before this field existed. */
+    estimatedDurationLabel: text("estimated_duration_label"),
     skills: jsonb("skills").$type<string[]>().notNull().default([]),
     tasks: jsonb("tasks").$type<{ id: string; title: string; description: string }[]>().notNull().default([]),
     deliverables: jsonb("deliverables").$type<string[]>().notNull().default([]),

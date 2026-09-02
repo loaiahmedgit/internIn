@@ -61,6 +61,7 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
         title: version.title,
         scenario: version.scenario,
         estimatedMinutes: version.estimatedMinutes,
+        estimatedDurationLabel: version.estimatedDurationLabel,
         skills: version.skills,
         tasks: version.tasks,
         deliverables: version.deliverables,
@@ -91,7 +92,7 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
         whatYouWillLearn={opportunity.whatYouWillLearn}
         requirements={opportunity.requirements}
         niceToHave={opportunity.niceToHave}
-        challengeSummary={{ title: challenge.title, taskCount: challenge.tasks.length, estimatedMinutes: challenge.estimatedMinutes }}
+        challengeSummary={{ title: challenge.title, taskCount: challenge.tasks.length, estimatedMinutes: challenge.estimatedMinutes, estimatedDurationLabel: challenge.estimatedDurationLabel ?? null }}
         initialLocation={isUnsetLocation(opportunity.location) ? "" : opportunity.location}
         initialDuration={isUnsetDuration(opportunity.duration) ? "" : opportunity.duration}
         initialHoursPerWeek={isUnsetHoursPerWeek(opportunity.hoursPerWeek) ? null : opportunity.hoursPerWeek}

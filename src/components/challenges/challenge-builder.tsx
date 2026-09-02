@@ -163,7 +163,11 @@ export function ChallengeBuilder({
             <input
               type="number"
               value={challenge.estimatedMinutes}
-              onChange={(e) => markEdited({ ...challenge, estimatedMinutes: Number(e.target.value) })}
+              // Hand-editing the minutes makes any existing human label
+              // ("4–6 hours") stale — clear it so this field stays the
+              // one true duration instead of silently disagreeing with a
+              // leftover label shown elsewhere (challenge-duration.ts).
+              onChange={(e) => markEdited({ ...challenge, estimatedMinutes: Number(e.target.value), estimatedDurationLabel: null })}
               aria-label="Estimated minutes"
               className="w-14 border-b border-gray-cool bg-transparent text-center font-medium text-navy"
             />{" "}

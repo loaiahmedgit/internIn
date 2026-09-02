@@ -1,25 +1,38 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { publishOpportunityFromReviewAction, type MissingOpportunityDetails } from "@/lib/opportunities/opportunity-from-challenge-actions";
-import { toDateInputValue } from "@/lib/format-date";
+import { formatChallengeDuration } from "@/lib/opportunities/challenge-duration";
+import { LocationCombobox } from "@/components/opportunities/location-combobox";
+import { DatePickerField } from "@/components/opportunities/date-picker-field";
 
 type WorkMode = "remote" | "onsite" | "hybrid" | null;
 
+const DURATION_OPTIONS = ["1 month", "2 months", "3 months", "4 months", "6 months"];
+const CUSTOM_DURATION = "custom";
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 /**
  * "Ready to publish" — the review-before-publish step for an internship
- * generated from an Ask internIn ChallengeDraft (see
- * opportunity-from-challenge-actions.ts). Most of the posting is already
- * written; this only asks for the real logistics the conversation never
- * collected (location, mode, duration, hours/week, deadline, start date,
- * openings). Deeper edits go through the existing manual Edit Internship
- * page — this stays a compact summary, not another giant form.
+ * generated from an Ask internIn ChallengeDraft. Most of the posting is
+ * already written; this only asks for the real logistics the conversation
+ * never collected. A review, not a form: compact fields, proper pickers
+ * (searchable location, Select for mode/duration, shadcn date picker),
+ * client-side validation before the server ever sees a bad value, and a
+ * toast + redirect on success — never a full-page "published!" screen.
  */
 export function OpportunityDraftReview({
   opportunityId,
@@ -47,7 +60,7 @@ export function OpportunityDraftReview({
   whatYouWillLearn: string | null;
   requirements: string[];
   niceToHave: string[];
-  challengeSummary: { title: string; taskCount: number; estimatedMinutes: number } | null;
+  challengeSummary: { title: string; taskCount: number; estimatedMinutes: number; estimatedDurationLabel: string | null } | null;
   /** Empty string means "not set yet" — the field renders blank, not with
    * a fabricated value. */
   initialLocation: string;
@@ -58,61 +71,65 @@ export function OpportunityDraftReview({
   initialStartDate: Date | null;
   initialSlots: number;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [published, setPublished] = useState(false);
+  const submittedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
 
   const [location, setLocation] = useState(initialLocation);
-  const [duration, setDuration] = useState(initialDuration);
-  const [hoursPerWeek, setHoursPerWeek] = useState(initialHoursPerWeek?.toString() ?? "");
   const [workMode, setWorkMode] = useState<WorkMode>(initialWorkMode);
-  const [deadlineInput, setDeadlineInput] = useState(initialApplicationDeadline ? toDateInputValue(initialApplicationDeadline) : "");
-  const [startDateInput, setStartDateInput] = useState(initialStartDate ? toDateInputValue(initialStartDate) : "");
+  const isPresetDuration = DURATION_OPTIONS.includes(initialDuration);
+  const [durationChoice, setDurationChoice] = useState(initialDuration ? (isPresetDuration ? initialDuration : CUSTOM_DURATION) : "");
+  const [customDuration, setCustomDuration] = useState(isPresetDuration ? "" : initialDuration);
+  const duration = durationChoice === CUSTOM_DURATION ? customDuration : durationChoice;
+  const [hoursPerWeek, setHoursPerWeek] = useState(initialHoursPerWeek?.toString() ?? "");
+  const [deadline, setDeadline] = useState<Date | null>(initialApplicationDeadline);
+  const [startDate, setStartDate] = useState<Date | null>(initialStartDate);
   const [slots, setSlots] = useState(initialSlots);
 
-  const canPublish = location.trim().length > 0 && duration.trim().length > 0 && Number(hoursPerWeek) > 0;
+  const today = startOfToday();
+  const fieldErrors = {
+    location: location.trim().length === 0 ? "Required" : null,
+    workMode: workMode === null ? "Required" : null,
+    duration: duration.trim().length === 0 ? "Required" : null,
+    hoursPerWeek: !Number(hoursPerWeek) || Number(hoursPerWeek) < 1 || Number(hoursPerWeek) > 60 ? "1–60" : null,
+    deadline: !deadline ? "Required" : null,
+    startDate: !startDate ? "Required" : startDate < today ? "Cannot be in the past" : deadline && startDate < deadline ? "Must be after the deadline" : null,
+    slots: slots < 1 ? "At least 1" : null,
+  };
+  const canPublish = Object.values(fieldErrors).every((e) => e === null);
 
   function handlePublish() {
-    if (!canPublish) {
-      setError("Fill in location, duration, and hours per week before publishing.");
-      return;
-    }
+    setAttempted(true);
+    if (!canPublish) return;
+    // Synchronous, not state-based — closes the double-click race a
+    // React-state `disabled` flag can't (same fix as the Questionnaire's
+    // submit guard: isPending only updates after this click has returned).
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     setError(null);
     const missing: MissingOpportunityDetails = {
       location: location.trim(),
       duration: duration.trim(),
       hoursPerWeek: Number(hoursPerWeek),
       workMode,
-      applicationDeadline: deadlineInput ? new Date(deadlineInput) : null,
-      startDate: startDateInput ? new Date(startDateInput) : null,
+      applicationDeadline: deadline,
+      startDate,
       slots,
     };
     startTransition(async () => {
       try {
         await publishOpportunityFromReviewAction(opportunityId, missing);
-        setPublished(true);
+        toast.success("Internship published", { description: `${role} is now live.` });
+        router.push(`/company/opportunities/${opportunityId}`);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Couldn't publish this internship — try again.");
+        submittedRef.current = false;
+        const message = e instanceof Error ? e.message : "Please try again.";
+        setError(message);
+        toast.error("Couldn't publish internship", { description: message });
       }
     });
-  }
-
-  if (published) {
-    return (
-      <div className="mx-auto max-w-xl px-6 py-16 text-center">
-        <CheckCircle2 className="mx-auto size-10 text-primary" aria-hidden="true" />
-        <h1 className="mt-4 text-xl font-semibold text-foreground">Internship published</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{role} is now live.</p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-          <Link href={`/company/opportunities/${opportunityId}`}>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">View internship</Button>
-          </Link>
-          <Link href={`/company/candidates?opportunity=${opportunityId}`}>
-            <Button variant="outline">View candidates</Button>
-          </Link>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -132,7 +149,7 @@ export function OpportunityDraftReview({
 
       {shortDescription && <p className="mt-4 text-sm text-foreground/80">{shortDescription}</p>}
 
-      <div className="mt-6 space-y-5">
+      <div className="mt-5 space-y-4">
         <section>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Role</p>
           <p className="mt-1 text-sm leading-relaxed text-foreground/80">{description}</p>
@@ -168,13 +185,16 @@ export function OpportunityDraftReview({
         )}
       </div>
 
-      <div className="mt-6 border-t border-border pt-5">
+      <div className="mt-5 border-t border-border pt-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Challenge</p>
         {challengeSummary ? (
           <div className="mt-1.5 flex items-center gap-2">
             <Badge variant="secondary" className="bg-primary/10 font-normal text-primary hover:bg-primary/10">Attached</Badge>
             <p className="text-sm text-foreground">
-              {challengeSummary.title} <span className="text-muted-foreground">· {challengeSummary.taskCount} task{challengeSummary.taskCount === 1 ? "" : "s"} · {challengeSummary.estimatedMinutes} min</span>
+              {challengeSummary.title}{" "}
+              <span className="text-muted-foreground">
+                · {challengeSummary.taskCount} task{challengeSummary.taskCount === 1 ? "" : "s"} · {formatChallengeDuration(challengeSummary.estimatedMinutes, challengeSummary.estimatedDurationLabel)}
+              </span>
             </p>
           </div>
         ) : (
@@ -182,45 +202,50 @@ export function OpportunityDraftReview({
         )}
       </div>
 
-      <div className="mt-6 border-t border-border pt-5">
+      <div className="mt-5 border-t border-border pt-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Missing details</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground" htmlFor="review-location">Location</label>
-            <Input id="review-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Doha, Qatar" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground" htmlFor="review-mode">Mode</label>
-            <Select value={workMode ?? "unset"} onValueChange={(v) => setWorkMode(v === "unset" ? null : (v as WorkMode))}>
-              <SelectTrigger id="review-mode" className="w-full"><SelectValue /></SelectTrigger>
+          <Field label="Location" error={attempted ? fieldErrors.location : null}>
+            <LocationCombobox value={location} onChange={setLocation} />
+          </Field>
+          <Field label="Mode" error={attempted ? fieldErrors.workMode : null}>
+            <Select value={workMode ?? undefined} onValueChange={(v) => setWorkMode(v as WorkMode)}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Select mode" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="unset">Not specified</SelectItem>
                 <SelectItem value="remote">Remote</SelectItem>
                 <SelectItem value="onsite">On-site</SelectItem>
                 <SelectItem value="hybrid">Hybrid</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground" htmlFor="review-duration">Duration</label>
-            <Input id="review-duration" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="e.g. 3 months" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground" htmlFor="review-hours">Hours / week</label>
-            <Input id="review-hours" type="number" min={1} max={60} value={hoursPerWeek} onChange={(e) => setHoursPerWeek(e.target.value)} placeholder="e.g. 20" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground" htmlFor="review-deadline">Application deadline</label>
-            <Input id="review-deadline" type="date" value={deadlineInput} onChange={(e) => setDeadlineInput(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground" htmlFor="review-start">Start date</label>
-            <Input id="review-start" type="date" value={startDateInput} onChange={(e) => setStartDateInput(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground" htmlFor="review-slots">Openings</label>
-            <Input id="review-slots" type="number" min={1} max={100} value={slots} onChange={(e) => setSlots(Number(e.target.value) || 1)} />
-          </div>
+          </Field>
+          <Field label="Duration" error={attempted ? fieldErrors.duration : null}>
+            <div className="space-y-2">
+              <Select value={durationChoice || undefined} onValueChange={(v) => setDurationChoice(v ?? "")}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Select duration" /></SelectTrigger>
+                <SelectContent>
+                  {DURATION_OPTIONS.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                  <SelectItem value={CUSTOM_DURATION}>Custom</SelectItem>
+                </SelectContent>
+              </Select>
+              {durationChoice === CUSTOM_DURATION && (
+                <Input value={customDuration} onChange={(e) => setCustomDuration(e.target.value)} placeholder="e.g. 10 weeks" />
+              )}
+            </div>
+          </Field>
+          <Field label="Hours per week" error={attempted ? fieldErrors.hoursPerWeek : null}>
+            <Input type="number" min={1} max={60} value={hoursPerWeek} onChange={(e) => setHoursPerWeek(e.target.value)} placeholder="e.g. 20" />
+          </Field>
+          <Field label="Application deadline" error={attempted ? fieldErrors.deadline : null}>
+            <DatePickerField value={deadline} onChange={setDeadline} minDate={today} />
+          </Field>
+          <Field label="Start date" error={attempted ? fieldErrors.startDate : null}>
+            <DatePickerField value={startDate} onChange={setStartDate} minDate={deadline && deadline > today ? deadline : today} />
+          </Field>
+          <Field label="Number of interns" error={attempted ? fieldErrors.slots : null}>
+            <Input type="number" min={1} max={100} value={slots} onChange={(e) => setSlots(Number(e.target.value) || 1)} />
+          </Field>
         </div>
       </div>
 
@@ -231,6 +256,16 @@ export function OpportunityDraftReview({
           {isPending ? "Publishing…" : "Publish internship"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+function Field({ label, error, children }: { label: string; error?: string | null; children: ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs text-muted-foreground">{label}</label>
+      {children}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }

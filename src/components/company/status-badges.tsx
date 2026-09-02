@@ -17,7 +17,10 @@ const CHALLENGE_STATUS: Record<string, { label: string; variant: "default" | "se
   ai_generated: { label: "Challenge draft", variant: "secondary" },
   pending_approval: { label: "Pending approval", variant: "secondary" },
   approved: { label: "Approved", variant: "outline" },
-  published: { label: "Challenge live", variant: "default" },
+  // The internship itself is what's "published" — the challenge is part
+  // of its application process, so "Attached" reads correctly regardless
+  // of whether the internship is live yet.
+  published: { label: "Attached", variant: "default" },
   none: { label: "No challenge yet", variant: "secondary" },
 };
 

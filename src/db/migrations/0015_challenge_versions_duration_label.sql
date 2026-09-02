@@ -1,0 +1,1 @@
+ALTER TABLE "challenge_versions" ADD COLUMN "estimated_duration_label" text;
