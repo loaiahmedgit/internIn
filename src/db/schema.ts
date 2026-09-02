@@ -64,6 +64,139 @@ export const offerStatusEnum = pgEnum("offer_status", ["pending", "accepted", "d
 export const placementFeeStatusEnum = pgEnum("placement_fee_status", ["unpaid", "stubbed_paid", "paid"]);
 export const programStatusEnum = pgEnum("program_status", ["draft", "active", "completed"]);
 export const internshipTaskStatusEnum = pgEnum("internship_task_status", ["pending", "in_progress", "done"]);
+export const roleKnowledgeSourceEnum = pgEnum("role_knowledge_source", ["onet", "esco", "internin_curated"]);
+export const roleProfileKindEnum = pgEnum("role_profile_kind", ["source_occupation", "internship_overlay"]);
+export const roleEvidenceTypeEnum = pgEnum("role_evidence_type", [
+  "description",
+  "task",
+  "work_activity",
+  "skill",
+  "knowledge",
+  "tool",
+  "work_environment",
+  "competency",
+  "deliverable",
+  "safety_constraint",
+]);
+export const roleMappingRelationEnum = pgEnum("role_mapping_relation", ["exact", "narrower", "broader", "related"]);
+
+// ---------------------------------------------------------------------------
+// Local occupation and role intelligence
+// ---------------------------------------------------------------------------
+
+/** One immutable, attributable upstream dataset release or internIn overlay release. */
+export const roleSourceReleases = pgTable(
+  "role_source_releases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    source: roleKnowledgeSourceEnum("source").notNull(),
+    version: text("version").notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    checksum: text("checksum"),
+    attribution: text("attribution").notNull(),
+    licenseUrl: text("license_url"),
+    importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("role_source_releases_source_version_uidx").on(t.source, t.version)],
+);
+
+/**
+ * The normalized role object used by internIn. Source occupations and
+ * internship-friendly overlays share one retrieval contract; overlays map
+ * back to one or more official occupations through the mapping table below.
+ */
+export const roleProfiles = pgTable(
+  "role_profiles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    stableKey: text("stable_key").notNull().unique(),
+    kind: roleProfileKindEnum("kind").notNull(),
+    canonicalTitle: text("canonical_title").notNull(),
+    internshipTitle: text("internship_title"),
+    occupationFamily: text("occupation_family").notNull(),
+    description: text("description").notNull(),
+    locale: text("locale").notNull().default("en"),
+    active: boolean("active").notNull().default(true),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    ...timestamps,
+  },
+  (t) => [index("role_profiles_family_idx").on(t.occupationFamily), index("role_profiles_active_idx").on(t.active)],
+);
+
+export const roleProfileAliases = pgTable(
+  "role_profile_aliases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roleProfileId: uuid("role_profile_id")
+      .notNull()
+      .references(() => roleProfiles.id, { onDelete: "cascade" }),
+    alias: text("alias").notNull(),
+    normalizedAlias: text("normalized_alias").notNull(),
+    locale: text("locale").notNull().default("en"),
+    source: roleKnowledgeSourceEnum("source").notNull(),
+  },
+  (t) => [
+    uniqueIndex("role_profile_aliases_profile_alias_locale_uidx").on(t.roleProfileId, t.normalizedAlias, t.locale),
+    index("role_profile_aliases_normalized_idx").on(t.normalizedAlias),
+  ],
+);
+
+/** Fine-grained evidence preserves task/skill/tool provenance and ranking weight. */
+export const roleProfileEvidence = pgTable(
+  "role_profile_evidence",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roleProfileId: uuid("role_profile_id")
+      .notNull()
+      .references(() => roleProfiles.id, { onDelete: "cascade" }),
+    evidenceType: roleEvidenceTypeEnum("evidence_type").notNull(),
+    text: text("text").notNull(),
+    normalizedText: text("normalized_text").notNull(),
+    importance: integer("importance").notNull().default(50),
+    source: roleKnowledgeSourceEnum("source").notNull(),
+    externalRef: text("external_ref"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (t) => [
+    index("role_profile_evidence_profile_type_idx").on(t.roleProfileId, t.evidenceType),
+    index("role_profile_evidence_normalized_idx").on(t.normalizedText),
+  ],
+);
+
+export const roleProfileSourceMappings = pgTable(
+  "role_profile_source_mappings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roleProfileId: uuid("role_profile_id")
+      .notNull()
+      .references(() => roleProfiles.id, { onDelete: "cascade" }),
+    sourceReleaseId: uuid("source_release_id")
+      .notNull()
+      .references(() => roleSourceReleases.id, { onDelete: "restrict" }),
+    externalId: text("external_id").notNull(),
+    relation: roleMappingRelationEnum("relation").notNull(),
+    weight: integer("weight").notNull().default(100),
+  },
+  (t) => [
+    uniqueIndex("role_profile_source_mappings_profile_source_external_uidx").on(t.roleProfileId, t.sourceReleaseId, t.externalId),
+    index("role_profile_source_mappings_external_idx").on(t.externalId),
+  ],
+);
+
+/**
+ * Denormalized lexical document. Migration-owned GIN expression index keeps
+ * search local and fast; pgvector will be added only after the deployed
+ * Supabase extension and embedding dimensions are explicitly verified.
+ */
+export const roleProfileSearchDocuments = pgTable("role_profile_search_documents", {
+  roleProfileId: uuid("role_profile_id")
+    .primaryKey()
+    .references(() => roleProfiles.id, { onDelete: "cascade" }),
+  searchText: text("search_text").notNull(),
+  documentVersion: integer("document_version").notNull().default(1),
+  embeddingModel: text("embedding_model"),
+  ...timestamps,
+});
 
 // ---------------------------------------------------------------------------
 // Identity

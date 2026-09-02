@@ -70,6 +70,39 @@ describe("preserveStructuredEmployerAnswers", () => {
     expect(result.responsibilities).toEqual(["Frontend development", "Backend development", "Full-stack feature work"]);
     expect(result.tools).toEqual(["React", "HTML/CSS", "TypeScript", "Node.js"]);
   });
+
+  it("uses the same task-first evidence behind a role recommendation without re-inferring it", () => {
+    const result = preserveStructuredEmployerAnswers(
+      {
+        originalRequest: "fallback",
+        role: "Fallback role",
+        level: null,
+        responsibilities: [],
+        tools: [],
+        restrictions: [],
+        additionalContext: null,
+      },
+      null,
+      "ERP Implementation Assistant Intern",
+      {
+        originalRequest: "We need help preparing data for an Oracle migration.",
+        explicitRoleTitle: null,
+        problems: ["messy migration data"],
+        activities: ["data cleansing", "data mapping", "migration validation"],
+        systemsOrTools: ["Oracle ERP"],
+        desiredOutcomes: ["fewer migration issues"],
+        constraints: ["synthetic data only"],
+        activityClarity: "clear",
+        seniorityIntent: "intern/junior",
+      },
+    );
+
+    expect(result.role).toBe("ERP Implementation Assistant Intern");
+    expect(result.responsibilities).toEqual(["data cleansing", "data mapping", "migration validation"]);
+    expect(result.tools).toEqual(["Oracle ERP"]);
+    expect(result.restrictions).toEqual(["synthetic data only"]);
+    expect(result.additionalContext).toContain("messy migration data");
+  });
 });
 
 describe("buildDesignSummary", () => {

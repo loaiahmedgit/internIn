@@ -16,15 +16,13 @@ import { classifyAssistantRequest } from "./assistant-router";
 const hasCredentials = Boolean(process.env.OPENROUTER_API_KEY);
 const maybe = hasCredentials ? describe : describe.skip;
 
-maybe("classifyAssistantRequest — real clarification-detection behavior (live model)", () => {
+maybe("classifyAssistantRequest — real role and clarification routing (live model)", () => {
   it(
-    "1. Fully specified hiring request -> offer_next_action directly, zero clarification questions",
+    "1. Fully specified problem-first request -> grounded role recommendation",
     async () => {
       const transcript = `Employer: I want a technical student to fix computers when small problems happen. School, university, or graduate doesn't matter. Mostly normal computer and software issues.`;
       const decision = await classifyAssistantRequest(transcript);
-      expect(decision.action).toBe("offer_next_action");
-      // Zero clarification questions IS the point — offer_next_action carries
-      // no missingSlots at all, there is nothing left to resolve.
+      expect(decision.action).toBe("recommend_role");
       expect(decision.missingSlots ?? []).toHaveLength(0);
     },
     60_000,
@@ -56,24 +54,22 @@ maybe("classifyAssistantRequest — real clarification-detection behavior (live 
   );
 
   it(
-    "3. Very vague request -> real clarification is needed (the role itself is unclear)",
+    "3. Very vague problem-first request -> role intelligence decides the focused clarification",
     async () => {
       const transcript = `Employer: I need someone for lab work.`;
       const decision = await classifyAssistantRequest(transcript);
-      expect(decision.action).toBe("ask_clarifying_questions");
-      expect(decision.missingSlots?.length ?? 0).toBeGreaterThan(0);
+      expect(decision.action).toBe("recommend_role");
     },
     60_000,
   );
 
   it(
-    "4. Information already stated in natural language is never asked again — explicit 'level doesn't matter' must not produce a candidate_level question",
+    "4. Problem-first routing never asks the legacy questionnaire to identify an occupation",
     async () => {
       const transcript = `Employer: I want a technical student to fix computers when small problems happen. School, university, or graduate doesn't matter. Mostly normal computer and software issues.`;
       const decision = await classifyAssistantRequest(transcript);
-      const slots = decision.missingSlots ?? [];
-      expect(slots).not.toContain("candidate_level");
-      expect(slots).not.toContain("responsibilities");
+      expect(decision.action).toBe("recommend_role");
+      expect(decision.missingSlots ?? []).toHaveLength(0);
     },
     60_000,
   );
@@ -91,6 +87,29 @@ maybe("classifyAssistantRequest — real clarification-detection behavior (live 
       // to skip either. One question alone is exactly the bug being fixed.
       expect(slots).toContain("responsibilities");
       expect(slots.length).toBeGreaterThanOrEqual(2);
+      expect((decision.employerRoleTitle ?? decision.normalizedRole)?.toLowerCase()).toMatch(/^web (?:dev|developer) intern$/);
+    },
+    60_000,
+  );
+
+  it(
+    "6. Exact ERP problem stays problem-first instead of being guessed in the router",
+    async () => {
+      const transcript = `Employer: We need to hire someone to deal with messy operational or financial data and slow transition times when migrating to new enterprise planning systems like SAP or Oracle.`;
+      const decision = await classifyAssistantRequest(transcript);
+      expect(decision.action).toBe("recommend_role");
+      expect(decision.employerRoleTitle ?? null).toBeNull();
+    },
+    60_000,
+  );
+
+  it(
+    "7. A serious named-role/work mismatch is sent to role intelligence instead of silently rewritten",
+    async () => {
+      const transcript = `Employer: I need a Graphic Design Intern to write backend APIs in Node.js.`;
+      const decision = await classifyAssistantRequest(transcript);
+      expect(decision.action).toBe("recommend_role");
+      expect((decision.employerRoleTitle ?? decision.normalizedRole)?.toLowerCase()).toContain("graphic design");
     },
     60_000,
   );

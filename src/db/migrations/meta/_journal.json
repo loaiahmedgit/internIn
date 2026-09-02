@@ -113,6 +113,13 @@
       "when": 1788342789882,
       "tag": "0015_challenge_versions_duration_label",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788373087652,
+      "tag": "0016_role_intelligence_foundation",
+      "breakpoints": true
     }
   ]
 }

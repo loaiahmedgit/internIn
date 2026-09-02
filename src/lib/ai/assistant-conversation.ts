@@ -1,5 +1,6 @@
 import type { AssistantUIMessage, QuestionnaireAnswer, QuestionnaireContinuation } from "./assistant-messages";
 import type { ChallengeDraft } from "./challenge-clarification-schemas";
+import type { WorkNeedProfile } from "./role-intelligence-schemas";
 
 /** Every text part across the conversation, in order — the raw material
  * the clarification/drafting tools reason over. Kept separate from
@@ -65,6 +66,7 @@ export function latestActionOfferChoice(messages: AssistantUIMessage[]): {
   kind: "create_internship_draft" | "create_challenge_only";
   roleSummary: string;
   answers: QuestionnaireAnswer[];
+  workNeed: WorkNeedProfile | null;
 } | null {
   const last = messages.at(-1);
   if (last?.role !== "user") return null;
@@ -73,6 +75,7 @@ export function latestActionOfferChoice(messages: AssistantUIMessage[]): {
     kind: last.metadata.intent,
     roleSummary: last.metadata.roleSummary ?? "",
     answers: last.metadata.questionnaireAnswers ?? [],
+    workNeed: last.metadata.generationWorkNeed ?? null,
   };
 }
 

@@ -1,6 +1,7 @@
 import type { UIMessage } from "ai";
 import type { ChallengeDraft, ClarificationQuestionsResult } from "./challenge-clarification-schemas";
 import type { OpportunityEditPatch } from "./opportunity-edit";
+import type { WorkNeedProfile } from "./role-intelligence-schemas";
 
 /**
  * Real, honest chain-of-thought progress step for the "Ask internIn"
@@ -91,6 +92,7 @@ export interface AssistantMessageMetadata {
   questionnaireAnswers?: QuestionnaireAnswer[];
   questionnaireContinuation?: QuestionnaireContinuation;
   roleSummary?: string;
+  generationWorkNeed?: WorkNeedProfile;
   chosenOpportunityId?: string;
   revisionInstruction?: string;
   internshipChoiceOperation?: "edit_challenge" | "edit_internship";
@@ -106,6 +108,10 @@ export interface ActionOfferData {
   /** Lossless questionnaire selections carried to the next structured
    * action. Never rendered in the compact offer card. */
   generationAnswers?: QuestionnaireAnswer[];
+  /** Task-first evidence behind a problem-first role recommendation. It is
+   * carried through the user's click so challenge generation uses the same
+   * work evidence instead of re-inferring it from a UI label. */
+  generationWorkNeed?: WorkNeedProfile;
 }
 
 /** Written after an internship is actually created from a draft — the

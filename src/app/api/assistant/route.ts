@@ -7,6 +7,8 @@ import { getModel } from "@/lib/ai/gemma-provider";
 import { buildCompanyHiringFacts, buildInternshipFacts } from "@/lib/company/internship-facts";
 import { resolveOpportunityByName } from "@/lib/company/opportunity-lookup";
 import { classifyAssistantRequest } from "@/lib/ai/assistant-router";
+import { extractWorkNeedProfile } from "@/lib/ai/work-need-extraction";
+import { recommendRoleFromKnowledgeBase } from "@/lib/ai/role-intelligence-repository";
 import { buildClarificationQuestions, resolveMissingSlots } from "@/lib/ai/clarification-engine";
 import { getRoleProfile } from "@/lib/ai/role-profiles";
 import { attachDraftIdentity, buildEmployerContext, generateChallengeDraftObject } from "@/lib/ai/challenge-generation";
@@ -30,6 +32,7 @@ import {
 } from "@/lib/ai/assistant-conversation";
 import type { AssistantUIMessage, QuestionnaireAnswer } from "@/lib/ai/assistant-messages";
 import type { ChallengeDraft, EmployerContext } from "@/lib/ai/challenge-clarification-schemas";
+import type { WorkNeedProfile } from "@/lib/ai/role-intelligence-schemas";
 
 // Generous, not arbitrary: generateChallengeDraftObject makes up to 3
 // attempts at 75s each (225s worst case) plus context-building and the
@@ -58,6 +61,18 @@ function writePlainText(writer: UIMessageStreamWriter<AssistantUIMessage>, id: s
   writer.write({ type: "text-end", id });
 }
 
+function sentenceList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
+}
+
+function indefiniteArticle(title: string): "a" | "an" {
+  const firstWord = title.trim().split(/\s+/u)[0] ?? "";
+  if (/^[A-Z]{2,}$/u.test(firstWord)) return /^[AEFHILMNORSX]/u.test(firstWord) ? "an" : "a";
+  return /^[aeiou]/iu.test(firstWord) ? "an" : "a";
+}
+
 /**
  * Generates a challenge draft, writes it to the stream, and RETURNS it
  * (or null on failure — the error part is already written) — the shared
@@ -80,6 +95,7 @@ async function runDraftChallenge(
     announce?: boolean;
     answers?: QuestionnaireAnswer[];
     roleHint?: string;
+    workNeed?: WorkNeedProfile | null;
     progressLabel?: string;
   },
 ): Promise<{ draft: ChallengeDraft; context: EmployerContext } | null> {
@@ -94,6 +110,7 @@ async function runDraftChallenge(
     announce = true,
     answers,
     roleHint,
+    workNeed,
     progressLabel = "Designing your challenge…",
   } = params;
   const generationId = crypto.randomUUID();
@@ -102,7 +119,7 @@ async function runDraftChallenge(
   let draft: ChallengeDraft;
   let context: EmployerContext;
   try {
-    context = await buildEmployerContext({ originalRequest, transcript, answers: answers ?? null, roleHint });
+    context = await buildEmployerContext({ originalRequest, transcript, answers: answers ?? null, roleHint, workNeed });
     const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction });
     draft = attachDraftIdentity(generated, existingDraft);
   } catch (error) {
@@ -137,6 +154,7 @@ async function runCreateInternshipDraft(
     transcript: string;
     answers?: QuestionnaireAnswer[];
     roleHint?: string;
+    workNeed?: WorkNeedProfile | null;
   },
 ) {
   const { requestId, t0, turnId } = params;
@@ -275,6 +293,7 @@ export async function POST(req: Request) {
             existingDraft: latestChallengeDraft(messages),
             answers: offerChoice.answers,
             roleHint: offerChoice.roleSummary,
+            workNeed: offerChoice.workNeed,
           });
         } else {
           await runCreateInternshipDraft(writer, {
@@ -285,6 +304,7 @@ export async function POST(req: Request) {
             transcript: transcriptOf(messages),
             answers: offerChoice.answers,
             roleHint: offerChoice.roleSummary,
+            workNeed: offerChoice.workNeed,
           });
         }
         return;
@@ -334,6 +354,49 @@ export async function POST(req: Request) {
       }
       console.log(`[assistant] requestId=${requestId} classified action=${decision.action} at +${Date.now() - t0}ms`);
 
+      if (decision.action === "recommend_role") {
+        const latestEmployerText = messages.at(-1)?.parts
+          .filter((part): part is Extract<(typeof messages)[number]["parts"][number], { type: "text" }> => part.type === "text")
+          .map((part) => part.text)
+          .join(" ")
+          .trim() ?? "";
+
+        writer.write({ type: "data-progress", id: "progress", data: { label: "Matching the work to a role…" } });
+        try {
+          const workNeed = await extractWorkNeedProfile(latestEmployerText || transcript, transcript);
+          const recommendation = await recommendRoleFromKnowledgeBase(workNeed);
+
+          if (recommendation.clarificationNeeded || !recommendation.recommendedRole) {
+            writePlainText(
+              writer,
+              `intro:${turnId}`,
+              recommendation.clarificationQuestion ?? "What will this person mainly be responsible for day to day?",
+            );
+            return;
+          }
+
+          const { title } = recommendation.recommendedRole;
+          const activities = workNeed.activities.slice(0, 4);
+          const activitySummary = activities.length
+            ? `They would mainly support ${sentenceList(activities)}.`
+            : recommendation.recommendedRole.reason;
+          writer.write({
+            type: "data-actionOffer",
+            id: `offer:${turnId}`,
+            data: { roleSummary: title, generationWorkNeed: workNeed },
+          });
+          writePlainText(
+            writer,
+            `intro:${turnId}`,
+            `Based on the work you described, this sounds closest to ${indefiniteArticle(title)} **${title}**.\n\n${activitySummary}`,
+          );
+          return;
+        } catch (error) {
+          console.error(`[assistant] requestId=${requestId} role recommendation failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
+          throw new Error("We couldn't match that work to a role — try again.");
+        }
+      }
+
       if (decision.action === "decline") {
         writer.merge(
           streamText({
@@ -372,7 +435,7 @@ export async function POST(req: Request) {
       }
 
       if (decision.action === "ask_clarifying_questions") {
-        const normalizedRole = decision.normalizedRole ?? decision.roleSummary ?? "the described role";
+        const normalizedRole = decision.employerRoleTitle ?? decision.normalizedRole ?? decision.roleSummary ?? "the described role";
         const missingSlots = resolveMissingSlots(decision.roleConfidence, decision.missingSlots);
 
         let questions;
@@ -390,7 +453,7 @@ export async function POST(req: Request) {
         // asking anyway (mirrors offer_next_action below).
         if (!questions.length) {
           console.log(`[assistant] requestId=${requestId} ask_clarifying_questions resolved to zero real questions at +${Date.now() - t0}ms — offering next action`);
-          const roleSummary = decision.roleSummary ?? normalizedRole;
+          const roleSummary = normalizedRole;
           writer.write({ type: "data-actionOffer", id: `offer:${turnId}`, data: { roleSummary } });
           writePlainText(writer, `intro:${turnId}`, `I've got enough context. I can create an internship draft for the ${normalizedRole} role with a short practical challenge.`);
           return;
@@ -411,7 +474,7 @@ export async function POST(req: Request) {
         writer.write({
           type: "data-questionnaire",
           id: `questionnaire:${turnId}`,
-          data: { intro, questions, continuation, roleSummary: decision.roleSummary ?? normalizedRole },
+          data: { intro, questions, continuation, roleSummary: normalizedRole },
         });
         // No model call for this sentence at all — deterministic template,
         // instant, and the router already spent its one call on routing.
@@ -424,8 +487,8 @@ export async function POST(req: Request) {
         // action instead of silently generating a bare challenge (Part
         // 4/5: the internship is the primary hiring object, and the
         // employer should never be handed a technical fork this early).
-        const normalizedRole = decision.normalizedRole ?? decision.roleSummary ?? "this role";
-        const roleSummary = decision.roleSummary ?? normalizedRole;
+        const normalizedRole = decision.employerRoleTitle ?? decision.normalizedRole ?? decision.roleSummary ?? "this role";
+        const roleSummary = normalizedRole;
         writer.write({ type: "data-actionOffer", id: `offer:${turnId}`, data: { roleSummary } });
         writePlainText(writer, `intro:${turnId}`, `I've got enough context. I can create an internship draft for the ${normalizedRole} role with a short practical challenge.`);
         return;

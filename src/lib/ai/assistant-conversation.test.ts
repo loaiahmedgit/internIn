@@ -115,6 +115,17 @@ describe("latestActionOfferChoice", () => {
         intent: "create_internship_draft",
         roleSummary: "Web Developer Intern",
         questionnaireAnswers: answers,
+        generationWorkNeed: {
+          originalRequest: "We need React interfaces connected to APIs.",
+          explicitRoleTitle: null,
+          problems: [],
+          activities: ["build React interfaces", "connect interfaces to APIs"],
+          systemsOrTools: ["React", "APIs"],
+          desiredOutcomes: [],
+          constraints: [],
+          activityClarity: "clear",
+          seniorityIntent: "intern/junior",
+        },
       },
     })]);
 
@@ -122,6 +133,17 @@ describe("latestActionOfferChoice", () => {
       kind: "create_internship_draft",
       roleSummary: "Web Developer Intern",
       answers,
+      workNeed: {
+        originalRequest: "We need React interfaces connected to APIs.",
+        explicitRoleTitle: null,
+        problems: [],
+        activities: ["build React interfaces", "connect interfaces to APIs"],
+        systemsOrTools: ["React", "APIs"],
+        desiredOutcomes: [],
+        constraints: [],
+        activityClarity: "clear",
+        seniorityIntent: "intern/junior",
+      },
     });
   });
 });

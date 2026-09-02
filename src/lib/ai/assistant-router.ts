@@ -25,6 +25,7 @@ import { InformationSlotSchema } from "./role-profiles";
 export const AssistantActionSchema = z.enum([
   "decline", // Clearly out of scope — briefly redirect, no other work.
   "chat", // GENERAL_CONVERSATION / HIRING_ADVICE: greeting, thanks, a question about hiring concepts, or the employer is still explaining/thinking through a problem out loud — talk, don't act.
+  "recommend_role", // ROLE_DISCOVERY: employer described the work/problem but did not name the role. Resolve it through the grounded role-intelligence layer.
   "check_data", // WORKSPACE_QUERY / CANDIDATE_QUERY / ANALYTICS_QUERY: needs real current numbers/status to answer (applicants, stages, deadlines, activity, an internship's performance).
   "ask_clarifying_questions", // Wants a challenge/internship built, but something REQUIRED is genuinely missing.
   "offer_next_action", // CREATE_INTERNSHIP: enough context exists for a NEW internship (no existing one referenced) — offer to act, don't act or ask "internship or challenge?" yet.
@@ -43,6 +44,10 @@ export const AssistantRouterDecisionSchema = z.object({
    * draft_challenge, this doubles as the input to role normalization/
    * RoleProfile lookup. */
   roleSummary: optionalText(300),
+  /** The role title when the employer explicitly supplied one. Preserve
+   * their occupation rather than silently replacing it with a neighboring
+   * retrieved title. Null for problem-first requests. */
+  employerRoleTitle: optionalText(160),
   /** The employer's exact revision/edit feedback, verbatim — for
    * draft_challenge revising an in-conversation draft, or
    * edit_existing_challenge acting on a named existing internship. */
@@ -82,6 +87,18 @@ export function normalizeAssistantRouterDecision(
   decision: AssistantRouterDecision,
   transcript: string,
 ): AssistantRouterDecision {
+  // If the router itself says it cannot identify the profession and the
+  // employer did not name one, occupation discovery belongs to the
+  // task-first role-intelligence layer. It asks one discriminating
+  // question; the legacy questionnaire is for refining a known role.
+  if (
+    decision.action === "ask_clarifying_questions" &&
+    decision.roleConfidence === "low" &&
+    !decision.employerRoleTitle?.trim()
+  ) {
+    return { ...decision, action: "recommend_role", missingSlots: null };
+  }
+
   if (decision.action !== "ask_clarifying_questions") {
     return { ...decision, missingSlots: null };
   }
@@ -111,8 +128,11 @@ const ROUTER_ATTEMPTS = [{}, {}] as const;
 
 const ROUTER_SYSTEM = `You are internIn's hiring copilot routing brain — not a challenge generator, a copilot for internship teams that can talk, look up real data, and take action. Read the conversation and decide EXACTLY ONE action for the LATEST employer message. Employers speak naturally, not in your internal categories — never make them choose between technical objects ("internship or challenge?") before you've even understood what they need.
 
+Whenever the employer explicitly names an occupation, set employerRoleTitle to that occupation using professional capitalization while preserving the role itself. Never put an inferred role there. Leave it null for problem-first requests where the employer did not name the occupation.
+
 - "decline": clearly unrelated to internship hiring/programs (e.g. write me a game, general trivia). A request that uses a similar format but serves a real hiring purpose (e.g. "make a Snake-style coding challenge for our software engineering intern") is NOT a decline.
 - "chat": a greeting/thanks/simple question ("hi", "thanks", "what can you do?"), a hiring-advice question, OR the employer is still explaining/thinking through a problem and hasn't asked for anything to be built yet. Respond naturally and, if a role is starting to take shape, name it and ask if that's roughly right — do NOT jump to a questionnaire or a draft while someone is still describing their problem.
+- "recommend_role": the employer wants to hire or figure out who could address a described work problem but has NOT named the occupation, OR the employer named a role whose responsibilities seriously conflict with that role. The app will extract the work, search grounded local role knowledge, recommend one role when confident, or ask one focused question when genuinely ambiguous. Do not silently replace an employer-named role.
 - "check_data": asking about real current numbers/status for their workspace or a specific internship (applicant counts, why a role gets few applicants, which internships need attention, when something closes, candidates waiting for review, how a role is performing). This is a read, never a write — no challenge, no draft, no questionnaire.
 - "ask_clarifying_questions": wants a NEW internship/challenge built, but something REQUIRED is genuinely missing (see below). Set creationTarget to "challenge" only when they explicitly asked for a challenge/assessment/task without an internship draft; otherwise set it to "internship".
 - "offer_next_action": wants a NEW internship/challenge built and nothing REQUIRED is missing (or a prior questionnaire already established it) — the internship doesn't exist yet in this conversation or the workspace. Do NOT build anything yet; the app will offer the employer a clear next step.
@@ -145,13 +165,13 @@ Employer: "hi" / "thanks" / "what can you do?"
 Correct: action = "chat". No data lookup, no questionnaire, no draft — just answer.
 
 Employer: "I want a technical student to fix computers when small problems happen. School, university, or graduate doesn't matter. Mostly normal computer and software issues."
-Correct: action = "offer_next_action" (not ask_clarifying_questions), zero missingSlots. Role (IT Support Intern), responsibilities, and scope are all already given; candidate level was explicitly said not to matter.
+Correct: action = "recommend_role" because the employer described work but did not name an occupation. The role-intelligence layer will identify the role; do not guess it here.
 
 Employer: "I want to hire a web dev intern."
 Correct: action = "ask_clarifying_questions", normalizedRole "Web Developer Intern", missingSlots = ["responsibilities", "candidate_level", "tools_technologies"]. "Web developer" spans frontend/backend/full-stack/QA with nothing else given; scope is wide open, so level isn't safely skippable either.
 
 Employer: "We're migrating customer data to PostgreSQL and need a final-year student to help with SQL, schema cleanup, and data cleaning."
-Correct: action = "offer_next_action", zero missingSlots — role, level, responsibilities, and even the tool (PostgreSQL) are all already given.
+Correct: action = "recommend_role" — the work, level, responsibilities, and tool are clear, but the employer did not name the occupation. The role-intelligence layer will recommend it without a questionnaire.
 
 Employer: "Why is my Marketing Intern internship getting no applicants?" / "How many people applied to Finance Intern?" / "Which internships need attention?"
 Correct: action = "check_data". Real data, no challenge/questionnaire/draft of any kind.
@@ -163,7 +183,16 @@ Employer: "Change the deadline for Marketing Intern to October 15." / "Make the 
 Correct: action = "edit_existing_internship", targetRoleName exactly as said, revisionInstruction the actual listing change requested.
 
 Employer: "We don't know what intern we need. Our team keeps wasting time manually cleaning spreadsheets and creating reports."
-Correct: action = "chat" — this is still an open problem, not a request to build anything. Reflect back what role would likely fit (a Data/Reporting Intern) and ask if that's right before doing anything else.
+Correct: action = "recommend_role" — the employer explicitly needs help identifying the role. The role-intelligence layer should recommend one strong fit, not present a list.
+
+Employer: "We need help with our CRM."
+Correct: action = "recommend_role" — this is problem-first. The role-intelligence layer will recognize that the work itself is ambiguous and ask one focused question.
+
+Employer: "I need a Frontend Developer Intern to build React interfaces."
+Correct: action = "offer_next_action", employerRoleTitle = "Frontend Developer Intern". The employer named the role, so preserve it; never replace it with an inferred neighboring occupation.
+
+Employer: "I need a Graphic Design Intern to write backend APIs."
+Correct: action = "recommend_role", employerRoleTitle = "Graphic Design Intern". This is a serious role/work mismatch, so the role-intelligence layer will explain it and ask one focused question instead of silently overriding the employer.
 
 For "ask_clarifying_questions", pick missingSlots from EXACTLY these 9 values — 1 to 4, only the ones that are REQUIRED per above and still genuinely unknown:
 1. role_domain (use when the profession itself is ambiguous)

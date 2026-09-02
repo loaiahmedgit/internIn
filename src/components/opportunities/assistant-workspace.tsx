@@ -521,6 +521,7 @@ export function AssistantWorkspace({
                               intent: choice,
                               roleSummary: actionOffer.data.roleSummary,
                               questionnaireAnswers: actionOffer.data.generationAnswers,
+                              generationWorkNeed: actionOffer.data.generationWorkNeed,
                             },
                           )
                         }

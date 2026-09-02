@@ -26,11 +26,20 @@ describe("AssistantRouterDecisionSchema", () => {
     expect(() => AssistantRouterDecisionSchema.parse({ action: "do_something_else" })).toThrow();
   });
 
-  it("only recognizes the eight canonical actions — one code path per action, no ambiguity", () => {
-    const actions = ["decline", "chat", "check_data", "ask_clarifying_questions", "offer_next_action", "draft_challenge", "edit_existing_challenge", "edit_existing_internship"];
+  it("only recognizes the nine canonical actions — one code path per action, no ambiguity", () => {
+    const actions = ["decline", "chat", "recommend_role", "check_data", "ask_clarifying_questions", "offer_next_action", "draft_challenge", "edit_existing_challenge", "edit_existing_internship"];
     for (const action of actions) {
       expect(() => AssistantRouterDecisionSchema.parse({ action })).not.toThrow();
     }
+  });
+
+  it("carries the employer-named role separately from any model summary", () => {
+    const result = AssistantRouterDecisionSchema.parse({
+      action: "offer_next_action",
+      employerRoleTitle: "Frontend Developer Intern",
+      normalizedRole: "Software Developer Intern",
+    });
+    expect(result.employerRoleTitle).toBe("Frontend Developer Intern");
   });
 
   it("preserves whether a clarified creation request is internship-first or explicitly challenge-only", () => {
@@ -74,6 +83,20 @@ describe("AssistantRouterDecisionSchema", () => {
 });
 
 describe("normalizeAssistantRouterDecision", () => {
+  it("routes an unnamed, low-confidence profession to one task-first role clarification", () => {
+    const result = normalizeAssistantRouterDecision(
+      {
+        action: "ask_clarifying_questions",
+        normalizedRole: "Lab Intern",
+        roleConfidence: "low",
+        missingSlots: ["role_domain", "responsibilities", "candidate_level"],
+      },
+      "Employer: I need someone for lab work.",
+    );
+    expect(result.action).toBe("recommend_role");
+    expect(result.missingSlots).toBeNull();
+  });
+
   it("removes stale question slots from non-question actions", () => {
     expect(
       normalizeAssistantRouterDecision(

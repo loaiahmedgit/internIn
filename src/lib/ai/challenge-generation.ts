@@ -2,6 +2,7 @@ import { generateObject } from "ai";
 import { getModel } from "./gemma-provider";
 import { ChallengeDraftGeneratedSchema, EmployerContextSchema, type ChallengeDraft, type ChallengeDraftGenerated, type EmployerContext } from "./challenge-clarification-schemas";
 import type { QuestionnaireAnswer } from "./assistant-messages";
+import type { WorkNeedProfile } from "./role-intelligence-schemas";
 
 // Split ChallengeDraftGeneratedSchema into two independently-generated
 // halves — a real, isolated finding, not a guess: a small flat schema
@@ -79,6 +80,7 @@ export function preserveStructuredEmployerAnswers(
   extracted: EmployerContext,
   answers: QuestionnaireAnswer[] | null,
   roleHint?: string,
+  workNeed?: WorkNeedProfile | null,
 ): EmployerContext {
   const selected = new Map(
     (answers ?? [])
@@ -98,11 +100,13 @@ export function preserveStructuredEmployerAnswers(
   return EmployerContextSchema.parse({
     ...extracted,
     role: roleHint?.trim() || extracted.role,
-    level: selected.get("candidate_level")?.[0] ?? extracted.level,
-    responsibilities: selected.get("responsibilities") ?? extracted.responsibilities,
-    tools: selected.get("tools_technologies") ?? extracted.tools,
-    restrictions: selected.get("restrictions") ?? extracted.restrictions,
-    additionalContext: structuredAdditional || extracted.additionalContext,
+    level: selected.get("candidate_level")?.[0] ?? workNeed?.seniorityIntent ?? extracted.level,
+    responsibilities: selected.get("responsibilities") ?? workNeed?.activities ?? extracted.responsibilities,
+    tools: selected.get("tools_technologies") ?? workNeed?.systemsOrTools ?? extracted.tools,
+    restrictions: selected.get("restrictions") ?? workNeed?.constraints ?? extracted.restrictions,
+    additionalContext:
+      structuredAdditional ||
+      (workNeed ? [...workNeed.problems, ...workNeed.desiredOutcomes].join("; ") || null : extracted.additionalContext),
   });
 }
 
@@ -121,8 +125,25 @@ export async function buildEmployerContext(params: {
   transcript: string;
   answers: QuestionnaireAnswer[] | null;
   roleHint?: string;
+  workNeed?: WorkNeedProfile | null;
 }): Promise<EmployerContext> {
-  const { originalRequest, transcript, answers, roleHint } = params;
+  const { originalRequest, transcript, answers, roleHint, workNeed } = params;
+  if (workNeed && roleHint?.trim()) {
+    return preserveStructuredEmployerAnswers(
+      {
+        originalRequest: workNeed.originalRequest,
+        role: roleHint,
+        level: workNeed.seniorityIntent ?? null,
+        responsibilities: workNeed.activities,
+        tools: workNeed.systemsOrTools,
+        restrictions: workNeed.constraints,
+        additionalContext: [...workNeed.problems, ...workNeed.desiredOutcomes].join("; ") || null,
+      },
+      answers,
+      roleHint,
+      workNeed,
+    );
+  }
   const answersBlock = answers?.length ? `\n\nThe employer's answers to clarification questions:\n${formatQuestionnaireAnswers(answers)}` : "";
   return withGenerateRetries("buildEmployerContext", CONTEXT_ATTEMPTS, async () => {
     const { object } = await generateObject({
@@ -132,7 +153,7 @@ export async function buildEmployerContext(params: {
       prompt: `Original request: ${originalRequest}${answersBlock}\n\nFull conversation:\n${transcript}`,
       abortSignal: AbortSignal.timeout(CONTEXT_TIMEOUT_MS),
     });
-    return preserveStructuredEmployerAnswers(object, answers, roleHint);
+    return preserveStructuredEmployerAnswers(object, answers, roleHint, workNeed);
   });
 }
 
