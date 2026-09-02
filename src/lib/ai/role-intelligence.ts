@@ -1,5 +1,6 @@
 import {
   RoleRecommendationResultSchema,
+  isGenericRoleTitle,
   type RecommendedRole,
   type RoleKnowledgeProfile,
   type RoleRecommendationResult,
@@ -190,7 +191,12 @@ export function evaluateRoleCandidates(need: WorkNeedProfile, profiles: RoleKnow
 }
 
 function displayTitle(profile: RoleKnowledgeProfile): string {
-  return profile.internshipTitle ?? profile.canonicalTitle;
+  const internshipTitle = profile.internshipTitle?.trim();
+  // A generic internshipTitle (a data-quality gap, not a role) carries no
+  // more information than the bare word "intern" — the canonical title is
+  // always a real occupation name and is the safer fallback.
+  if (internshipTitle && !isGenericRoleTitle(internshipTitle)) return internshipTitle;
+  return profile.canonicalTitle;
 }
 
 function calibratedConfidence(scored: ScoredProfile, margin: number, familyCoherent: boolean): number {
@@ -245,28 +251,78 @@ function distinctiveActivity(profile: RoleKnowledgeProfile, otherProfiles: RoleK
   return [...profile.workActivities, ...profile.typicalTasks].find((activity) => coverage([activity], otherActivities, weights) < 0.45) ?? null;
 }
 
-function buildClarificationQuestion(scored: ScoredProfile[], weights: CorpusWeights): string {
-  if (scored.length < 2) return "What kind of work should this person mainly own day to day?";
-  const anchor = scored[0].profile;
-  const coherent = scored.filter((candidate) => familySimilarity(anchor, candidate.profile, weights) >= 0.35);
-  if (coherent.length !== scored.length) return "What kind of work should this person mainly own day to day?";
+const GENERIC_CLARIFICATION_QUESTION = "What kind of work should this person mainly own day to day?";
 
-  const choices = coherent
-    .slice(0, 3)
-    .map(({ profile }, index, all) => distinctiveActivity(profile, all.filter((_, candidateIndex) => candidateIndex !== index).map((candidate) => candidate.profile), weights))
-    .filter((activity): activity is string => Boolean(activity))
-    .slice(0, 3);
-  if (choices.length < 2) return "What kind of work should this person mainly own day to day?";
-  const readable = choices.map((choice) => choice.replace(/[.?!]+$/u, "").toLocaleLowerCase("en"));
-  const last = readable.pop();
-  return `Will they mainly ${readable.join(", ")}, or ${last}?`;
+function sentenceList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
+}
+
+/**
+ * The employer's own domain/work evidence, for grounding a fallback
+ * clarification instead of a bare generic one. Requires at least two
+ * distinct signals: a lone `problems` entry is often just the employer's
+ * whole ambiguous sentence restated, which is not meaningful evidence to
+ * quote back — it is the ambiguity itself, not a resolution of it.
+ */
+function groundedEvidencePhrases(need: WorkNeedProfile): string[] {
+  const pool = [...need.domainSignals, ...need.activities, ...need.problems, ...need.desiredOutcomes]
+    .map((value) => value.trim().replace(/[.?!]+$/u, ""))
+    .filter(Boolean);
+  const unique = [...new Set(pool)];
+  return unique.length >= 2 ? unique.slice(0, 3) : [];
+}
+
+/**
+ * Used whenever retrieval can't support a real discriminating choice
+ * (too few candidates, incoherent families, no distinctive activities).
+ * Still grounds the question in whatever domain/work evidence the employer
+ * already gave, rather than discarding it for a one-size-fits-all prompt —
+ * per-profession wording is never hardcoded here, only the employer's own
+ * extracted phrases are reflected back.
+ */
+function groundedFallbackQuestion(need: WorkNeedProfile): string {
+  const phrases = groundedEvidencePhrases(need);
+  if (!phrases.length) return GENERIC_CLARIFICATION_QUESTION;
+  return `You mentioned ${sentenceList(phrases)}. What kind of work should they mainly focus on day to day?`;
+}
+
+function buildClarificationQuestion(scored: ScoredProfile[], weights: CorpusWeights, need: WorkNeedProfile): string {
+  if (scored.length >= 2) {
+    const anchor = scored[0].profile;
+    // Use whatever coherent subset exists rather than discarding all of it
+    // the moment one outlier candidate breaks full-list coherence — a
+    // single unrelated candidate in the list shouldn't erase a genuinely
+    // discriminating question available from the rest.
+    const coherent = scored.filter((candidate) => familySimilarity(anchor, candidate.profile, weights) >= 0.35);
+    if (coherent.length >= 2) {
+      const choices = coherent
+        .slice(0, 3)
+        .map(({ profile }, index, all) => distinctiveActivity(profile, all.filter((_, candidateIndex) => candidateIndex !== index).map((candidate) => candidate.profile), weights))
+        .filter((activity): activity is string => Boolean(activity))
+        .slice(0, 3);
+      if (choices.length >= 2) {
+        const readable = choices.map((choice) => choice.replace(/[.?!]+$/u, "").toLocaleLowerCase("en"));
+        const last = readable.pop();
+        return `Will they mainly ${readable.join(", ")}, or ${last}?`;
+      }
+    }
+  }
+  return groundedFallbackQuestion(need);
 }
 
 export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleKnowledgeProfile[]): RoleRecommendationResult {
   const weights = corpusWeights(profiles);
+  // A generic word ("intern", "student", "employee", ...) is not a role the
+  // employer actually named — it is an employment-status noun that
+  // extraction sometimes mistakes for one. Treating it as absent falls
+  // through to the same problem-first retrieval every other request uses,
+  // instead of preserving a title with zero role information.
+  const explicitRoleTitle = need.explicitRoleTitle && !isGenericRoleTitle(need.explicitRoleTitle) ? need.explicitRoleTitle : null;
 
-  if (need.explicitRoleTitle) {
-    const profile = findExplicitProfile(need.explicitRoleTitle, profiles, weights);
+  if (explicitRoleTitle) {
+    const profile = findExplicitProfile(explicitRoleTitle, profiles, weights);
     if (profile && need.activityClarity === "clear" && workActivitySignals(need).length > 0) {
       const explicitScore = scoreProfile(need, profile, weights);
       const strongestAlternative = profiles
@@ -293,15 +349,15 @@ export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleK
         return RoleRecommendationResultSchema.parse({
           recommendedRole: {
             roleProfileId: profile.id,
-            title: need.explicitRoleTitle,
+            title: explicitRoleTitle,
             confidence: 1,
             reason: "The employer explicitly named this role, so it has not been replaced.",
-            evidence: [need.explicitRoleTitle],
+            evidence: [explicitRoleTitle],
           },
           alternatives: [recommendationFromScore(strongestAlternative, calibratedConfidence(strongestAlternative, strongestAlternative.score - explicitScore.score, true))],
           ambiguity: "high",
           clarificationNeeded: true,
-          clarificationQuestion: `The responsibilities you described sound closer to ${alternativeTitle} than ${need.explicitRoleTitle}. Should I use ${alternativeTitle}, or is there more ${need.explicitRoleTitle} work involved?`,
+          clarificationQuestion: `The responsibilities you described sound closer to ${alternativeTitle} than ${explicitRoleTitle}. Should I use ${alternativeTitle}, or is there more ${explicitRoleTitle} work involved?`,
           roleSource: "explicit",
         });
       }
@@ -310,10 +366,10 @@ export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleK
     return RoleRecommendationResultSchema.parse({
       recommendedRole: {
         roleProfileId: profile?.id ?? null,
-        title: need.explicitRoleTitle,
+        title: explicitRoleTitle,
         confidence: 1,
         reason: "The employer explicitly named this role, so their title is preserved.",
-        evidence: [need.explicitRoleTitle],
+        evidence: [explicitRoleTitle],
       },
       alternatives: [],
       ambiguity: "low",
@@ -339,7 +395,7 @@ export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleK
       alternatives: [],
       ambiguity: "high",
       clarificationNeeded: true,
-      clarificationQuestion: buildClarificationQuestion(clarificationCandidates, weights),
+      clarificationQuestion: buildClarificationQuestion(clarificationCandidates, weights, need),
       roleSource: "inferred",
     });
   }
@@ -358,7 +414,7 @@ export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleK
       alternatives: [],
       ambiguity: "high",
       clarificationNeeded: true,
-      clarificationQuestion: buildClarificationQuestion(plausible, weights),
+      clarificationQuestion: buildClarificationQuestion(plausible, weights, need),
       roleSource: "inferred",
     });
   }

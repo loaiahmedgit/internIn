@@ -1,0 +1,211 @@
+import { describe, expect, it } from "vitest";
+import { recommendRoleFromProfiles } from "./role-intelligence";
+import { WorkNeedProfileSchema, type RoleKnowledgeProfile, type WorkNeedProfile } from "./role-intelligence-schemas";
+
+/**
+ * Targets one regression only: the clarification asked AFTER role
+ * discovery abstains, not role discovery itself (role accuracy is covered
+ * by role-intelligence.heldout.test.ts). Held out from the production
+ * fixtures and from role-intelligence.heldout.test.ts's own corpus so
+ * nothing here can be satisfied by memorizing either.
+ */
+function need(overrides: Partial<WorkNeedProfile>): WorkNeedProfile {
+  return WorkNeedProfileSchema.parse({
+    originalRequest: "The company described a work problem.",
+    explicitRoleTitle: null,
+    problems: [],
+    activities: [],
+    domainSignals: [],
+    systemsOrTools: [],
+    desiredOutcomes: [],
+    constraints: [],
+    activityClarity: "ambiguous",
+    domainClarity: "clear",
+    seniorityIntent: "intern/junior",
+    ...overrides,
+  });
+}
+
+const GENERIC = "What kind of work should this person mainly own day to day?";
+
+/**
+ * Weak/empty retrieval (no candidate profiles at all) is the exact
+ * production symptom this fixes: real domain/work evidence was extracted,
+ * but nothing usable came back from the knowledge base, so the app used to
+ * discard that evidence for the one-size-fits-all fallback line.
+ */
+const NO_RETRIEVAL: RoleKnowledgeProfile[] = [];
+
+describe("clarification quality after role-discovery abstention (held out)", () => {
+  it.each([
+    {
+      domain: "healthcare operations",
+      workNeed: need({
+        originalRequest: "We need help with medication inventory records that are often inconsistent, causing stock discrepancies and making it harder to track expiry dates and restocking needs.",
+        problems: ["medication inventory records are inconsistent", "stock discrepancies"],
+        activities: ["track medication expiry dates", "manage restocking"],
+        domainSignals: ["pharmacy operations", "medication inventory"],
+        desiredOutcomes: ["accurate inventory records"],
+      }),
+      expectSubstringOneOf: ["pharmacy", "medication", "inventory", "expiry", "restock"],
+    },
+    {
+      domain: "ERP/business systems",
+      workNeed: need({
+        originalRequest: "We're moving our HR records from spreadsheets into Workday and need help mapping fields, cleaning up employee data, and testing before go-live.",
+        problems: ["employee data needs cleaning before go-live"],
+        activities: ["map HR fields to Workday", "test the new system before go-live"],
+        domainSignals: ["Workday implementation", "HR systems"],
+        systemsOrTools: ["Workday"],
+      }),
+      expectSubstringOneOf: ["workday", "field", "hr system", "go-live", "map"],
+    },
+    {
+      domain: "IT support",
+      workNeed: need({
+        originalRequest: "Our office laptops keep breaking and staff keep locking themselves out of accounts.",
+        problems: ["laptops keep breaking", "staff lock themselves out of accounts"],
+        activities: ["reset employee passwords", "troubleshoot broken laptops"],
+        domainSignals: ["office IT support"],
+      }),
+      expectSubstringOneOf: ["laptop", "password", "account", "it support"],
+    },
+    {
+      domain: "finance/accounting",
+      workNeed: need({
+        originalRequest: "We want an intern to reconcile our monthly bank statements, chase overdue client invoices, and keep our expense spreadsheets accurate.",
+        problems: ["bank statements need reconciliation", "client invoices are overdue"],
+        activities: ["reconcile monthly bank statements", "follow up on overdue invoices"],
+        domainSignals: ["bookkeeping", "accounts receivable"],
+      }),
+      expectSubstringOneOf: ["bank", "reconcil", "invoice", "bookkeeping", "receivable"],
+    },
+    {
+      domain: "marketing",
+      workNeed: need({
+        originalRequest: "Our social posts go out inconsistently and we can't tell which campaigns are actually working.",
+        problems: ["social posts go out inconsistently", "campaign performance is unclear"],
+        activities: ["schedule social posts", "track campaign performance"],
+        domainSignals: ["social media marketing", "campaign analytics"],
+      }),
+      expectSubstringOneOf: ["social", "campaign", "marketing", "analytic"],
+    },
+    {
+      domain: "logistics",
+      workNeed: need({
+        originalRequest: "We keep losing track of inbound shipments and delivery schedules slip constantly.",
+        problems: ["inbound shipments are hard to track", "delivery schedules slip"],
+        activities: ["track inbound shipments", "coordinate delivery schedules"],
+        domainSignals: ["logistics coordination"],
+      }),
+      expectSubstringOneOf: ["shipment", "delivery", "logistic", "schedule"],
+    },
+    {
+      domain: "HR",
+      workNeed: need({
+        originalRequest: "Onboarding paperwork for new hires is scattered across emails and nothing is tracked centrally.",
+        problems: ["onboarding paperwork is scattered", "nothing is tracked centrally"],
+        activities: ["organize onboarding paperwork", "track new-hire status centrally"],
+        domainSignals: ["employee onboarding"],
+      }),
+      expectSubstringOneOf: ["onboard", "new hire", "paperwork", "hr"],
+    },
+    {
+      domain: "software",
+      workNeed: need({
+        originalRequest: "Our internal dashboard has UI bugs and the API integration breaks whenever the vendor changes their schema.",
+        problems: ["dashboard has UI bugs", "API integration breaks on schema changes"],
+        activities: ["fix dashboard UI bugs", "stabilize the API integration"],
+        domainSignals: ["frontend development", "API integration"],
+      }),
+      expectSubstringOneOf: ["dashboard", "ui", "api", "integration"],
+    },
+    {
+      domain: "operations",
+      workNeed: need({
+        originalRequest: "Our internal approval workflow has too many manual handoffs and nobody has documented how it actually works.",
+        problems: ["approval workflow has manual handoffs", "workflow is undocumented"],
+        activities: ["map the approval workflow", "document the process"],
+        domainSignals: ["process improvement"],
+      }),
+      expectSubstringOneOf: ["approval", "workflow", "handoff", "process"],
+    },
+  ])(
+    "grounds the clarification in the employer's own $domain evidence instead of the generic fallback",
+    ({ workNeed, expectSubstringOneOf }) => {
+      const result = recommendRoleFromProfiles(workNeed, NO_RETRIEVAL);
+
+      expect(result.recommendedRole).toBeNull();
+      expect(result.clarificationNeeded).toBe(true);
+      expect(result.clarificationQuestion).not.toBe(GENERIC);
+      expect(result.clarificationQuestion).not.toBeNull();
+      const question = (result.clarificationQuestion ?? "").toLocaleLowerCase("en");
+      expect(expectSubstringOneOf.some((needle) => question.includes(needle))).toBe(true);
+    },
+  );
+
+  it("still abstains with the plain generic question when there is no real evidence at all (no false grounding)", () => {
+    const result = recommendRoleFromProfiles(
+      need({
+        originalRequest: "We need somebody to help out.",
+        problems: ["We need somebody to help out."],
+      }),
+      NO_RETRIEVAL,
+    );
+
+    expect(result.clarificationNeeded).toBe(true);
+    expect(result.clarificationQuestion).toBe(GENERIC);
+  });
+
+  it("prefers a real discriminating choice between two coherent nearby roles over a grounded restatement", () => {
+    const empty = { alternateTitles: [], workEnvironments: [], competencies: [], safetyConstraints: [], sourceMappings: [] } satisfies Partial<RoleKnowledgeProfile>;
+    const inventoryFocused: RoleKnowledgeProfile = {
+      ...empty,
+      id: "pharmacy-inventory",
+      kind: "internship_overlay",
+      canonicalTitle: "Pharmacy Inventory Assistant",
+      internshipTitle: "Pharmacy Inventory Assistant Intern",
+      occupationFamily: "Pharmacy and Healthcare Operations",
+      description: "Provides junior-level support for pharmacy inventory work.",
+      typicalTasks: ["Reconcile medication inventory counts", "Track expiry dates and stock levels", "Flag restocking needs"],
+      workActivities: ["Medication inventory control", "Expiry date tracking", "Restocking coordination"],
+      skills: ["Medication inventory control", "Expiry date tracking"],
+      knowledge: ["Pharmacy operations"],
+      commonTools: ["Pharmacy inventory system"],
+      typicalDeliverables: ["Inventory reconciliation report"],
+    };
+    const broaderOperations: RoleKnowledgeProfile = {
+      ...empty,
+      id: "pharmacy-operations",
+      kind: "internship_overlay",
+      canonicalTitle: "Pharmacy Operations Assistant",
+      internshipTitle: "Pharmacy Operations Assistant Intern",
+      occupationFamily: "Pharmacy and Healthcare Operations",
+      description: "Provides junior-level support for broader pharmacy operations.",
+      typicalTasks: ["Reconcile medication inventory counts", "Support daily pharmacy workflow", "Document dispensing workflow exceptions"],
+      workActivities: ["Medication inventory control", "Pharmacy workflow support", "Dispensing documentation"],
+      skills: ["Medication inventory control", "Pharmacy workflow support"],
+      knowledge: ["Pharmacy operations"],
+      commonTools: ["Pharmacy inventory system"],
+      typicalDeliverables: ["Exception log"],
+    };
+
+    const result = recommendRoleFromProfiles(
+      need({
+        originalRequest: "We need help with medication inventory in our pharmacy.",
+        problems: ["medication inventory needs help"],
+        activities: ["reconcile medication inventory counts"],
+        domainSignals: ["pharmacy operations"],
+      }),
+      [inventoryFocused, broaderOperations],
+    );
+
+    expect(result.recommendedRole).toBeNull();
+    expect(result.clarificationNeeded).toBe(true);
+    const question = result.clarificationQuestion ?? "";
+    expect(question).toMatch(/mainly/i);
+    expect(question).toMatch(/\bor\b/i);
+    expect(question.toLocaleLowerCase("en")).not.toContain("diagnos");
+    expect(question.toLocaleLowerCase("en")).not.toContain("prescri");
+  });
+});

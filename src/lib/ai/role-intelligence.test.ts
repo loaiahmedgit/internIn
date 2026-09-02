@@ -140,4 +140,21 @@ describe("recommendRoleFromProfiles", () => {
     expect(result.clarificationQuestion).toMatch(/mainly/i);
     expect(result.clarificationQuestion).toMatch(/or/i);
   });
+
+  it("does not let a generic word like 'intern' stand in for a role — falls through to real retrieval instead", () => {
+    const result = recommendRoleFromProfiles(
+      need({
+        originalRequest: "We want an intern to reconcile our monthly bank statements, chase overdue client invoices, and keep our expense spreadsheets accurate.",
+        explicitRoleTitle: "intern",
+        problems: ["bank statements need reconciliation", "client invoices are overdue"],
+        activities: ["reconcile invoices", "prepare monthly financial reports"],
+        desiredOutcomes: ["accurate monthly financial reporting"],
+      }),
+      ROLE_INTELLIGENCE_FIXTURES,
+    );
+
+    expect(result.roleSource).toBe("inferred");
+    expect(result.recommendedRole?.title).toBe("Accounting Intern");
+    expect(result.recommendedRole?.title.toLocaleLowerCase("en")).not.toBe("intern");
+  });
 });

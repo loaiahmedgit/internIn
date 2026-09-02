@@ -1,7 +1,7 @@
 import { generateObject } from "ai";
 import { getModel } from "./gemma-provider";
 import { withGenerateRetries } from "./challenge-generation";
-import { WorkNeedProfileSchema, type WorkNeedProfile } from "./role-intelligence-schemas";
+import { WorkNeedProfileSchema, isGenericRoleTitle, type WorkNeedProfile } from "./role-intelligence-schemas";
 
 const WORK_NEED_TIMEOUT_MS = 20_000;
 const WORK_NEED_ATTEMPTS = [{}, {}] as const;
@@ -80,6 +80,11 @@ export function normalizeWorkNeedProfile(profile: WorkNeedProfile, originalReque
     ...profile,
     originalRequest,
     activityClarity,
+    // A bare employment-status word ("intern", "student", ...) is not a
+    // role the employer named — a weak model sometimes echoes it here
+    // anyway. Treat it as not given so downstream retrieval runs instead
+    // of preserving a title with zero role information.
+    explicitRoleTitle: profile.explicitRoleTitle && !isGenericRoleTitle(profile.explicitRoleTitle) ? profile.explicitRoleTitle : null,
     constraints: removeProtectedCharacteristics(profile.constraints),
   });
 }

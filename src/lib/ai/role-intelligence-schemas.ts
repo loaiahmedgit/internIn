@@ -44,6 +44,31 @@ export function workActivitySignals(need: WorkNeedProfile): string[] {
   return [];
 }
 
+/**
+ * Employment-status words that name no profession at all. A title built
+ * entirely from these carries zero role information — trusting it as a
+ * meaningful "explicit role" or a retrieved profile's display title would
+ * let a bare word like "intern" silently stand in for a real role. This is
+ * a generic-noun filter shared by extraction and retrieval, not a
+ * per-profession rule: it contains no industry or occupation vocabulary,
+ * so it never needs updating when a new occupation is added.
+ */
+const GENERIC_ROLE_WORDS = new Set([
+  "intern", "interns", "internship", "internships", "trainee", "trainees", "apprentice", "apprentices",
+  "student", "students", "employee", "employees", "staff", "worker", "workers", "hire", "hires",
+  "candidate", "candidates", "person", "people", "someone", "somebody", "member", "members", "team",
+  "individual", "individuals", "recruit", "recruits", "position", "role", "job", "junior", "entry", "level",
+]);
+
+export function isGenericRoleTitle(title: string): boolean {
+  const words = title
+    .toLocaleLowerCase("en")
+    .replace(/[^\p{L}\p{N}\s-]+/gu, "")
+    .split(/\s+/u)
+    .filter(Boolean);
+  return words.length > 0 && words.every((word) => GENERIC_ROLE_WORDS.has(word));
+}
+
 export const RoleProfileSourceMappingSchema = z.object({
   source: z.enum(["onet", "esco", "internin_curated"]),
   externalId: z.string().trim().min(1).max(300),
