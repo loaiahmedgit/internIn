@@ -77,4 +77,21 @@ maybe("classifyAssistantRequest — real clarification-detection behavior (live 
     },
     60_000,
   );
+
+  it(
+    "5. DYNAMIC COUNT: a bare 'web dev intern' request is genuinely vague and needs multiple questions — under-asking (only 1) is the reported regression this proves fixed",
+    async () => {
+      const transcript = `Employer: I want to hire a web dev intern.`;
+      const decision = await classifyAssistantRequest(transcript);
+      expect(decision.action).toBe("ask_clarifying_questions");
+      const slots = decision.missingSlots ?? [];
+      // "Web developer" spans frontend/backend/full-stack/QA with nothing
+      // else given — responsibilities is non-negotiable here, and since
+      // scope is still totally open, candidate_level can't be judged safe
+      // to skip either. One question alone is exactly the bug being fixed.
+      expect(slots).toContain("responsibilities");
+      expect(slots.length).toBeGreaterThanOrEqual(2);
+    },
+    60_000,
+  );
 });

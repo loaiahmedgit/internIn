@@ -83,6 +83,24 @@ const CURATED_ROLE_PROFILES: Record<string, RoleProfile> = {
     competencies: ["Problem solving", "Code quality", "Communication", "Debugging"],
     safetyConstraints: [],
   },
+  // "Web developer" is genuinely broader than "full stack" — frontend,
+  // backend, full-stack, and testing/QA are different day-to-day work
+  // AND different tech, which is exactly why this specific role needs a
+  // real responsibilities question before a tools question can mean
+  // anything (see assistant-router.ts's worked example for this exact
+  // request). Kept as its own curated entry rather than folding into
+  // "full stack developer" so its taskFamilies/commonTools stay broad
+  // enough to build that first question well.
+  "web developer intern": {
+    normalizedRole: "Web Developer Intern",
+    occupationFamily: "Software Engineering",
+    taskFamilies: ["Frontend development", "Backend development", "Full-stack feature work", "Testing / QA", "Bug fixing"],
+    commonTools: ["React", "Vue", "HTML/CSS", "JavaScript", "TypeScript", "Node.js", "Python", "REST APIs", "Git", "Jest/Cypress"],
+    workEnvironments: ["Fully remote", "Hybrid", "In-office"],
+    typicalDeliverables: ["Working feature", "Pull request", "Bug fix with notes", "Test coverage"],
+    competencies: ["Problem solving", "Code quality", "Debugging", "Communication"],
+    safetyConstraints: [],
+  },
   "database intern": {
     normalizedRole: "Database Intern",
     occupationFamily: "Data & Database Engineering",

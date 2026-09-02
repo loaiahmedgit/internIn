@@ -9,6 +9,7 @@ import type { ClarificationQuestion } from "./challenge-clarification-schemas";
 // call) is both faster and more exhaustive than live-testing every one.
 const PROFESSIONS = [
   "Full Stack Developer Intern",
+  "Web Developer Intern",
   "Database Intern",
   "IT Technician Intern",
   "Pharmacy Intern",
@@ -22,7 +23,7 @@ const PROFESSIONS = [
 
 const CORE_SLOTS: InformationSlot[] = ["candidate_level", "responsibilities", "tools_technologies"];
 
-describe("buildClarificationQuestions — generalizes across all 10 required professions", () => {
+describe("buildClarificationQuestions — generalizes across all required professions", () => {
   for (const profession of PROFESSIONS) {
     describe(profession, () => {
       it("candidate_level is ALWAYS single-select — never a textbox, regardless of profession", async () => {
@@ -93,6 +94,21 @@ describe("buildClarificationQuestions — generalizes across all 10 required pro
   it("NO MINIMUM: zero missing slots produces zero questions — not an error, not a forced fallback question", async () => {
     const profile = await getRoleProfile("Pharmacy Intern"); // curated — no live model call
     expect(buildClarificationQuestions([], profile)).toEqual([]);
+  });
+
+  it("DYNAMIC COUNT: a genuinely vague 'web dev intern' request needs all 3 real questions, not just one — the exact reported under-asking bug", async () => {
+    const profile = await getRoleProfile("Web Developer Intern"); // curated — no live model call
+    const questions = buildClarificationQuestions(["responsibilities", "candidate_level", "tools_technologies"], profile);
+    expect(questions.map((q) => q.slot)).toEqual(["responsibilities", "candidate_level", "tools_technologies"]);
+    // Q1: area of work — frontend/backend/full-stack/testing are genuinely
+    // different challenges, this is why level and tools can't be judged yet.
+    const responsibilities = questions.find((q) => q.slot === "responsibilities")!;
+    expect(responsibilities.choices?.some((c) => /frontend/i.test(c.value))).toBe(true);
+    expect(responsibilities.choices?.some((c) => /backend/i.test(c.value))).toBe(true);
+    // Q3: tools must offer a real "no preference" escape hatch — asking
+    // about tools must never become a hard blocker.
+    const tools = questions.find((q) => q.slot === "tools_technologies")!;
+    expect(tools.choices?.some((c) => /not sure|no preference/i.test(c.value))).toBe(true);
   });
 });
 

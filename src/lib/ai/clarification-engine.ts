@@ -45,7 +45,12 @@ function buildQuestion(slot: InformationSlot, profile: RoleProfile): Clarificati
 
     case "tools_technologies": {
       if (profile.commonTools.length === 0) return null;
-      const choices = toChoices(profile.commonTools);
+      // 7, not 8: refineQuestions caps every question at 8 choices total —
+      // reserving one slot keeps "Not sure yet" from being the one thing
+      // silently truncated away on a profile with 8+ real tools (a real,
+      // previously-latent bug: it never showed up while every curated
+      // profile happened to have 7 or fewer).
+      const choices = toChoices(profile.commonTools, 7);
       choices.push({ value: "Not sure yet", label: "Not sure yet" });
       return {
         id: slot,
