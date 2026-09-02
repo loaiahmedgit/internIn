@@ -2,7 +2,7 @@ import { generateObject } from "ai";
 import { getModel } from "./gemma-provider";
 import { ChallengeDraftGeneratedSchema, EmployerContextSchema, type ChallengeDraft, type ChallengeDraftGenerated, type EmployerContext } from "./challenge-clarification-schemas";
 import type { QuestionnaireAnswer } from "./assistant-messages";
-import type { WorkNeedProfile } from "./role-intelligence-schemas";
+import { workActivitySignals, type WorkNeedProfile } from "./role-intelligence-schemas";
 
 // Split ChallengeDraftGeneratedSchema into two independently-generated
 // halves — a real, isolated finding, not a guess: a small flat schema
@@ -101,7 +101,7 @@ export function preserveStructuredEmployerAnswers(
     ...extracted,
     role: roleHint?.trim() || extracted.role,
     level: selected.get("candidate_level")?.[0] ?? workNeed?.seniorityIntent ?? extracted.level,
-    responsibilities: selected.get("responsibilities") ?? workNeed?.activities ?? extracted.responsibilities,
+    responsibilities: selected.get("responsibilities") ?? (workNeed ? workActivitySignals(workNeed) : extracted.responsibilities),
     tools: selected.get("tools_technologies") ?? workNeed?.systemsOrTools ?? extracted.tools,
     restrictions: selected.get("restrictions") ?? workNeed?.constraints ?? extracted.restrictions,
     additionalContext:
@@ -134,7 +134,7 @@ export async function buildEmployerContext(params: {
         originalRequest: workNeed.originalRequest,
         role: roleHint,
         level: workNeed.seniorityIntent ?? null,
-        responsibilities: workNeed.activities,
+        responsibilities: workActivitySignals(workNeed),
         tools: workNeed.systemsOrTools,
         restrictions: workNeed.constraints,
         additionalContext: [...workNeed.problems, ...workNeed.desiredOutcomes].join("; ") || null,

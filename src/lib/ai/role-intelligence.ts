@@ -4,6 +4,7 @@ import {
   type RoleKnowledgeProfile,
   type RoleRecommendationResult,
   type WorkNeedProfile,
+  workActivitySignals,
 } from "./role-intelligence-schemas";
 
 const STOP_WORDS = new Set([
@@ -30,21 +31,65 @@ function tokens(value: string): Set<string> {
   );
 }
 
-function phraseSimilarity(left: string, right: string): number {
-  const leftTokens = tokens(left);
-  const rightTokens = tokens(right);
-  if (!leftTokens.size || !rightTokens.size) return 0;
-  const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length;
-  return intersection / Math.max(leftTokens.size, rightTokens.size);
+type CorpusWeights = Map<string, number>;
+
+function profileDocument(profile: RoleKnowledgeProfile): string {
+  return [
+    profile.occupationFamily,
+    profile.description,
+    ...profile.typicalTasks,
+    ...profile.workActivities,
+    ...profile.skills,
+    ...profile.knowledge,
+    ...profile.commonTools,
+    ...profile.typicalDeliverables,
+  ].join(" ");
 }
 
-function coverage(needles: string[], haystack: string[]): number {
+/**
+ * Corpus-derived inverse-document weights suppress generic vocabulary without
+ * maintaining a profession- or industry-specific keyword blacklist.
+ */
+function corpusWeights(profiles: RoleKnowledgeProfile[]): CorpusWeights {
+  const documentFrequency = new Map<string, number>();
+  for (const profile of profiles) {
+    for (const token of tokens(profileDocument(profile))) {
+      documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
+    }
+  }
+  return new Map(
+    [...documentFrequency].map(([token, frequency]) => [
+      token,
+      Math.log((profiles.length + 1) / (frequency + 1)) + 1,
+    ]),
+  );
+}
+
+function tokenWeight(token: string, weights: CorpusWeights): number {
+  return weights.get(token) ?? Math.log(weights.size + 2) + 1;
+}
+
+/** Directional evidence coverage: how much of the employer phrase is supported. */
+function phraseCoverage(needle: string, candidate: string, weights: CorpusWeights): number {
+  const needleTokens = tokens(needle);
+  const candidateTokens = tokens(candidate);
+  if (!needleTokens.size || !candidateTokens.size) return 0;
+  let total = 0;
+  let matched = 0;
+  for (const token of needleTokens) {
+    const weight = tokenWeight(token, weights);
+    total += weight;
+    if (candidateTokens.has(token)) matched += weight;
+  }
+  return total ? matched / total : 0;
+}
+
+function coverage(needles: string[], haystack: string[], weights: CorpusWeights): number {
   if (!needles.length || !haystack.length) return 0;
-  const total = needles.reduce((sum, needle) => {
-    const best = haystack.reduce((max, candidate) => Math.max(max, phraseSimilarity(needle, candidate)), 0);
+  return needles.reduce((sum, needle) => {
+    const best = haystack.reduce((max, candidate) => Math.max(max, phraseCoverage(needle, candidate, weights)), 0);
     return sum + best;
-  }, 0);
-  return total / needles.length;
+  }, 0) / needles.length;
 }
 
 function exactOrContainedCoverage(needles: string[], haystack: string[]): number {
@@ -60,104 +105,189 @@ function exactOrContainedCoverage(needles: string[], haystack: string[]): number
 type ScoredProfile = {
   profile: RoleKnowledgeProfile;
   score: number;
+  activityCoverage: number;
+  domainCoverage: number;
+  toolCoverage: number;
+  contextCoverage: number;
+  matchingChannelCount: number;
   activityEvidence: string[];
   toolEvidence: string[];
+  eligible: boolean;
 };
 
-function scoreProfile(need: WorkNeedProfile, profile: RoleKnowledgeProfile): ScoredProfile {
-  const activityCorpus = [...profile.workActivities, ...profile.typicalTasks, ...profile.typicalDeliverables];
-  const descriptiveCorpus = [profile.description, ...profile.skills, ...profile.knowledge, ...activityCorpus];
-  const titleCorpus = [profile.canonicalTitle, profile.internshipTitle ?? "", ...profile.alternateTitles];
+export type RoleCandidateEvidence = Omit<ScoredProfile, "profile"> & {
+  roleProfileId: string;
+  title: string;
+  occupationFamily: string;
+};
 
-  const activityCoverage = coverage(need.activities, activityCorpus);
+function scoreProfile(need: WorkNeedProfile, profile: RoleKnowledgeProfile, weights: CorpusWeights): ScoredProfile {
+  const activitySignals = workActivitySignals(need);
+  const activityCorpus = [...profile.workActivities, ...profile.typicalTasks, ...profile.typicalDeliverables];
+  const domainCorpus = [profile.occupationFamily, profile.description, ...profile.knowledge, ...profile.skills, ...profile.workEnvironments];
+  const contextCorpus = [profile.description, ...profile.knowledge, ...activityCorpus];
+
+  const activityCoverage = coverage(activitySignals, activityCorpus, weights);
+  const domainCoverage = coverage(need.domainSignals, domainCorpus, weights);
   const toolCoverage = Math.max(
     exactOrContainedCoverage(need.systemsOrTools, profile.commonTools),
-    coverage(need.systemsOrTools, [...profile.commonTools, ...profile.skills, ...profile.knowledge]),
+    coverage(need.systemsOrTools, [...profile.commonTools, ...profile.skills, ...profile.knowledge], weights),
   );
-  const problemOutcomeCoverage = coverage([...need.problems, ...need.desiredOutcomes], descriptiveCorpus);
-  const requestCoverage = coverage([need.originalRequest], [...descriptiveCorpus, ...profile.commonTools]);
-  const titleCoverage = coverage([need.originalRequest], titleCorpus);
+  const contextCoverage = coverage([...need.problems, ...need.desiredOutcomes], contextCorpus, weights);
+  const matchingChannelCount = [
+    activityCoverage >= 0.24,
+    need.domainSignals.length > 0 && domainCoverage >= 0.18,
+    need.systemsOrTools.length > 0 && toolCoverage >= 0.35,
+    [...need.problems, ...need.desiredOutcomes].length > 0 && contextCoverage >= 0.2,
+  ].filter(Boolean).length;
 
-  const score = Math.min(
-    1,
-    activityCoverage * 0.44 +
-      toolCoverage * 0.29 +
-      problemOutcomeCoverage * 0.15 +
-      requestCoverage * 0.08 +
-      titleCoverage * 0.04,
-  );
+  const domainIsCompatible =
+    need.domainClarity !== "clear" ||
+    need.domainSignals.length === 0 ||
+    domainCoverage >= 0.16 ||
+    (activityCoverage >= 0.55 && matchingChannelCount >= 2);
+  const hasMeaningfulActivityEvidence = activitySignals.length > 0 && activityCoverage >= 0.24;
+  const eligible = hasMeaningfulActivityEvidence && domainIsCompatible;
 
-  const activityEvidence = need.activities.filter((activity) => coverage([activity], activityCorpus) >= 0.5);
+  // Problem-first discovery deliberately excludes title similarity. A title
+  // becomes authoritative only in the explicit-title branch below.
+  const rawScore =
+    activityCoverage * 0.56 +
+    domainCoverage * 0.24 +
+    toolCoverage * 0.12 +
+    contextCoverage * 0.08;
+  const crossDomainPenalty = domainIsCompatible ? 1 : 0.2;
+  const score = Math.min(1, rawScore * crossDomainPenalty);
+
+  const activityEvidence = activitySignals.filter((activity) => coverage([activity], activityCorpus, weights) >= 0.5);
   const toolEvidence = need.systemsOrTools.filter((tool) => exactOrContainedCoverage([tool], profile.commonTools) > 0);
-  return { profile, score, activityEvidence, toolEvidence };
+  return {
+    profile,
+    score,
+    activityCoverage,
+    domainCoverage,
+    toolCoverage,
+    contextCoverage,
+    matchingChannelCount,
+    activityEvidence,
+    toolEvidence,
+    eligible,
+  };
+}
+
+/** Stable diagnostic projection used by aggregate evaluations and telemetry. */
+export function evaluateRoleCandidates(need: WorkNeedProfile, profiles: RoleKnowledgeProfile[]): RoleCandidateEvidence[] {
+  const weights = corpusWeights(profiles);
+  return profiles
+    .map((profile) => scoreProfile(need, profile, weights))
+    .sort((left, right) => right.score - left.score)
+    .map(({ profile, ...evidence }) => ({
+      ...evidence,
+      roleProfileId: profile.id,
+      title: displayTitle(profile),
+      occupationFamily: profile.occupationFamily,
+    }));
 }
 
 function displayTitle(profile: RoleKnowledgeProfile): string {
   return profile.internshipTitle ?? profile.canonicalTitle;
 }
 
-function recommendationFromScore(scored: ScoredProfile, confidence = scored.score): RecommendedRole {
+function calibratedConfidence(scored: ScoredProfile, margin: number, familyCoherent: boolean): number {
+  const evidenceQuality =
+    scored.activityCoverage * 0.58 +
+    scored.domainCoverage * 0.22 +
+    scored.toolCoverage * 0.12 +
+    scored.contextCoverage * 0.08;
+  const channelSupport = Math.min(1, scored.matchingChannelCount / 3);
+  const separation = Math.min(1, Math.max(0, margin) / 0.24);
+  const confidence = evidenceQuality * 0.72 + channelSupport * 0.14 + separation * 0.1 + (familyCoherent ? 0.04 : 0);
+  return Math.round(Math.max(0, Math.min(1, confidence)) * 100) / 100;
+}
+
+function recommendationFromScore(scored: ScoredProfile, confidence: number): RecommendedRole {
   const evidence = [...scored.activityEvidence, ...scored.toolEvidence].slice(0, 8);
   const evidenceText = evidence.length ? evidence.join(", ") : scored.profile.occupationFamily;
   return {
     roleProfileId: scored.profile.id,
     title: displayTitle(scored.profile),
-    confidence: Math.round(Math.max(0, Math.min(1, confidence)) * 100) / 100,
+    confidence,
     reason: `This role is grounded in the described work around ${evidenceText}.`,
     evidence,
   };
 }
 
-function findExplicitProfile(explicitTitle: string, profiles: RoleKnowledgeProfile[]): RoleKnowledgeProfile | null {
+function titleSimilarity(left: string, right: string, weights: CorpusWeights): number {
+  return Math.max(phraseCoverage(left, right, weights), phraseCoverage(right, left, weights));
+}
+
+function findExplicitProfile(explicitTitle: string, profiles: RoleKnowledgeProfile[], weights: CorpusWeights): RoleKnowledgeProfile | null {
   const ranked = profiles
     .map((profile) => ({
       profile,
       score: Math.max(
-        ...[profile.canonicalTitle, profile.internshipTitle ?? "", ...profile.alternateTitles].map((title) => phraseSimilarity(explicitTitle, title)),
+        ...[profile.canonicalTitle, profile.internshipTitle ?? "", ...profile.alternateTitles].map((title) => titleSimilarity(explicitTitle, title, weights)),
       ),
     }))
     .sort((left, right) => right.score - left.score);
-  return ranked[0]?.score >= 0.65 ? ranked[0].profile : null;
+  return ranked[0]?.score >= 0.72 ? ranked[0].profile : null;
 }
 
-function distinctiveActivity(profile: RoleKnowledgeProfile, otherProfiles: RoleKnowledgeProfile[]): string | null {
+function familySimilarity(left: RoleKnowledgeProfile, right: RoleKnowledgeProfile, weights: CorpusWeights): number {
+  return Math.max(
+    phraseCoverage(left.occupationFamily, right.occupationFamily, weights),
+    phraseCoverage(right.occupationFamily, left.occupationFamily, weights),
+  );
+}
+
+function distinctiveActivity(profile: RoleKnowledgeProfile, otherProfiles: RoleKnowledgeProfile[], weights: CorpusWeights): string | null {
   const otherActivities = otherProfiles.flatMap((candidate) => [...candidate.workActivities, ...candidate.typicalTasks]);
-  return [...profile.workActivities, ...profile.typicalTasks].find((activity) => coverage([activity], otherActivities) < 0.5) ?? null;
+  return [...profile.workActivities, ...profile.typicalTasks].find((activity) => coverage([activity], otherActivities, weights) < 0.45) ?? null;
 }
 
-function buildClarificationQuestion(scored: ScoredProfile[]): string {
-  const choices = scored
+function buildClarificationQuestion(scored: ScoredProfile[], weights: CorpusWeights): string {
+  if (scored.length < 2) return "What kind of work should this person mainly own day to day?";
+  const anchor = scored[0].profile;
+  const coherent = scored.filter((candidate) => familySimilarity(anchor, candidate.profile, weights) >= 0.35);
+  if (coherent.length !== scored.length) return "What kind of work should this person mainly own day to day?";
+
+  const choices = coherent
     .slice(0, 3)
-    .map(({ profile }, index, all) => distinctiveActivity(profile, all.filter((candidate) => candidate.profile.id !== profile.id).map((candidate) => candidate.profile)))
+    .map(({ profile }, index, all) => distinctiveActivity(profile, all.filter((_, candidateIndex) => candidateIndex !== index).map((candidate) => candidate.profile), weights))
     .filter((activity): activity is string => Boolean(activity))
     .slice(0, 3);
-
-  if (choices.length < 2) return "What will this person mainly be responsible for day to day?";
+  if (choices.length < 2) return "What kind of work should this person mainly own day to day?";
   const readable = choices.map((choice) => choice.replace(/[.?!]+$/u, "").toLocaleLowerCase("en"));
   const last = readable.pop();
   return `Will they mainly ${readable.join(", ")}, or ${last}?`;
 }
 
-/**
- * Deterministic lexical baseline used to prove the task-first architecture
- * before adding Postgres FTS, embeddings, or an LLM reranker. There are no
- * title-specific conditionals here: every role is ranked by the same work,
- * activity, system, and outcome evidence.
- */
 export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleKnowledgeProfile[]): RoleRecommendationResult {
+  const weights = corpusWeights(profiles);
+
   if (need.explicitRoleTitle) {
-    const profile = findExplicitProfile(need.explicitRoleTitle, profiles);
-    if (profile && need.activityClarity === "clear" && need.activities.length > 0) {
-      const explicitScore = scoreProfile(need, profile);
+    const profile = findExplicitProfile(need.explicitRoleTitle, profiles, weights);
+    if (profile && need.activityClarity === "clear" && workActivitySignals(need).length > 0) {
+      const explicitScore = scoreProfile(need, profile, weights);
       const strongestAlternative = profiles
         .filter((candidate) => candidate.id !== profile.id)
-        .map((candidate) => scoreProfile(need, candidate))
+        .map((candidate) => scoreProfile(need, candidate, weights))
+        .filter((candidate) => candidate.eligible)
         .sort((left, right) => right.score - left.score)[0];
+      const conflictEvidence = strongestAlternative && need.domainSignals.length > 0
+        ? strongestAlternative.domainCoverage >= 0.25 && explicitScore.domainCoverage < 0.16
+        : Boolean(
+            strongestAlternative &&
+            strongestAlternative.activityCoverage >= 0.55 &&
+            explicitScore.activityCoverage < 0.16,
+          );
 
       if (
         strongestAlternative &&
-        strongestAlternative.score >= 0.38 &&
-        strongestAlternative.score - explicitScore.score >= 0.2
+        conflictEvidence &&
+        strongestAlternative.score >= 0.4 &&
+        strongestAlternative.activityCoverage >= 0.3 &&
+        strongestAlternative.score - explicitScore.score >= 0.15
       ) {
         const alternativeTitle = displayTitle(strongestAlternative.profile);
         return RoleRecommendationResultSchema.parse({
@@ -168,7 +298,7 @@ export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleK
             reason: "The employer explicitly named this role, so it has not been replaced.",
             evidence: [need.explicitRoleTitle],
           },
-          alternatives: [recommendationFromScore(strongestAlternative)],
+          alternatives: [recommendationFromScore(strongestAlternative, calibratedConfidence(strongestAlternative, strongestAlternative.score - explicitScore.score, true))],
           ambiguity: "high",
           clarificationNeeded: true,
           clarificationQuestion: `The responsibilities you described sound closer to ${alternativeTitle} than ${need.explicitRoleTitle}. Should I use ${alternativeTitle}, or is there more ${need.explicitRoleTitle} work involved?`,
@@ -193,36 +323,63 @@ export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleK
     });
   }
 
-  const scored = profiles.map((profile) => scoreProfile(need, profile)).sort((left, right) => right.score - left.score);
-  const top = scored[0];
-  if (!top) {
+  const allScored = profiles.map((profile) => scoreProfile(need, profile, weights)).sort((left, right) => right.score - left.score);
+  const eligible = allScored.filter((candidate) => candidate.eligible);
+  const top = eligible[0];
+  const lacksDiscriminatingWork =
+    need.activityClarity === "ambiguous" ||
+    workActivitySignals(need).length === 0;
+
+  if (!top || lacksDiscriminatingWork) {
+    const clarificationCandidates = eligible
+      .filter((candidate) => candidate.activityCoverage >= 0.3)
+      .slice(0, 3);
     return RoleRecommendationResultSchema.parse({
       recommendedRole: null,
       alternatives: [],
       ambiguity: "high",
       clarificationNeeded: true,
-      clarificationQuestion: "What will this person mainly be responsible for day to day?",
+      clarificationQuestion: buildClarificationQuestion(clarificationCandidates, weights),
       roleSource: "inferred",
     });
   }
 
-  const margin = top.score - (scored[1]?.score ?? 0);
-  const lacksDiscriminatingWork =
-    need.activityClarity === "ambiguous" ||
-    (need.activities.length === 0 && need.desiredOutcomes.length === 0);
-  const highAmbiguity = lacksDiscriminatingWork || top.score < 0.16;
-  const mediumAmbiguity = !highAmbiguity && (top.score < 0.38 || margin < 0.085);
-  const alternatives = scored
+  const runnerUp = eligible[1];
+  const margin = top.score - (runnerUp?.score ?? 0);
+  const plausible = eligible.filter((candidate) => candidate.score >= Math.max(0.28, top.score - 0.12)).slice(0, 3);
+  const familyCoherent = plausible.every((candidate) => familySimilarity(top.profile, candidate.profile, weights) >= 0.35);
+  const confidence = calibratedConfidence(top, margin, familyCoherent);
+  const conflictingFamilies = !familyCoherent && margin < 0.14;
+  const weakAbsoluteEvidence = top.activityCoverage < 0.3 || top.score < 0.29 || confidence < 0.46;
+
+  if (conflictingFamilies || weakAbsoluteEvidence) {
+    return RoleRecommendationResultSchema.parse({
+      recommendedRole: null,
+      alternatives: [],
+      ambiguity: "high",
+      clarificationNeeded: true,
+      clarificationQuestion: buildClarificationQuestion(plausible, weights),
+      roleSource: "inferred",
+    });
+  }
+
+  const alternatives = eligible
     .slice(1, 4)
-    .filter((candidate) => candidate.score >= Math.max(0.05, top.score - 0.4))
-    .map((candidate) => recommendationFromScore(candidate));
+    .filter((candidate) =>
+      candidate.score >= top.score - 0.1 &&
+      candidate.activityCoverage >= 0.34 &&
+      familySimilarity(top.profile, candidate.profile, weights) >= 0.35,
+    )
+    .map((candidate) => recommendationFromScore(candidate, calibratedConfidence(candidate, candidate.score - (eligible[2]?.score ?? 0), true)))
+    .slice(0, 2);
+  const ambiguity = confidence >= 0.7 && margin >= 0.1 ? "low" : "medium";
 
   return RoleRecommendationResultSchema.parse({
-    recommendedRole: highAmbiguity ? null : recommendationFromScore(top, mediumAmbiguity ? Math.min(top.score, 0.69) : Math.max(top.score, 0.7)),
+    recommendedRole: recommendationFromScore(top, confidence),
     alternatives,
-    ambiguity: highAmbiguity ? "high" : mediumAmbiguity ? "medium" : "low",
-    clarificationNeeded: highAmbiguity,
-    clarificationQuestion: highAmbiguity ? buildClarificationQuestion(scored) : null,
+    ambiguity,
+    clarificationNeeded: false,
+    clarificationQuestion: null,
     roleSource: "inferred",
   });
 }

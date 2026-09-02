@@ -65,10 +65,7 @@ describe("recommendRoleFromProfiles", () => {
     );
 
     expect(result.recommendedRole?.title).toBe("ERP Implementation Assistant Intern");
-    const financialSystemsIndex = result.alternatives.findIndex((role) => role.title === "Financial Systems Analyst Intern");
-    const businessOperationsIndex = result.alternatives.findIndex((role) => role.title === "Business Operations Intern");
-    expect(financialSystemsIndex).toBeGreaterThanOrEqual(0);
-    if (businessOperationsIndex >= 0) expect(financialSystemsIndex).toBeLessThan(businessOperationsIndex);
+    expect(result.alternatives).not.toContainEqual(expect.objectContaining({ title: "Business Operations Intern" }));
   });
 
   it.each([

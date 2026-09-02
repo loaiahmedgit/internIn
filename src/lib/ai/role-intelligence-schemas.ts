@@ -15,13 +15,34 @@ export const WorkNeedProfileSchema = z.object({
   explicitRoleTitle: optionalText(160),
   problems: boundedTextArray(8, 240),
   activities: boundedTextArray(12, 180),
+  /**
+   * Open-ended work-domain concepts grounded in the employer's description.
+   * This intentionally is not an industry enum: new occupations and domains
+   * must remain representable without a deployment.
+   */
+  domainSignals: boundedTextArray(8, 160).default([]),
   systemsOrTools: boundedTextArray(12, 100),
   desiredOutcomes: boundedTextArray(8, 240),
   constraints: boundedTextArray(8, 240),
   activityClarity: z.enum(["clear", "ambiguous"]),
+  domainClarity: z.enum(["clear", "ambiguous"]).default("ambiguous"),
   seniorityIntent: optionalText(100),
 });
 export type WorkNeedProfile = z.infer<typeof WorkNeedProfileSchema>;
+
+/**
+ * Grounded activity evidence for retrieval. A model may preserve a clearly
+ * domain-bound problem and outcome while conservatively leaving `activities`
+ * empty; in that case the original problem/outcome text is safer than either
+ * inventing tasks or discarding the employer's evidence.
+ */
+export function workActivitySignals(need: WorkNeedProfile): string[] {
+  if (need.activities.length) return need.activities;
+  if (need.domainClarity === "clear" && need.problems.length && need.desiredOutcomes.length) {
+    return [...need.problems, ...need.desiredOutcomes];
+  }
+  return [];
+}
 
 export const RoleProfileSourceMappingSchema = z.object({
   source: z.enum(["onet", "esco", "internin_curated"]),

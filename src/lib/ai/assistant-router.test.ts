@@ -107,21 +107,23 @@ describe("normalizeAssistantRouterDecision", () => {
   });
 
   it("never asks for deliverables or work environment", () => {
-    expect(
-      normalizeAssistantRouterDecision(
-        {
-          action: "ask_clarifying_questions",
-          missingSlots: ["expected_deliverables", "work_environment", "responsibilities"],
-        },
-        "Employer: I need an intern.",
-      ).missingSlots,
-    ).toEqual(["responsibilities"]);
+    const result = normalizeAssistantRouterDecision(
+      {
+        action: "ask_clarifying_questions",
+        employerRoleTitle: "Web Developer Intern",
+        normalizedRole: "Web Developer Intern",
+        missingSlots: ["expected_deliverables", "work_environment", "responsibilities"],
+      },
+      "Employer: I need a Web Developer Intern.",
+    );
+    expect(result.missingSlots).toEqual(["responsibilities"]);
   });
 
   it("does not re-ask candidate level when the employer explicitly says it does not matter", () => {
     const result = normalizeAssistantRouterDecision(
       {
         action: "ask_clarifying_questions",
+        employerRoleTitle: "IT Support Intern",
         normalizedRole: "IT Support Intern",
         roleConfidence: "high",
         missingSlots: ["role_domain", "candidate_level"],

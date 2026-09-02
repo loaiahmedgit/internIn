@@ -89,10 +89,12 @@ describe("preserveStructuredEmployerAnswers", () => {
         explicitRoleTitle: null,
         problems: ["messy migration data"],
         activities: ["data cleansing", "data mapping", "migration validation"],
+        domainSignals: ["enterprise systems implementation"],
         systemsOrTools: ["Oracle ERP"],
         desiredOutcomes: ["fewer migration issues"],
         constraints: ["synthetic data only"],
         activityClarity: "clear",
+        domainClarity: "clear",
         seniorityIntent: "intern/junior",
       },
     );

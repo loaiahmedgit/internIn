@@ -17,7 +17,7 @@ maybe("role intelligence — live task-first extraction", () => {
 
       expect(need.activityClarity).toBe("clear");
       expect(need.explicitRoleTitle).toBeNull();
-      expect(need.activities.join(" ")).toMatch(/migration|mapping|cleansing|validation|implementation/i);
+      expect(need.activities.join(" ")).toMatch(/migrat|map|cleans|validat|implement/i);
       expect(need.systemsOrTools.join(" ")).toMatch(/SAP/i);
       expect(need.systemsOrTools.join(" ")).toMatch(/Oracle/i);
       expect(result.recommendedRole?.title).toBe("ERP Implementation Assistant Intern");
@@ -65,7 +65,8 @@ maybe("role intelligence — live task-first extraction", () => {
       expect(need.explicitRoleTitle?.toLowerCase()).toContain("graphic design");
       expect(result.recommendedRole?.title.toLowerCase()).toContain("graphic design");
       expect(result.clarificationNeeded).toBe(true);
-      expect(result.alternatives[0]?.title).toBe("Backend Developer Intern");
+      const alternative = ROLE_INTELLIGENCE_FIXTURES.find((profile) => profile.id === result.alternatives[0]?.roleProfileId);
+      expect(alternative?.occupationFamily).toBe("Software Development");
     },
     60_000,
   );

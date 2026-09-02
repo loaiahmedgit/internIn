@@ -1,22 +1,22 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { ROLE_INTELLIGENCE_FIXTURES } from "./role-intelligence-fixtures";
 import { recommendRoleFromProfiles } from "./role-intelligence";
-import type { RoleKnowledgeProfile, RoleRecommendationResult, WorkNeedProfile } from "./role-intelligence-schemas";
+import { workActivitySignals, type RoleKnowledgeProfile, type RoleRecommendationResult, type WorkNeedProfile } from "./role-intelligence-schemas";
 
-function retrievalQuery(need: WorkNeedProfile): string {
-  return [
-    ...need.activities,
-    ...need.systemsOrTools,
-    ...need.desiredOutcomes,
-    ...need.problems,
-    need.originalRequest,
-  ].join(" ");
+type EvidenceType = typeof schema.roleEvidenceTypeEnum.enumValues[number];
+
+function searchTerms(values: string[]): string | null {
+  const terms = [...new Set(
+    values
+      .flatMap((value) => value.toLocaleLowerCase("en").replace(/[^\p{L}\p{N}+#./-]+/gu, " ").split(/\s+/u))
+      .filter((term) => term.length > 1),
+  )];
+  return terms.length ? terms.map((term) => `"${term.replaceAll('"', "")}"`).join(" OR ") : null;
 }
 
 function valuesForType(
   rows: (typeof schema.roleProfileEvidence.$inferSelect)[],
-  evidenceType: typeof schema.roleEvidenceTypeEnum.enumValues[number],
+  evidenceType: EvidenceType,
 ): string[] {
   return rows
     .filter((row) => row.evidenceType === evidenceType)
@@ -24,48 +24,85 @@ function valuesForType(
     .map((row) => row.text);
 }
 
-/**
- * Retrieves a small task-matched candidate set from local Postgres. The
- * deterministic fixture fallback keeps development and zero-downtime deploys
- * working before the additive migration/seed has reached every environment.
- */
-export async function retrieveRoleProfiles(need: WorkNeedProfile, limit = 20): Promise<RoleKnowledgeProfile[]> {
+async function retrieveEvidenceProfileIds(types: EvidenceType[], values: string[], limit: number): Promise<string[]> {
+  const query = searchTerms(values);
+  if (!query) return [];
   const db = getDb();
-  const query = retrievalQuery(need).trim();
+  const fullTextQuery = sql`websearch_to_tsquery('english', ${query})`;
+  const rows = await db
+    .selectDistinct({ id: schema.roleProfileEvidence.roleProfileId })
+    .from(schema.roleProfileEvidence)
+    .innerJoin(schema.roleProfiles, eq(schema.roleProfileEvidence.roleProfileId, schema.roleProfiles.id))
+    .where(and(
+      eq(schema.roleProfiles.active, true),
+      inArray(schema.roleProfileEvidence.evidenceType, types),
+      sql`to_tsvector('english', ${schema.roleProfileEvidence.normalizedText}) @@ ${fullTextQuery}`,
+    ))
+    .limit(limit);
+  return rows.map((row) => row.id);
+}
 
-  try {
-    const fullTextQuery = sql`plainto_tsquery('english', ${query})`;
-    const rank = sql<number>`ts_rank_cd(to_tsvector('english', ${schema.roleProfileSearchDocuments.searchText}), ${fullTextQuery})`;
-    const rows = query
-      ? await db
-          .select({ profile: schema.roleProfiles, rank })
-          .from(schema.roleProfiles)
-          .innerJoin(
-            schema.roleProfileSearchDocuments,
-            eq(schema.roleProfileSearchDocuments.roleProfileId, schema.roleProfiles.id),
-          )
-          .where(and(eq(schema.roleProfiles.active, true), sql`to_tsvector('english', ${schema.roleProfileSearchDocuments.searchText}) @@ ${fullTextQuery}`))
-          .orderBy(desc(rank))
-          .limit(limit)
-      : await db
-          .select({ profile: schema.roleProfiles, rank: sql<number>`0` })
-          .from(schema.roleProfiles)
-          .where(eq(schema.roleProfiles.active, true))
-          .limit(limit);
+async function retrieveDomainProfileIds(values: string[], limit: number): Promise<string[]> {
+  const query = searchTerms(values);
+  if (!query) return [];
+  const db = getDb();
+  const fullTextQuery = sql`websearch_to_tsquery('english', ${query})`;
+  const rows = await db
+    .select({ id: schema.roleProfiles.id })
+    .from(schema.roleProfiles)
+    .where(and(
+      eq(schema.roleProfiles.active, true),
+      sql`to_tsvector('english', ${schema.roleProfiles.occupationFamily} || ' ' || ${schema.roleProfiles.description}) @@ ${fullTextQuery}`,
+    ))
+    .limit(limit);
+  return rows.map((row) => row.id);
+}
 
-    if (!rows.length) return ROLE_INTELLIGENCE_FIXTURES;
-    const ids = rows.map((row) => row.profile.id);
-    const [aliases, evidence, mappings] = await Promise.all([
-      db.select().from(schema.roleProfileAliases).where(inArray(schema.roleProfileAliases.roleProfileId, ids)),
-      db.select().from(schema.roleProfileEvidence).where(inArray(schema.roleProfileEvidence.roleProfileId, ids)),
-      db
-        .select({ mapping: schema.roleProfileSourceMappings, release: schema.roleSourceReleases })
-        .from(schema.roleProfileSourceMappings)
-        .innerJoin(schema.roleSourceReleases, eq(schema.roleProfileSourceMappings.sourceReleaseId, schema.roleSourceReleases.id))
-        .where(inArray(schema.roleProfileSourceMappings.roleProfileId, ids)),
-    ]);
+async function retrieveExplicitTitleProfileIds(explicitTitle: string | null | undefined, limit: number): Promise<string[]> {
+  const query = searchTerms(explicitTitle ? [explicitTitle] : []);
+  if (!query) return [];
+  const db = getDb();
+  const fullTextQuery = sql`websearch_to_tsquery('english', ${query})`;
+  const [profiles, aliases] = await Promise.all([
+    db
+      .select({ id: schema.roleProfiles.id })
+      .from(schema.roleProfiles)
+      .where(and(
+        eq(schema.roleProfiles.active, true),
+        sql`to_tsvector('english', ${schema.roleProfiles.canonicalTitle} || ' ' || coalesce(${schema.roleProfiles.internshipTitle}, '')) @@ ${fullTextQuery}`,
+      ))
+      .limit(limit),
+    db
+      .selectDistinct({ id: schema.roleProfileAliases.roleProfileId })
+      .from(schema.roleProfileAliases)
+      .innerJoin(schema.roleProfiles, eq(schema.roleProfileAliases.roleProfileId, schema.roleProfiles.id))
+      .where(and(
+        eq(schema.roleProfiles.active, true),
+        sql`to_tsvector('english', ${schema.roleProfileAliases.normalizedAlias}) @@ ${fullTextQuery}`,
+      ))
+      .limit(limit),
+  ]);
+  return [...profiles, ...aliases].map((row) => row.id);
+}
 
-    return rows.map(({ profile }) => {
+async function hydrateProfiles(ids: string[]): Promise<RoleKnowledgeProfile[]> {
+  if (!ids.length) return [];
+  const db = getDb();
+  const [profiles, aliases, evidence, mappings] = await Promise.all([
+    db.select().from(schema.roleProfiles).where(and(eq(schema.roleProfiles.active, true), inArray(schema.roleProfiles.id, ids))),
+    db.select().from(schema.roleProfileAliases).where(inArray(schema.roleProfileAliases.roleProfileId, ids)),
+    db.select().from(schema.roleProfileEvidence).where(inArray(schema.roleProfileEvidence.roleProfileId, ids)),
+    db
+      .select({ mapping: schema.roleProfileSourceMappings, release: schema.roleSourceReleases })
+      .from(schema.roleProfileSourceMappings)
+      .innerJoin(schema.roleSourceReleases, eq(schema.roleProfileSourceMappings.sourceReleaseId, schema.roleSourceReleases.id))
+      .where(inArray(schema.roleProfileSourceMappings.roleProfileId, ids)),
+  ]);
+
+  const order = new Map(ids.map((id, index) => [id, index]));
+  return profiles
+    .sort((left, right) => (order.get(left.id) ?? ids.length) - (order.get(right.id) ?? ids.length))
+    .map((profile) => {
       const profileEvidence = evidence.filter((row) => row.roleProfileId === profile.id);
       return {
         id: profile.stableKey,
@@ -94,12 +131,42 @@ export async function retrieveRoleProfiles(need: WorkNeedProfile, limit = 20): P
           })),
       } satisfies RoleKnowledgeProfile;
     });
+}
+
+/**
+ * Retrieves a recall-oriented union from distinct evidence channels. Final
+ * eligibility and confidence are decided by the channel-aware reranker; an
+ * empty or failed retrieval remains empty so the product can safely abstain.
+ */
+export async function retrieveRoleProfiles(need: WorkNeedProfile, limit = 24): Promise<RoleKnowledgeProfile[]> {
+  const perChannelLimit = Math.max(limit, 30);
+  try {
+    const [activityIds, domainEvidenceIds, domainProfileIds, toolIds, contextIds, explicitTitleIds] = await Promise.all([
+      retrieveEvidenceProfileIds(["task", "work_activity", "deliverable"], workActivitySignals(need), perChannelLimit),
+      retrieveEvidenceProfileIds(["knowledge", "skill", "work_environment"], need.domainSignals, perChannelLimit),
+      retrieveDomainProfileIds(need.domainSignals, perChannelLimit),
+      retrieveEvidenceProfileIds(["tool"], need.systemsOrTools, perChannelLimit),
+      retrieveEvidenceProfileIds(["description", "task", "work_activity"], [...need.problems, ...need.desiredOutcomes], perChannelLimit),
+      retrieveExplicitTitleProfileIds(need.explicitRoleTitle, perChannelLimit),
+    ]);
+
+    // Channel order is intentional: activity evidence controls recall first,
+    // while title retrieval participates only for an employer-named role.
+    const ids = [...new Set([
+      ...activityIds,
+      ...domainEvidenceIds,
+      ...domainProfileIds,
+      ...toolIds,
+      ...contextIds,
+      ...explicitTitleIds,
+    ])].slice(0, limit);
+    return hydrateProfiles(ids);
   } catch (error) {
-    // Additive rollouts can briefly run new code before the migration/seed.
-    // Falling back to the same version-controlled corpus is safe and keeps
-    // role discovery available; unexpected failures remain observable.
-    console.warn("[role-intelligence] local retrieval unavailable; using bundled profiles:", error instanceof Error ? error.message : error);
-    return ROLE_INTELLIGENCE_FIXTURES;
+    const cause = error instanceof Error && "cause" in error && error.cause instanceof Error
+      ? ` (${error.cause.message})`
+      : "";
+    console.warn("[role-intelligence] local evidence retrieval unavailable; abstaining:", `${error instanceof Error ? error.message : error}${cause}`);
+    return [];
   }
 }
 
