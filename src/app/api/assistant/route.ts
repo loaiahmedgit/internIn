@@ -11,6 +11,7 @@ import { extractWorkNeedProfile } from "@/lib/ai/work-need-extraction";
 import { recommendRoleFromKnowledgeBase } from "@/lib/ai/role-intelligence-repository";
 import { buildClarificationQuestions, resolveMissingSlots } from "@/lib/ai/clarification-engine";
 import { getRoleProfile } from "@/lib/ai/role-profiles";
+import { naturalizeClarificationQuestion } from "@/lib/ai/clarification-wording";
 import { attachDraftIdentity, buildEmployerContext, generateChallengeDraftObject } from "@/lib/ai/challenge-generation";
 import { saveChallengeDraftAction } from "@/lib/opportunities/challenge-draft-actions";
 import { createOpportunityFromChallengeDraftAction } from "@/lib/opportunities/opportunity-from-challenge-actions";
@@ -367,11 +368,13 @@ export async function POST(req: Request) {
           const recommendation = await recommendRoleFromKnowledgeBase(workNeed);
 
           if (recommendation.clarificationNeeded || !recommendation.recommendedRole) {
-            writePlainText(
-              writer,
-              `intro:${turnId}`,
-              recommendation.clarificationQuestion ?? "What will this person mainly be responsible for day to day?",
-            );
+            // Role Intelligence already decided WHICH two work scopes to
+            // contrast (untouched here); this only rephrases that decision
+            // into something a normal person would actually ask, never
+            // changing what's being asked or falling back to nothing.
+            const rawQuestion = recommendation.clarificationQuestion ?? "What will this person mainly be responsible for day to day?";
+            const naturalQuestion = await naturalizeClarificationQuestion(rawQuestion);
+            writePlainText(writer, `intro:${turnId}`, naturalQuestion);
             return;
           }
 
