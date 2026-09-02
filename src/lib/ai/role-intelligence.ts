@@ -293,23 +293,66 @@ function narrowActivityCluster(need: WorkNeedProfile): string[] {
 }
 
 /**
- * A domain signal genuinely broader than the narrow cluster — one whose
- * tokens are not already covered by it — for the "or also support
- * broader X" side of the contrast. A pure token-overlap check: it never
- * looks at what profession or industry is involved, only whether this
- * phrase adds information the narrow cluster doesn't already have.
+ * Overly formal verbs swapped for a plainer equivalent when they open a
+ * narrow-cluster phrase, purely because the meaning transfers unchanged —
+ * "audit the records" and "track the records" ask the same question. This
+ * is a verb-register map, not a profession map: it has no idea what
+ * domain the phrase is even about.
  */
-function broaderDomainSignal(need: WorkNeedProfile, narrow: string[]): string | null {
+const FORMAL_VERB_REPLACEMENTS: Record<string, string> = {
+  audit: "track", audits: "tracks", auditing: "tracking",
+  oversee: "manage", oversees: "manages", overseeing: "managing",
+  administer: "maintain", administers: "maintains", administering: "maintaining",
+  administrate: "maintain", administrates: "maintains", administrating: "maintaining",
+};
+
+function softenLeadingVerb(phrase: string): string {
+  const [firstWord, ...rest] = phrase.split(/\s+/u);
+  const replacement = FORMAL_VERB_REPLACEMENTS[firstWord];
+  return replacement ? [replacement, ...rest].join(" ") : phrase;
+}
+
+/** Generic organizational nouns a domain phrase might already end in —
+ * checked only so a suffix is never doubled ("pharmacy operations
+ * operations"), never to recognize a specific profession. */
+const DOMAIN_SUFFIX_WORDS = new Set(["operations", "operation", "work", "works", "support", "administration", "management", "implementation", "services", "responsibilities"]);
+
+function endsWithOrganizationalNoun(phrase: string): boolean {
+  // Raw word, not the stemmed tokens() output: stemming mangles words like
+  // "implementation" (-> "implementate"), which would never match the
+  // (deliberately unstemmed) suffix-word set below.
+  const words = phrase.toLocaleLowerCase("en").replace(/[^\p{L}\p{N}\s-]+/gu, " ").trim().split(/\s+/u);
+  const lastWord = words.at(-1);
+  return Boolean(lastWord && DOMAIN_SUFFIX_WORDS.has(lastWord));
+}
+
+/**
+ * The domain phrase for the "or also support broader X" side of the
+ * contrast — preferred over a fully generic "in this area" whenever a
+ * usable domain signal exists, per "if a reliable domain label exists,
+ * prefer broader {domain} operations/responsibilities". Two tiers, both
+ * pure token/vocabulary checks with no profession-specific casing:
+ *
+ * 1. A domain signal genuinely not already covered by the narrow
+ *    cluster's tokens — the strongest signal, used as-is.
+ * 2. Otherwise, the shortest available domain signal (a short phrase is
+ *    usually the broader category, e.g. "pharmacy operations" versus
+ *    "medication inventory"), with a generic "operations" suffix added
+ *    only if it doesn't already end in an organizational noun.
+ */
+function broaderDomainPhrase(need: WorkNeedProfile, narrow: string[]): string | null {
+  const signals = need.domainSignals.map(cleanPhrase).filter(Boolean);
+  if (!signals.length) return null;
+
   const narrowTokens = new Set(narrow.flatMap((phrase) => [...tokens(phrase)]));
-  return (
-    need.domainSignals
-      .map(cleanPhrase)
-      .filter(Boolean)
-      .find((signal) => {
-        const signalTokens = tokens(signal);
-        return signalTokens.size > 0 && ![...signalTokens].some((token) => narrowTokens.has(token));
-      }) ?? null
-  );
+  const distinct = signals.find((signal) => {
+    const signalTokens = tokens(signal);
+    return signalTokens.size > 0 && ![...signalTokens].some((token) => narrowTokens.has(token));
+  });
+  if (distinct) return distinct;
+
+  const shortest = [...signals].sort((left, right) => tokens(left).size - tokens(right).size)[0];
+  return endsWithOrganizationalNoun(shortest) ? shortest : `${shortest} operations`;
 }
 
 /**
@@ -319,15 +362,15 @@ function broaderDomainSignal(need: WorkNeedProfile, narrow: string[]): string | 
  * contrast — a specific known activity cluster versus a broader domain not
  * yet confirmed in scope — instead of restating the evidence as a
  * sentence and appending a generic question. Per-profession wording is
- * never hardcoded: only token overlap against the employer's own
- * extracted phrases decides the split.
+ * never hardcoded: only token overlap and a small verb-register map
+ * against the employer's own extracted phrases decide the wording.
  */
 function groundedFallbackQuestion(need: WorkNeedProfile): string {
   if (evidencePool(need).length < 2) return GENERIC_CLARIFICATION_QUESTION;
   const narrow = narrowActivityCluster(need);
   if (!narrow.length) return GENERIC_CLARIFICATION_QUESTION;
-  const narrowPhrase = sentenceList(narrow.map((phrase) => phrase.toLocaleLowerCase("en")));
-  const broader = broaderDomainSignal(need, narrow);
+  const narrowPhrase = sentenceList(narrow.map((phrase) => softenLeadingVerb(phrase.toLocaleLowerCase("en"))));
+  const broader = broaderDomainPhrase(need, narrow);
   return broader
     ? `Will they mainly ${narrowPhrase}, or will they also support broader ${broader}?`
     : `Will they mainly ${narrowPhrase}, or take on broader responsibilities in this area?`;

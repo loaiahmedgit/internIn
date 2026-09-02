@@ -215,4 +215,72 @@ describe("clarification quality after role-discovery abstention (held out)", () 
     expect(question.toLocaleLowerCase("en")).not.toContain("diagnos");
     expect(question.toLocaleLowerCase("en")).not.toContain("prescri");
   });
+
+  describe("wording quality", () => {
+    it.each([
+      {
+        domain: "pharmacy (formal verbs)",
+        workNeed: need({
+          activities: ["audit medication inventory records", "reconcile stock discrepancies", "track medication expiry dates"],
+          domainSignals: ["pharmacy operations"],
+        }),
+      },
+      {
+        domain: "logistics (formal verbs)",
+        workNeed: need({
+          activities: ["oversee warehouse compliance checks", "administer safety documentation"],
+          domainSignals: ["logistics compliance"],
+        }),
+      },
+      {
+        domain: "ERP/business systems",
+        workNeed: need({
+          problems: ["employee data needs cleaning before go-live"],
+          activities: ["map HR fields to Workday", "test the new system before go-live"],
+          domainSignals: ["Workday implementation", "HR systems"],
+        }),
+      },
+      {
+        domain: "IT support",
+        workNeed: need({
+          activities: ["reset employee passwords", "troubleshoot broken laptops"],
+          domainSignals: ["office IT support"],
+        }),
+      },
+    ])(
+      "prefers a domain-labeled broader phrase over generic 'in this area' wording for $domain, and never reintroduces a formal verb it should have softened",
+      ({ workNeed }) => {
+        const result = recommendRoleFromProfiles(workNeed, []);
+        const question = result.clarificationQuestion ?? "";
+
+        // A reliable domain signal exists in every case above, so the
+        // question must name it instead of falling back to the fully
+        // generic "responsibilities in this area" tail.
+        expect(question).not.toMatch(/responsibilities in this area/i);
+        expect(question).toMatch(/broader/i);
+        // Grounded: still traces back to the extracted domain vocabulary,
+        // not an invented one.
+        const lower = question.toLocaleLowerCase("en");
+        expect(workNeed.domainSignals.some((signal) => lower.includes(signal.toLocaleLowerCase("en").split(/\s+/u)[0]))).toBe(true);
+        // Verb-register map applies generally — it has no idea these are
+        // pharmacy/logistics activities, only that "audit"/"oversee"/
+        // "administer" have a plainer equivalent.
+        expect(question).not.toMatch(/\baudit(s|ing)?\b/i);
+        expect(question).not.toMatch(/\boversee(s|ing)?\b/i);
+        expect(question).not.toMatch(/\badminister(s|ing)?\b/i);
+      },
+    );
+
+    it("does not invent a suffix when the domain signal already reads as an organizational noun", () => {
+      const result = recommendRoleFromProfiles(
+        need({
+          activities: ["clean opportunity records", "track pipeline movement"],
+          domainSignals: ["sales operations and revenue process"],
+        }),
+        [],
+      );
+      const question = result.clarificationQuestion ?? "";
+      expect(question.toLocaleLowerCase("en")).not.toMatch(/operations operations|operations and revenue process operations/i);
+    });
+  });
 });
