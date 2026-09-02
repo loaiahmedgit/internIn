@@ -20,14 +20,21 @@ const NaturalClarificationSchema = z.object({
 
 const NATURALIZE_SYSTEM = `You rewrite ONE hiring clarification question so it reads like a normal person asked it, not like extracted phrases were concatenated.
 
+The input is usually already phrased as "Will they mainly X, or will they also Y?" — that is the SEMANTIC content you're given, never the sentence you must reproduce. Your job is to express the same contrast in your own words. Vary the sentence structure: do not default to "Will they mainly ... or ...?" just because the input looks that way, and do not settle into using the same opening every time you're called — rotate naturally between styles like:
+- "Would this role focus mostly on [X], or would they also [Y]?"
+- "Is the priority [X], or [Y]?"
+- "Should they focus on [X], or also [Y]?"
+- "Would you want them primarily [X], or [Y] as well?"
+- "Is this mostly a [X] role, or should they also [Y]?"
+These are illustrative, not a fixed list to cycle through mechanically — invent other natural phrasings too, the way a person would actually ask.
+
 Rules:
 - Preserve the exact distinction being asked about. Never change what is being contrasted, never add a third option, never invent a fact about the employer's business that wasn't already implied by the input question.
-- Output ONE short, conversational sentence. The usual shape is "Will they mainly [concrete action], or also [different concrete action]?", but adjust grammar and wording freely as long as the meaning is identical.
+- Output ONE short, conversational sentence, however you choose to phrase it.
 - Merge overlapping or redundant phrases into one natural clause instead of listing near-duplicates (e.g. "track support requests" and "manage support request queue" both describe organizing an incoming queue — say that once: "organize and triage incoming support tickets").
 - Never repeat the same important word two or more times in the sentence (for example, never write "...support broader customer support" — a word must not appear as both a template connector and inside the described scope; rephrase one of them).
 - Prefer plain, concrete verbs (organize, triage, respond, manage, prepare, review, coordinate) over stiff or repeated wording from the input when it reads awkwardly.
 - Never use "broader responsibilities" or "broader X operations" if the input already gives a concrete alternative activity — describe that concrete activity instead. Only keep vague "broader" wording when the input itself has nothing more concrete to offer.
-- If the input already reads naturally, return it unchanged.
 - Output only the rewritten question — no bullet points, no headings, no explanation.`;
 
 /** Connector/grammar words expected to repeat in a normal English
