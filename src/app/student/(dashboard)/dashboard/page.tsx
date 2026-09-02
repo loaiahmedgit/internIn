@@ -199,7 +199,11 @@ export default async function StudentDashboardPage() {
 
   return (
     <div className="mx-auto max-w-screen-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
-      <StudentPageHeader eyebrow="Dashboard" title={`Welcome back, ${user.fullName.split(" ")[0]}.`} />
+      <StudentPageHeader
+        eyebrow="For You"
+        title="For You"
+        description="Internships matched to your interests and experience."
+      />
 
       <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-navy/10 bg-navy/10 sm:grid-cols-4">
         <StatCell
@@ -285,6 +289,7 @@ export default async function StudentDashboardPage() {
                     skills={o.skills}
                     saved={savedIds.has(o.id)}
                     estimatedMinutes={publishedChallengeInfo.get(o.id)?.estimatedMinutes}
+                    matchScore={o.matchScore}
                     challengeState={getChallengeState({
                       challengePublished: publishedChallengeInfo.has(o.id),
                       application: applicationByOpportunityId.get(o.id),

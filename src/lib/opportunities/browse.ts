@@ -18,6 +18,8 @@ export async function getOpportunitiesWithMatch(studentUserId?: string) {
       duration: schema.opportunities.duration,
       hoursPerWeek: schema.opportunities.hoursPerWeek,
       location: schema.opportunities.location,
+      workMode: schema.opportunities.workMode,
+      applicationDeadline: schema.opportunities.applicationDeadline,
       skills: schema.opportunities.skills,
       companyName: schema.companies.name,
       companyVerified: schema.companies.verified,

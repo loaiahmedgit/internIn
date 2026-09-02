@@ -22,13 +22,16 @@ export type IconName =
 
 export type NavItem = { href: string; label: string; icon: IconName };
 
+// Discovery/career nav — deliberately 4 items (For You / Explore /
+// Applications / Profile), not the old 7-item scheme. Challenges fold into
+// the application flow, Internships becomes a separate post-hire workspace
+// (reached from For You / Applications once an offer is accepted, not a
+// permanent nav item here), and Verified Experience becomes a Profile
+// section — see the product-phase audit for the full reasoning.
 export const STUDENT_NAV_ITEMS: NavItem[] = [
-  { href: "/student/dashboard", label: "Home", icon: "home" },
-  { href: "/student/opportunities", label: "Opportunities", icon: "compass" },
+  { href: "/student/dashboard", label: "For You", icon: "sparkles" },
+  { href: "/student/opportunities", label: "Explore", icon: "compass" },
   { href: "/student/applications", label: "Applications", icon: "clipboard-list" },
-  { href: "/student/challenges", label: "Challenges", icon: "zap" },
-  { href: "/student/internships", label: "Internships", icon: "building" },
-  { href: "/student/experience", label: "Verified Experience", icon: "badge-check" },
   { href: "/student/profile", label: "Profile", icon: "user" },
 ];
 

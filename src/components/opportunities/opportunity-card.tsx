@@ -1,7 +1,20 @@
 import Link from "next/link";
-import { BadgeCheck, Zap, ArrowRight } from "lucide-react";
+import { BadgeCheck, Zap, ArrowRight, CalendarClock } from "lucide-react";
 import { SaveButton } from "@/components/opportunities/save-button";
 import type { ChallengeState } from "@/lib/opportunities/challenge-state";
+import { matchTier } from "@/lib/matching";
+import { formatDeadline } from "@/lib/format-date";
+
+const WORK_MODE_LABEL: Record<"remote" | "onsite" | "hybrid", string> = {
+  remote: "Remote",
+  onsite: "On-site",
+  hybrid: "Hybrid",
+};
+
+const MATCH_TIER_LABEL: Record<"strong" | "good", string> = {
+  strong: "Strong match",
+  good: "Good match",
+};
 
 function CompanyAvatar({ name }: { name: string }) {
   return (
@@ -85,6 +98,11 @@ export interface OpportunityCardData {
   duration: string;
   hoursPerWeek: number;
   location: string;
+  /** Optional: only Explore/For You currently select these — a card still
+   * renders correctly without them (e.g. from the Challenges page's
+   * narrower query), just omitting the mode/deadline line. */
+  workMode?: "remote" | "onsite" | "hybrid" | null;
+  applicationDeadline?: Date | null;
 }
 
 export function OpportunityCard({
@@ -93,15 +111,21 @@ export function OpportunityCard({
   saved,
   challengeState,
   estimatedMinutes,
+  matchScore,
 }: {
   opportunity: OpportunityCardData;
   skills: string[];
   saved: boolean;
   challengeState: ChallengeState;
   estimatedMinutes?: number;
+  /** Skill/interest overlap against the opportunity, 0-100 — rendered as a
+   * qualitative "Strong match"/"Good match" cue only, never the raw number
+   * (a percentage reads as a fake hiring-probability claim). */
+  matchScore?: number;
 }) {
   const challengeRequired = challengeState.kind !== "unavailable";
   const status = statusLine(challengeState);
+  const tier = typeof matchScore === "number" ? matchTier(matchScore) : null;
 
   return (
     <div className="rounded-xl border border-navy/10 bg-white p-6">
@@ -123,17 +147,37 @@ export function OpportunityCard({
             </Link>
           </div>
         </div>
-        <SaveButton opportunityId={opportunity.id} initialSaved={saved} />
+        <div className="flex shrink-0 items-center gap-2">
+          {tier && (
+            <span className="rounded-full bg-teal/10 px-2 py-0.5 text-xs font-medium text-teal-ink">
+              {MATCH_TIER_LABEL[tier]}
+            </span>
+          )}
+          <SaveButton opportunityId={opportunity.id} initialSaved={saved} />
+        </div>
       </div>
 
       {opportunity.description && <p className="mt-3 line-clamp-2 text-sm text-navy/60">{teaser(opportunity.description)}</p>}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-navy/60">
+        <span>{opportunity.location}</span>
+        {opportunity.workMode && (
+          <>
+            <span className="text-navy/25" aria-hidden="true">·</span>
+            <span>{WORK_MODE_LABEL[opportunity.workMode]}</span>
+          </>
+        )}
+        <span className="text-navy/25" aria-hidden="true">·</span>
         <span>{opportunity.duration}</span>
         <span className="text-navy/25" aria-hidden="true">·</span>
         <span>{opportunity.hoursPerWeek}h/week</span>
-        <span className="text-navy/25" aria-hidden="true">·</span>
-        <span>{opportunity.location}</span>
+        {opportunity.applicationDeadline && (
+          <span className="flex items-center gap-1">
+            <span className="text-navy/25" aria-hidden="true">·</span>
+            <CalendarClock className="size-3.5" aria-hidden="true" />
+            Deadline {formatDeadline(opportunity.applicationDeadline)}
+          </span>
+        )}
       </div>
 
       {skills.length > 0 && (

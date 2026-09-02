@@ -68,8 +68,7 @@ export default async function StudentOpportunitiesPage({
     }
     if (location && o.location !== location) return false;
     if (duration && o.duration !== duration) return false;
-    if (workMode === "remote" && o.location.trim().toLowerCase() !== "remote") return false;
-    if (workMode === "onsite" && o.location.trim().toLowerCase() === "remote") return false;
+    if (workMode && o.workMode !== workMode) return false;
     if (savedOnly && !savedIds.has(o.id)) return false;
     return true;
   });
@@ -78,7 +77,7 @@ export default async function StudentOpportunitiesPage({
 
   return (
     <div className="@container mx-auto max-w-screen-2xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
-      <StudentPageHeader eyebrow="Opportunities" title="Prove what you can do." />
+      <StudentPageHeader eyebrow="Explore" title="Explore internships" />
 
       <form method="get" className="mt-8 space-y-3">
         <label htmlFor="opportunity-search" className="sr-only">
@@ -138,8 +137,9 @@ export default async function StudentOpportunitiesPage({
             className="rounded-lg border border-navy/15 bg-white px-3 py-2 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
           >
             <option value="">Any work mode</option>
-            <option value="remote">Remote</option>
             <option value="onsite">On-site</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="remote">Remote</option>
           </select>
 
           <label className="col-span-2 flex items-center gap-2 text-sm text-navy/70 sm:col-span-1">
@@ -192,6 +192,7 @@ export default async function StudentOpportunitiesPage({
                 skills={o.skills}
                 saved={savedIds.has(o.id)}
                 estimatedMinutes={publishedChallengeInfo.get(o.id)?.estimatedMinutes}
+                matchScore={o.matchScore}
                 challengeState={getChallengeState({
                   challengePublished: publishedChallengeInfo.has(o.id),
                   application,

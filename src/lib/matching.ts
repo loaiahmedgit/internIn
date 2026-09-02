@@ -18,3 +18,14 @@ export function computeMatchScore(
   const matched = opportunitySkills.filter((skill) => studentTerms.has(skill.trim().toLowerCase())).length;
   return Math.round((matched / opportunitySkills.length) * 100);
 }
+
+/**
+ * A qualitative compatibility cue only — never the raw percentage. Showing
+ * "87%" reads as a fake success/hiring probability; "Strong match" /
+ * "Good match" communicates the same signal without that false precision.
+ */
+export function matchTier(score: number): "strong" | "good" | null {
+  if (score >= 70) return "strong";
+  if (score >= 40) return "good";
+  return null;
+}
