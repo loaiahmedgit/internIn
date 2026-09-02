@@ -356,7 +356,14 @@ export function AssistantWorkspace({
           positioned layer with its own margin from the viewport edge. No
           justify-end/justify-between anywhere in this structure. */}
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="mx-auto w-full max-w-6xl px-6 pt-12 pb-8 sm:px-10 lg:px-12">
+        {/* pb-28, not pb-8: the composer is a true flex sibling below this
+            (never overlapping via position), but the LAST message still
+            needs real clearance past the visible scroll viewport's bottom
+            edge — otherwise "scrolled to bottom" leaves a tall card's own
+            action row flush against that edge, and ConversationScrollButton
+            (absolute bottom-4 within this same viewport) lands directly on
+            top of it instead of floating in clear space above the composer. */}
+        <ConversationContent className="mx-auto w-full max-w-6xl px-6 pt-12 pb-28 sm:px-10 lg:px-12">
           {/* The wide max-w-6xl above is the canvas ceiling for a future
               rich/wide result component to render as a sibling of this
               column. Ordinary messages — including the user bubble — live

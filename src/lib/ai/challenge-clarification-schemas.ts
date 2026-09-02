@@ -18,6 +18,19 @@ import { z } from "zod";
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 const optionalFlag = () => z.boolean().nullable().optional();
 
+/** Real, reproduced quirk of this model: a structured field's value
+ * sometimes comes back with a leading "Label: " remnant stripped down to
+ * just the punctuation (": Frontend Bug Fix...", "- Junior Web
+ * Developer") — the model echoing its own field-label formatting into the
+ * value. `.trim()` alone doesn't touch it (it's not whitespace). This is
+ * generated-text normalization at the schema boundary, not a rendering
+ * hack — every consumer of the validated value sees the clean string;
+ * there is nothing left for a component or CSS to "hide". */
+function stripLabelArtifact(value: string): string {
+  return value.replace(/^[:\-–—]\s*/, "");
+}
+const labeledText = (min: number, max: number) => z.string().trim().min(min).max(max).transform(stripLabelArtifact);
+
 export const ClarificationChoiceSchema = z.object({
   value: z.string().trim().min(1).max(60),
   label: z.string().trim().min(1).max(120),
@@ -179,9 +192,9 @@ export const AI_USAGE_MODE_LABEL: Record<ChallengeAiUsagePolicyMode, string> = {
  * otherwise-identical schema/prompt). Every other optional value here is a
  * primitive or an array, which never showed this failure. */
 export const ChallengeDraftGeneratedSchema = z.object({
-  role: z.string().trim().min(2).max(160),
-  title: z.string().trim().min(2).max(180),
-  scenario: z.string().trim().min(20).max(3000),
+  role: labeledText(2, 160),
+  title: labeledText(2, 180),
+  scenario: labeledText(20, 3000),
   skills: z.array(z.string().trim().min(1).max(80)).min(1).max(10),
   tasks: z.array(GeneratedTaskSchema).min(1).max(10),
   // `.default([])`, not a bare required array: the model omitting a

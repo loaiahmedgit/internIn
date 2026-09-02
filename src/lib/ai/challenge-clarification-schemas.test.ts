@@ -81,6 +81,26 @@ describe("ChallengeDraftGeneratedSchema — the shape the model actually outputs
     const withOracle = { ...generatedDraft(), scenario: `${generatedDraft().scenario} The company uses an Oracle database.` };
     expect(() => ChallengeDraftGeneratedSchema.parse(withOracle)).not.toThrow();
   });
+
+  it("strips a leading label-artifact colon/dash from title/role/scenario — the real 'stray \":\" before every field' bug: the model's own prompt starts each context line with 'Role: ...', and it sometimes echoes just the punctuation back into the generated value", () => {
+    const draft = generatedDraft();
+    const result = ChallengeDraftGeneratedSchema.parse({
+      ...draft,
+      title: ": Frontend Bug Fix & Feature Implementation Challenge",
+      role: ": Junior Web Developer",
+      scenario: ": The candidate is handed a small web app with a few known bugs to fix.",
+    });
+    expect(result.title).toBe("Frontend Bug Fix & Feature Implementation Challenge");
+    expect(result.role).toBe("Junior Web Developer");
+    expect(result.scenario).toBe("The candidate is handed a small web app with a few known bugs to fix.");
+  });
+
+  it("also strips a leading dash artifact, and leaves a clean value untouched", () => {
+    const draft = generatedDraft();
+    const result = ChallengeDraftGeneratedSchema.parse({ ...draft, role: "- Junior Web Developer", title: "Clean Title Already" });
+    expect(result.role).toBe("Junior Web Developer");
+    expect(result.title).toBe("Clean Title Already");
+  });
 });
 
 describe("ChallengeDraftSchema — the full, id-carrying app-facing shape", () => {
