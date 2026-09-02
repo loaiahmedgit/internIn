@@ -71,6 +71,41 @@ export function formatQuestionnaireAnswers(answers: QuestionnaireAnswer[]): stri
   return answers.map((a) => `- ${a.prompt} — ${a.answer ?? "(not specified — use your best professional judgment)"}`).join("\n");
 }
 
+/** Applies lossless Questionnaire selections after the model extracts the
+ * free-form opening request. Structured UI answers are the source of truth:
+ * a selected technology or responsibility must never be renamed, dropped,
+ * or expanded by a second model pass. */
+export function preserveStructuredEmployerAnswers(
+  extracted: EmployerContext,
+  answers: QuestionnaireAnswer[] | null,
+  roleHint?: string,
+): EmployerContext {
+  const selected = new Map(
+    (answers ?? [])
+      .filter((answer) => answer.slot && (answer.values?.length || answer.answer))
+      .map((answer) => [
+        answer.slot!,
+        answer.values?.length ? answer.values : answer.answer ? [answer.answer] : [],
+      ]),
+  );
+
+  const extraSlots = ["work_environment", "expected_deliverables", "access_level", "special_company_context"] as const;
+  const structuredAdditional = extraSlots
+    .flatMap((slot) => selected.get(slot) ?? [])
+    .filter(Boolean)
+    .join("; ");
+
+  return EmployerContextSchema.parse({
+    ...extracted,
+    role: roleHint?.trim() || extracted.role,
+    level: selected.get("candidate_level")?.[0] ?? extracted.level,
+    responsibilities: selected.get("responsibilities") ?? extracted.responsibilities,
+    tools: selected.get("tools_technologies") ?? extracted.tools,
+    restrictions: selected.get("restrictions") ?? extracted.restrictions,
+    additionalContext: structuredAdditional || extracted.additionalContext,
+  });
+}
+
 const CONTEXT_TIMEOUT_MS = 30_000;
 const CONTEXT_ATTEMPTS = [{}, {}] as const;
 
@@ -81,8 +116,13 @@ const CONTEXT_ATTEMPTS = [{}, {}] as const;
  * "Oracle" can't quietly drift into an unrelated "Oracle Reporting"
  * challenge at generation time.
  */
-export async function buildEmployerContext(params: { originalRequest: string; transcript: string; answers: QuestionnaireAnswer[] | null }): Promise<EmployerContext> {
-  const { originalRequest, transcript, answers } = params;
+export async function buildEmployerContext(params: {
+  originalRequest: string;
+  transcript: string;
+  answers: QuestionnaireAnswer[] | null;
+  roleHint?: string;
+}): Promise<EmployerContext> {
+  const { originalRequest, transcript, answers, roleHint } = params;
   const answersBlock = answers?.length ? `\n\nThe employer's answers to clarification questions:\n${formatQuestionnaireAnswers(answers)}` : "";
   return withGenerateRetries("buildEmployerContext", CONTEXT_ATTEMPTS, async () => {
     const { object } = await generateObject({
@@ -92,7 +132,7 @@ export async function buildEmployerContext(params: { originalRequest: string; tr
       prompt: `Original request: ${originalRequest}${answersBlock}\n\nFull conversation:\n${transcript}`,
       abortSignal: AbortSignal.timeout(CONTEXT_TIMEOUT_MS),
     });
-    return object;
+    return preserveStructuredEmployerAnswers(object, answers, roleHint);
   });
 }
 
@@ -156,7 +196,7 @@ export async function generateChallengeDraftObject(params: {
   const { context, existingDraft, revisionInstruction } = params;
   const basePrompt = existingDraft
     ? `${contextBlockFrom(context)}\n\nCurrent draft (JSON):\n${JSON.stringify(existingDraft)}\n\nThe employer's revision instruction: ${revisionInstruction}\n\nReturn the FULL updated value for your part (not a diff), reusing everything the employer didn't ask to change.`
-    : `${contextBlockFrom(context)}\n\nDesign a new challenge draft for this role.`;
+    : `${contextBlockFrom(context)}\n\nDesign a new challenge draft for this role. Treat the listed responsibilities and tools as the complete requested scope and preserve their wording.`;
 
   const [core, details] = await Promise.all([
     withGenerateRetries("generateChallengeDraftObject:core", PART_ATTEMPTS, async (attempt) => {
@@ -186,7 +226,18 @@ export async function generateChallengeDraftObject(params: {
   ]);
 
   return enforceChallengeDurationPolicy(
-    { ...core, rubric: normalizeRubricWeights(details.rubric), tasks: details.tasks, materials: details.materials },
+    {
+      ...core,
+      // Structured selections win over generated restatements. This keeps
+      // React as React and TypeScript as TypeScript all the way into the
+      // attached challenge instead of allowing a model synonym or extra
+      // technology to change what the employer chose.
+      role: context.role,
+      skills: context.tools.length ? context.tools : core.skills,
+      rubric: normalizeRubricWeights(details.rubric),
+      tasks: details.tasks,
+      materials: details.materials,
+    },
     context,
   );
 }

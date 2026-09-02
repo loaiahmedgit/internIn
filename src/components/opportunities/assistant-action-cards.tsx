@@ -21,12 +21,13 @@ export function AssistantActionOfferCard({
   disabled: boolean;
   onChoose: (choice: ActionOfferChoice) => void;
 }) {
+  // A click is transient workflow state, not a durable transcript event.
+  // The next assistant message owns the real pending indicator and then
+  // replaces it with the completed internship card.
+  if (selected === "create_internship_draft") return null;
+
   if (selected) {
-    return (
-      <CompletedAction
-        label={selected === "create_internship_draft" ? "Internship draft requested" : "Challenge draft requested"}
-      />
-    );
+    return <CompletedAction label="Challenge draft requested" />;
   }
 
   return (
@@ -101,10 +102,10 @@ export function AssistantInternshipChoiceCard({
 
 export function AssistantInternshipCreatedCard({ data }: { data: InternshipCreatedData }) {
   return (
-    <Card size="sm" className="not-typeset mt-4 border-primary/20 bg-primary/5 shadow-none">
-      <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+    <Card size="sm" className="not-typeset mt-4 border-border bg-card shadow-none">
+      <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-8 shrink-0 items-center justify-center text-primary">
             <FileCheck2 className="size-4" aria-hidden="true" />
           </span>
           <div className="min-w-0">
@@ -114,7 +115,7 @@ export function AssistantInternshipCreatedCard({ data }: { data: InternshipCreat
         </div>
         <Link
           href={`/company/opportunities/${data.opportunityId}/setup`}
-          className={cn(buttonVariants({ size: "sm" }), "w-full sm:w-auto")}
+          className={cn(buttonVariants({ size: "sm" }), "w-full shrink-0 sm:w-auto")}
         >
           Review internship draft
         </Link>

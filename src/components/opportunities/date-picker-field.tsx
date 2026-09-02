@@ -20,6 +20,7 @@ export function DatePickerField({
   onChange,
   minDate,
   placeholder = "Pick a date",
+  ariaLabel = "Choose date",
 }: {
   value: Date | null;
   onChange: (date: Date | null) => void;
@@ -27,12 +28,14 @@ export function DatePickerField({
    * dates" and "start date must be after the deadline". */
   minDate?: Date;
   placeholder?: string;
+  ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
+        aria-label={ariaLabel}
         className={cn(buttonVariants({ variant: "outline" }), "w-full justify-start gap-1.5 font-normal", !value && "text-muted-foreground")}
       >
         <CalendarIcon className="size-3.5 shrink-0" aria-hidden="true" />

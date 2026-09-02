@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { attachDraftIdentity, buildDesignSummary, formatQuestionnaireAnswers, normalizeRubricWeights } from "./challenge-generation";
-import { ChallengeDraftGeneratedSchema, ChallengeDraftSchema, type ChallengeDraft, type ChallengeDraftGenerated } from "./challenge-clarification-schemas";
+import { attachDraftIdentity, buildDesignSummary, formatQuestionnaireAnswers, normalizeRubricWeights, preserveStructuredEmployerAnswers } from "./challenge-generation";
+import { ChallengeDraftGeneratedSchema, ChallengeDraftSchema, type ChallengeDraft, type ChallengeDraftGenerated, type EmployerContext } from "./challenge-clarification-schemas";
 import { mapChallengeDraftToChallenge } from "@/lib/opportunities/challenge-draft-mapping";
 import { ChallengeSchema } from "@/lib/ai/schemas";
 import type { QuestionnaireAnswer } from "./assistant-messages";
@@ -41,6 +41,34 @@ describe("formatQuestionnaireAnswers", () => {
       { prompt: "Level?", answer: null },
     ];
     expect(formatQuestionnaireAnswers(answers).split("\n")).toHaveLength(2);
+  });
+});
+
+describe("preserveStructuredEmployerAnswers", () => {
+  it("keeps the employer's selected responsibilities, level, and technologies exactly", () => {
+    const extracted: EmployerContext = {
+      originalRequest: "I need a web developer intern",
+      role: "Web Developer",
+      level: "Junior",
+      responsibilities: ["Generic web work"],
+      tools: ["JavaScript"],
+      restrictions: [],
+      additionalContext: null,
+    };
+    const result = preserveStructuredEmployerAnswers(
+      extracted,
+      [
+        { prompt: "Responsibilities?", slot: "responsibilities", answer: "Frontend development, Backend development, Full-stack feature work", values: ["Frontend development", "Backend development", "Full-stack feature work"] },
+        { prompt: "Candidate level?", slot: "candidate_level", answer: "Recent graduate", values: ["Recent graduate"] },
+        { prompt: "Technologies?", slot: "tools_technologies", answer: "React, HTML/CSS, TypeScript, Node.js", values: ["React", "HTML/CSS", "TypeScript", "Node.js"] },
+      ],
+      "Web Developer Intern",
+    );
+
+    expect(result.role).toBe("Web Developer Intern");
+    expect(result.level).toBe("Recent graduate");
+    expect(result.responsibilities).toEqual(["Frontend development", "Backend development", "Full-stack feature work"]);
+    expect(result.tools).toEqual(["React", "HTML/CSS", "TypeScript", "Node.js"]);
   });
 });
 

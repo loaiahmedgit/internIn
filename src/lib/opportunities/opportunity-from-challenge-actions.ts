@@ -5,7 +5,12 @@ import { eq, and, inArray, desc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { ChallengeSchema, type Challenge } from "@/lib/ai";
-import { ChallengeDraftSchema, type ChallengeDraft } from "@/lib/ai/challenge-clarification-schemas";
+import {
+  ChallengeDraftSchema,
+  EmployerContextSchema,
+  type ChallengeDraft,
+  type EmployerContext,
+} from "@/lib/ai/challenge-clarification-schemas";
 import { saveChallengeVersionAction, saveInternshipAction, publishOpportunityAction, type InternshipFormInput } from "@/lib/opportunities/actions";
 import { saveChallengeDraftAction } from "@/lib/opportunities/challenge-draft-actions";
 import { generateOpportunityFromChallenge } from "@/lib/ai/opportunity-from-challenge";
@@ -15,16 +20,20 @@ const IdSchema = z.string().uuid();
 
 /**
  * The "Create internship from this draft" entry point. Generates real
- * posting copy from the ALREADY-APPROVED ChallengeDraft (one small model
- * call — see generateOpportunityFromChallenge), saves it as a normal draft
+ * posting copy from the ALREADY-APPROVED ChallengeDraft and the employer's
+ * structured context, saves it as a normal draft
  * opportunity through the same saveInternshipAction every manual save uses,
  * then attaches the challenge via the existing saveChallengeDraftAction.
  * Never re-runs the assistant router, never re-asks clarification
  * questions, never generates a second challenge draft.
  */
-export async function createOpportunityFromChallengeDraftAction(draft: ChallengeDraft): Promise<{ opportunityId: string }> {
+export async function createOpportunityFromChallengeDraftAction(
+  draft: ChallengeDraft,
+  employerContext?: EmployerContext,
+): Promise<{ opportunityId: string; role: string }> {
   const validatedDraft = ChallengeDraftSchema.parse(draft);
-  const generated = await generateOpportunityFromChallenge(validatedDraft);
+  const validatedContext = employerContext ? EmployerContextSchema.parse(employerContext) : undefined;
+  const generated = await generateOpportunityFromChallenge(validatedDraft, validatedContext);
 
   const form: InternshipFormInput = {
     role: generated.title,
@@ -48,7 +57,7 @@ export async function createOpportunityFromChallengeDraftAction(draft: Challenge
 
   const opportunityId = await saveInternshipAction({ publish: false, form });
   await saveChallengeDraftAction(opportunityId, validatedDraft);
-  return { opportunityId };
+  return { opportunityId, role: generated.title };
 }
 
 const MissingDetailsSchema = z.object({
@@ -59,6 +68,25 @@ const MissingDetailsSchema = z.object({
   applicationDeadline: z.coerce.date().nullable(),
   startDate: z.coerce.date().nullable(),
   slots: z.number().int().min(1).max(100),
+}).superRefine((details, ctx) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (!details.workMode) {
+    ctx.addIssue({ code: "custom", path: ["workMode"], message: "Select a work mode." });
+  }
+  if (!details.applicationDeadline) {
+    ctx.addIssue({ code: "custom", path: ["applicationDeadline"], message: "Choose an application deadline." });
+  } else if (details.applicationDeadline < today) {
+    ctx.addIssue({ code: "custom", path: ["applicationDeadline"], message: "The application deadline cannot be in the past." });
+  }
+  if (!details.startDate) {
+    ctx.addIssue({ code: "custom", path: ["startDate"], message: "Choose a start date." });
+  } else if (details.startDate < today) {
+    ctx.addIssue({ code: "custom", path: ["startDate"], message: "The start date cannot be in the past." });
+  }
+  if (details.applicationDeadline && details.startDate && details.applicationDeadline >= details.startDate) {
+    ctx.addIssue({ code: "custom", path: ["startDate"], message: "The start date must be after the application deadline." });
+  }
 });
 export type MissingOpportunityDetails = z.infer<typeof MissingDetailsSchema>;
 

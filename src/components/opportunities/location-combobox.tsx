@@ -43,10 +43,12 @@ export function LocationCombobox({
   value,
   onChange,
   placeholder = "Search a city…",
+  ariaLabel = "Location",
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -56,6 +58,7 @@ export function LocationCombobox({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
+        aria-label={ariaLabel}
         className={cn(buttonVariants({ variant: "outline" }), "w-full justify-between font-normal")}
       >
         <span className={cn("flex min-w-0 items-center gap-1.5", !value && "text-muted-foreground")}>

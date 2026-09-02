@@ -28,7 +28,7 @@ import {
   latestInternshipEditConfirmation,
   transcriptOf,
 } from "@/lib/ai/assistant-conversation";
-import type { AssistantUIMessage } from "@/lib/ai/assistant-messages";
+import type { AssistantUIMessage, QuestionnaireAnswer } from "@/lib/ai/assistant-messages";
 import type { ChallengeDraft, EmployerContext } from "@/lib/ai/challenge-clarification-schemas";
 
 // Generous, not arbitrary: generateChallengeDraftObject makes up to 3
@@ -69,15 +69,40 @@ function writePlainText(writer: UIMessageStreamWriter<AssistantUIMessage>, id: s
  */
 async function runDraftChallenge(
   writer: UIMessageStreamWriter<AssistantUIMessage>,
-  params: { requestId: string; t0: number; turnId: string; originalRequest: string; transcript: string; existingDraft: ChallengeDraft | null; revisionInstruction?: string; announce?: boolean },
-): Promise<ChallengeDraft | null> {
-  const { requestId, t0, turnId, originalRequest, transcript, existingDraft, revisionInstruction, announce = true } = params;
+  params: {
+    requestId: string;
+    t0: number;
+    turnId: string;
+    originalRequest: string;
+    transcript: string;
+    existingDraft: ChallengeDraft | null;
+    revisionInstruction?: string;
+    announce?: boolean;
+    answers?: QuestionnaireAnswer[];
+    roleHint?: string;
+    progressLabel?: string;
+  },
+): Promise<{ draft: ChallengeDraft; context: EmployerContext } | null> {
+  const {
+    requestId,
+    t0,
+    turnId,
+    originalRequest,
+    transcript,
+    existingDraft,
+    revisionInstruction,
+    announce = true,
+    answers,
+    roleHint,
+    progressLabel = "Designing your challenge…",
+  } = params;
   const generationId = crypto.randomUUID();
   console.log(`[assistant] requestId=${requestId} generationId=${generationId} trigger=draft_challenge at +${Date.now() - t0}ms`);
-  writer.write({ type: "data-progress", id: "progress", data: { label: "Designing your challenge…" } });
+  writer.write({ type: "data-progress", id: "progress", data: { label: progressLabel } });
   let draft: ChallengeDraft;
+  let context: EmployerContext;
   try {
-    const context = await buildEmployerContext({ originalRequest, transcript, answers: null });
+    context = await buildEmployerContext({ originalRequest, transcript, answers: answers ?? null, roleHint });
     const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction });
     draft = attachDraftIdentity(generated, existingDraft);
   } catch (error) {
@@ -91,7 +116,7 @@ async function runDraftChallenge(
     writer.write({ type: "data-challengeDraft", id: `challengeDraft:${turnId}`, data: draft });
     writePlainText(writer, `intro:${turnId}`, "Challenge draft ready\n\nHere's a draft challenge based on your request.");
   }
-  return draft;
+  return { draft, context };
 }
 
 /**
@@ -102,17 +127,33 @@ async function runDraftChallenge(
  * intermediate "here's a bare Challenge Draft, now click through twice"
  * detour for this entry point.
  */
-async function runCreateInternshipDraft(writer: UIMessageStreamWriter<AssistantUIMessage>, params: { requestId: string; t0: number; turnId: string; originalRequest: string; transcript: string }) {
+async function runCreateInternshipDraft(
+  writer: UIMessageStreamWriter<AssistantUIMessage>,
+  params: {
+    requestId: string;
+    t0: number;
+    turnId: string;
+    originalRequest: string;
+    transcript: string;
+    answers?: QuestionnaireAnswer[];
+    roleHint?: string;
+  },
+) {
   const { requestId, t0, turnId } = params;
-  const draft = await runDraftChallenge(writer, { ...params, existingDraft: null, announce: false });
-  if (!draft) return; // error part already written
+  const result = await runDraftChallenge(writer, {
+    ...params,
+    existingDraft: null,
+    announce: false,
+    progressLabel: "Preparing your internship draft…",
+  });
+  if (!result) return; // error part already written
+  const { draft, context } = result;
 
-  writer.write({ type: "data-progress", id: "progress", data: { label: "Preparing your internship draft…" } });
   try {
-    const { opportunityId: newOpportunityId } = await createOpportunityFromChallengeDraftAction(draft);
+    const { opportunityId: newOpportunityId, role } = await createOpportunityFromChallengeDraftAction(draft, context);
     console.log(`[assistant] requestId=${requestId} internship draft created opportunityId=${newOpportunityId} at +${Date.now() - t0}ms`);
-    writer.write({ type: "data-internshipCreated", id: `internshipCreated:${turnId}`, data: { opportunityId: newOpportunityId, role: draft.role } });
-    writePlainText(writer, `intro:${turnId}`, `Your internship draft for ${draft.role} is ready to review.`);
+    writer.write({ type: "data-internshipCreated", id: `internshipCreated:${turnId}`, data: { opportunityId: newOpportunityId, role } });
+    writePlainText(writer, `intro:${turnId}`, `Your ${role} draft is ready to review.`);
   } catch (error) {
     console.error(`[assistant] requestId=${requestId} internship draft creation failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
     writer.write({
@@ -179,16 +220,13 @@ export async function POST(req: Request) {
       const questionnaireSubmission = latestQuestionnaireSubmission(messages);
       if (questionnaireSubmission) {
         const { answers, continuation, roleSummary } = questionnaireSubmission;
-        const answeredContext = answers
-          .map((answer) => `${answer.prompt}: ${answer.answer ?? "Not specified"}`)
-          .join("\n");
         if (continuation === "offer_next_action") {
           writer.write({
             type: "data-actionOffer",
             id: `offer:${turnId}`,
             data: {
               roleSummary,
-              generationContext: `${roleSummary}\n${answeredContext}`.trim(),
+              generationAnswers: answers,
             },
           });
           writePlainText(writer, `intro:${turnId}`, `Thanks. I have enough context to prepare the ${roleSummary} hiring setup with a short practical challenge.`);
@@ -206,7 +244,7 @@ export async function POST(req: Request) {
           // structured answers already carry everything EmployerContext
           // needs. Sending the full, ever-growing conversation transcript
           // on top of them was pure re-derivation.
-          const context = await buildEmployerContext({ originalRequest, transcript: originalRequest, answers });
+          const context = await buildEmployerContext({ originalRequest, transcript: originalRequest, answers, roleHint: roleSummary });
           console.log(`[assistant] requestId=${requestId} generationId=${generationId} T1 employerContext ready at +${Date.now() - t0}ms`);
           const existingDraft = latestChallengeDraft(messages);
           const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction: existingDraft ? "Incorporate the employer's latest answers." : undefined });
@@ -228,9 +266,26 @@ export async function POST(req: Request) {
       if (offerChoice) {
         const originalRequest = offerChoice.roleSummary || transcriptOf(messages.slice(0, -1));
         if (offerChoice.kind === "create_challenge_only") {
-          await runDraftChallenge(writer, { requestId, t0, turnId, originalRequest, transcript: transcriptOf(messages), existingDraft: latestChallengeDraft(messages) });
+          await runDraftChallenge(writer, {
+            requestId,
+            t0,
+            turnId,
+            originalRequest,
+            transcript: transcriptOf(messages),
+            existingDraft: latestChallengeDraft(messages),
+            answers: offerChoice.answers,
+            roleHint: offerChoice.roleSummary,
+          });
         } else {
-          await runCreateInternshipDraft(writer, { requestId, t0, turnId, originalRequest, transcript: transcriptOf(messages) });
+          await runCreateInternshipDraft(writer, {
+            requestId,
+            t0,
+            turnId,
+            originalRequest,
+            transcript: transcriptOf(messages),
+            answers: offerChoice.answers,
+            roleHint: offerChoice.roleSummary,
+          });
         }
         return;
       }

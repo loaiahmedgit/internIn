@@ -61,11 +61,19 @@ export function latestQuestionnaireAnswers(messages: AssistantUIMessage[]): Ques
  * card's "Create internship draft" / "Create challenge only" button —
  * never inferred from message text (an employer could plausibly type
  * those exact words too; the metadata is what makes this deterministic). */
-export function latestActionOfferChoice(messages: AssistantUIMessage[]): { kind: "create_internship_draft" | "create_challenge_only"; roleSummary: string } | null {
+export function latestActionOfferChoice(messages: AssistantUIMessage[]): {
+  kind: "create_internship_draft" | "create_challenge_only";
+  roleSummary: string;
+  answers: QuestionnaireAnswer[];
+} | null {
   const last = messages.at(-1);
   if (last?.role !== "user") return null;
   if (last.metadata?.intent !== "create_internship_draft" && last.metadata?.intent !== "create_challenge_only") return null;
-  return { kind: last.metadata.intent, roleSummary: last.metadata.roleSummary ?? "" };
+  return {
+    kind: last.metadata.intent,
+    roleSummary: last.metadata.roleSummary ?? "",
+    answers: last.metadata.questionnaireAnswers ?? [],
+  };
 }
 
 /** True only when the LAST message is a real click on the internship

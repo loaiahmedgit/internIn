@@ -1,19 +1,12 @@
-import { generateObject } from "ai";
 import { z } from "zod";
-import { getModel } from "./gemma-provider";
-import { withGenerateRetries } from "./challenge-generation";
-import type { ChallengeDraft } from "./challenge-clarification-schemas";
+import type { ChallengeDraft, EmployerContext } from "./challenge-clarification-schemas";
 
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 
 /**
- * What the model actually fills in for "Create internship from this draft" —
- * deliberately narrow. Everything here is content the challenge already
- * implies (role, scenario, skills, tasks) restated as a real internship
- * posting. Real logistics the challenge conversation never asked about
- * (location, duration, hours/week, mode, deadline, start date, openings)
- * are NOT here — never invented; the review screen asks the employer for
- * those directly (see opportunity-from-challenge-actions.ts).
+ * The deliberately narrow listing shape produced from an employer context
+ * or existing challenge draft. Real logistics the conversation never asked
+ * about are NOT here; the review screen asks the employer for those.
  */
 const OpportunityFromChallengeSchema = z.object({
   title: z.string().trim().min(2).max(120),
@@ -25,41 +18,87 @@ const OpportunityFromChallengeSchema = z.object({
 });
 export type OpportunityFromChallenge = z.infer<typeof OpportunityFromChallengeSchema>;
 
-const TIMEOUT_MS = 30_000;
-const ATTEMPTS = [{}, {}] as const;
+function sentenceList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
+}
+
+function ensureInternTitle(role: string): string {
+  const clean = role.trim().replace(/\s+role$/i, "");
+  return /\bintern(ship)?\b/i.test(clean) ? clean : `${clean} Intern`;
+}
+
+function withPeriod(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+/** Builds listing copy only from the employer's canonical structured
+ * context. This deterministic path is used by the conversation-first
+ * internship flow so a second model call cannot invent a team/company
+ * claim or silently rename a selected responsibility or technology. */
+export function buildGroundedOpportunityFromContext(
+  draft: ChallengeDraft,
+  context: EmployerContext,
+): OpportunityFromChallenge {
+  const title = ensureInternTitle(context.role || draft.role);
+  const responsibilities = context.responsibilities;
+  const tools = context.tools;
+  const responsibilityList = sentenceList(responsibilities);
+  const toolList = sentenceList(tools);
+
+  const shortDescription = responsibilities.length
+    ? `Build practical experience in ${responsibilityList}${tools.length ? ` using ${toolList}` : ""}.`
+    : `Build practical experience completing ${draft.role.toLowerCase()} work${tools.length ? ` using ${toolList}` : ""}.`;
+
+  const descriptionParts = [`As a ${title}, you will work on practical role-related tasks.`];
+  if (responsibilities.length) descriptionParts.push(`Your responsibilities will include ${responsibilityList}.`);
+  if (tools.length) descriptionParts.push(`You will use ${toolList} while completing this work.`);
+
+  const requirements: string[] = [];
+  if (context.level) requirements.push(withPeriod(context.level));
+  if (tools.length) requirements.push(`Working knowledge of ${toolList}.`);
+  if (responsibilities.length) requirements.push(`Interest in ${responsibilityList}.`);
+  requirements.push("Ability to complete practical tasks and explain your approach clearly.");
+
+  const niceToHave: string[] = [];
+  if (tools.length) niceToHave.push(`An academic, personal, or internship project using ${toolList}.`);
+  if (responsibilities.length > 1) niceToHave.push(`Experience combining ${responsibilityList} in one project or feature.`);
+
+  const learningParts: string[] = [];
+  if (responsibilities.length) learningParts.push(`build practical experience in ${responsibilityList}`);
+  if (tools.length) learningParts.push(`strengthen your use of ${toolList}`);
+  learningParts.push("practice completing structured work against clear requirements");
+
+  return OpportunityFromChallengeSchema.parse({
+    title,
+    shortDescription,
+    description: descriptionParts.join(" "),
+    whatYouWillLearn: `You will ${sentenceList(learningParts)}.`,
+    requirements: requirements.slice(0, 6),
+    niceToHave: niceToHave.slice(0, 3),
+  });
+}
 
 /**
  * Turns an approved ChallengeDraft into real internship-posting copy — the
  * public listing content, not the challenge itself (Opportunity -> Challenge,
- * never the other way round). ONE small model call, reusing the draft's own
- * role/scenario/skills/tasks — never re-asks the employer anything the
- * conversation already resolved.
+ * never the other way round). This is intentionally deterministic: a
+ * challenge simulation may contain fictional context, but a real listing
+ * must never inherit that context or invent employer facts.
  */
-export async function generateOpportunityFromChallenge(draft: ChallengeDraft): Promise<OpportunityFromChallenge> {
-  const taskLines = draft.tasks.map((t) => `- ${t.title}`).join("\n");
-  const prompt = `A company is hiring an intern. They already designed this practical work challenge for the role — write the internship POSTING (not the challenge) that this candidate would apply to.
-
-Role: ${draft.role}
-Challenge title: ${draft.title}
-Scenario: ${draft.scenario}
-Skills assessed: ${draft.skills.join(", ")}
-Tasks in the challenge:
-${taskLines}
-
-Write a real internship posting: a compelling title (usually "${draft.role}" or a close, natural variant — e.g. add "Intern" if it's not already in the role name), a one-sentence short description, a fuller role description (what the intern will actually do day to day — broader than just the challenge), what they'll learn, requirements (skills/background a candidate should have), and nice-to-have extras. Never mention logistics you don't know (location, hours, duration, dates) — that's handled separately.
-
-IMPORTANT — the scenario above may describe a FICTIONAL company/situation used only to make the challenge realistic (e.g. "a fictional mid-sized manufacturer"). That fictional detail is fine INSIDE the challenge, but the internship posting is about the REAL hiring company — never claim the intern will "work with our manufacturing teams", "our clients", "our delivery operation", or any other specific real-company fact you were not actually given. Describe the work in general, honest role terms instead (e.g. "you'll help analyze business processes and identify operational improvement opportunities"), not as if the fictional scenario were the employer's real business.`;
-
-  return withGenerateRetries("generateOpportunityFromChallenge", ATTEMPTS, async () => {
-    const { object } = await generateObject({
-      model: getModel(),
-      schema: OpportunityFromChallengeSchema,
-      system: "You write clear, honest internship postings for a hiring platform. Never fabricate a logistics detail (location, hours, dates) that wasn't given to you, and never state a fictional challenge scenario's details (a made-up company, clients, or operation) as if they were the real hiring employer's actual business.",
-      prompt,
-      temperature: 0.5,
-      maxOutputTokens: 1200,
-      abortSignal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    return object;
-  });
+export async function generateOpportunityFromChallenge(
+  draft: ChallengeDraft,
+  employerContext?: EmployerContext,
+): Promise<OpportunityFromChallenge> {
+  const groundedContext: EmployerContext = employerContext ?? {
+    originalRequest: draft.role,
+    role: draft.role,
+    level: null,
+    responsibilities: [],
+    tools: draft.skills,
+    restrictions: [],
+    additionalContext: null,
+  };
+  return buildGroundedOpportunityFromContext(draft, groundedContext);
 }

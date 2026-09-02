@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { transcriptOf, latestChallengeDraft, latestQuestionnaireAnswers, latestQuestionnaireSubmission } from "./assistant-conversation";
+import { transcriptOf, latestActionOfferChoice, latestChallengeDraft, latestQuestionnaireAnswers, latestQuestionnaireSubmission } from "./assistant-conversation";
 import type { AssistantUIMessage } from "./assistant-messages";
 import type { ChallengeDraft } from "./challenge-clarification-schemas";
 
@@ -98,6 +98,30 @@ describe("latestQuestionnaireAnswers", () => {
     expect(latestQuestionnaireSubmission(messages)).toMatchObject({
       continuation: "offer_next_action",
       roleSummary: "Database Intern",
+    });
+  });
+});
+
+describe("latestActionOfferChoice", () => {
+  it("carries the structured questionnaire selections through the create button", () => {
+    const answers = [{
+      prompt: "Technologies?",
+      slot: "tools_technologies" as const,
+      answer: "React, TypeScript",
+      values: ["React", "TypeScript"],
+    }];
+    const result = latestActionOfferChoice([userMessage({
+      metadata: {
+        intent: "create_internship_draft",
+        roleSummary: "Web Developer Intern",
+        questionnaireAnswers: answers,
+      },
+    })]);
+
+    expect(result).toEqual({
+      kind: "create_internship_draft",
+      roleSummary: "Web Developer Intern",
+      answers,
     });
   });
 });

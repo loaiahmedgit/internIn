@@ -517,7 +517,11 @@ export function AssistantWorkspace({
                           handleStructuredAction(
                             actionOffer.id,
                             choice === "create_internship_draft" ? "Create internship draft" : "Create challenge only",
-                            { intent: choice, roleSummary: actionOffer.data.generationContext ?? actionOffer.data.roleSummary },
+                            {
+                              intent: choice,
+                              roleSummary: actionOffer.data.roleSummary,
+                              questionnaireAnswers: actionOffer.data.generationAnswers,
+                            },
                           )
                         }
                       />

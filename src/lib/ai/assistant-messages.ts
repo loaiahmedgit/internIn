@@ -54,6 +54,13 @@ export interface GenerationErrorData {
 export interface QuestionnaireAnswer {
   prompt: string;
   answer: string | null;
+  /** The machine-readable information slot behind the question. Keeping
+   * this with the submitted answer lets later workflow buttons preserve
+   * the employer's selections exactly instead of re-extracting prose. */
+  slot?: ClarificationQuestionsResult["questions"][number]["slot"];
+  /** Individual selected labels in their original order. `answer` remains
+   * the compact display string; this array is the lossless workflow value. */
+  values?: string[];
 }
 
 export type QuestionnaireContinuation = "offer_next_action" | "draft_challenge";
@@ -96,9 +103,9 @@ export interface AssistantMessageMetadata {
  * two buttons, "Create internship draft" primary. */
 export interface ActionOfferData {
   roleSummary: string;
-  /** Full factual generation context when clarification answers exist.
-   * Kept separate so the compact card never dumps questionnaire prose. */
-  generationContext?: string;
+  /** Lossless questionnaire selections carried to the next structured
+   * action. Never rendered in the compact offer card. */
+  generationAnswers?: QuestionnaireAnswer[];
 }
 
 /** Written after an internship is actually created from a draft — the

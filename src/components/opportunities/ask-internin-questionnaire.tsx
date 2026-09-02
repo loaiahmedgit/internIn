@@ -71,7 +71,12 @@ export function AskInternInQuestionnaire({
         .filter(Boolean)
         .map((v) => (v === OTHER_VALUE ? null : (q.choices?.find((c) => c.value === v)?.label ?? v)))
         .filter((v): v is string => v !== null);
-      return { prompt: q.prompt, answer: answered.length ? answered.join(", ") : null };
+      return {
+        prompt: q.prompt,
+        slot: q.slot,
+        values: answered,
+        answer: answered.length ? answered.join(", ") : null,
+      };
     });
     onSubmit(answers);
   }

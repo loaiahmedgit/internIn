@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,10 +29,14 @@ export function ChallengeBuilder({
   challenge,
   onChange,
   opportunityId,
+  reviewMode = false,
 }: {
   challenge: Challenge;
   onChange: (next: Challenge) => void;
   opportunityId: string;
+  /** Draft-review mode edits the already attached challenge in place and
+   * never exposes the separate approve/publish lifecycle controls. */
+  reviewMode?: boolean;
 }) {
   const [instruction, setInstruction] = useState("");
   const [isThinking, setIsThinking] = useState(false);
@@ -90,6 +95,19 @@ export function ChallengeBuilder({
     }
   }
 
+  async function handleSaveDraft() {
+    setSaveError(null);
+    setActionPending(true);
+    try {
+      await saveChallengeVersionAction(opportunityId, challenge, "human_edited");
+      toast.success("Challenge changes saved");
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Couldn't save the challenge.");
+    } finally {
+      setActionPending(false);
+    }
+  }
+
   function addSkill() {
     if (!newSkill.trim()) return;
     markEdited({ ...challenge, skills: [...challenge.skills, newSkill.trim()] });
@@ -122,25 +140,27 @@ export function ChallengeBuilder({
   return (
     <div className="space-y-6">
       {/* Approval stepper */}
-      <div className="flex items-center gap-1.5 overflow-x-auto rounded-lg border border-gray-cool/60 bg-white p-3">
-        {STEPS.map((s, i) => (
-          <div key={s.key} className="flex items-center gap-1.5">
-            <span
-              className={cn(
-                "whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium",
-                i === currentIndex
-                  ? "bg-teal text-white"
-                  : i < currentIndex
-                    ? "bg-teal/10 text-teal"
-                    : "bg-gray-light text-navy/40",
-              )}
-            >
-              {s.label}
-            </span>
-            {i < STEPS.length - 1 && <span className="h-px w-4 bg-gray-cool" />}
-          </div>
-        ))}
-      </div>
+      {!reviewMode && (
+        <div className="flex items-center gap-1.5 overflow-x-auto rounded-lg border border-gray-cool/60 bg-white p-3">
+          {STEPS.map((s, i) => (
+            <div key={s.key} className="flex items-center gap-1.5">
+              <span
+                className={cn(
+                  "whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium",
+                  i === currentIndex
+                    ? "bg-teal text-white"
+                    : i < currentIndex
+                      ? "bg-teal/10 text-teal"
+                      : "bg-gray-light text-navy/40",
+                )}
+              >
+                {s.label}
+              </span>
+              {i < STEPS.length - 1 && <span className="h-px w-4 bg-gray-cool" />}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Editable challenge card */}
       <div className="rounded-xl border border-gray-cool/60 bg-white p-6">
@@ -292,10 +312,14 @@ export function ChallengeBuilder({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-navy/60">
             <Lock className="size-3.5" />
-            Nothing publishes until a human explicitly approves it.
+            {reviewMode ? "Changes stay attached to this draft internship." : "Nothing publishes until a human explicitly approves it."}
           </div>
           <div className="flex gap-2">
-            {challenge.status !== "approved" && challenge.status !== "published" && (
+            {reviewMode ? (
+              <Button onClick={handleSaveDraft} disabled={actionPending} className="bg-teal text-white hover:bg-teal/90">
+                {actionPending ? "Saving..." : "Save changes"}
+              </Button>
+            ) : challenge.status !== "approved" && challenge.status !== "published" ? (
               <Button
                 onClick={handleApprove}
                 disabled={actionPending}
@@ -304,13 +328,13 @@ export function ChallengeBuilder({
               >
                 <CheckCircle2 className="mr-1.5 size-4" /> {actionPending ? "Saving..." : "Approve"}
               </Button>
-            )}
-            {challenge.status === "approved" && (
+            ) : null}
+            {!reviewMode && challenge.status === "approved" && (
               <Button onClick={handlePublish} disabled={actionPending} className="bg-teal text-white hover:bg-teal/90">
                 {actionPending ? "Publishing..." : "Publish"}
               </Button>
             )}
-            {challenge.status === "published" && (
+            {!reviewMode && challenge.status === "published" && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-teal/10 px-3 py-1.5 text-sm font-medium text-teal">
                 <CheckCircle2 className="size-4" /> Published — visible to students
               </span>
