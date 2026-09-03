@@ -13,12 +13,19 @@ import { SaveButton } from "@/components/opportunities/save-button";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
+  Bookmark,
+  Briefcase,
   CalendarDays,
   CheckCircle2,
   Circle,
   Clock3,
   MapPin,
 } from "lucide-react";
+
+/** Display-only capitalization for a first name — never touches the stored value. */
+function toDisplayName(name: string): string {
+  return name.length ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+}
 
 const RECOMMENDED_COUNT = 3;
 const SAVED_COUNT = 3;
@@ -137,33 +144,34 @@ export default async function StudentDashboardPage() {
   const notApplied = opportunities.filter((o) => !appliedOpportunityIds.has(o.id));
   const recommended = (hasMatchData ? notApplied : [...notApplied].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())).slice(0, RECOMMENDED_COUNT);
 
-  const firstName = user.fullName.trim().split(/\s+/)[0] || "there";
+  const firstName = toDisplayName(user.fullName.trim().split(/\s+/)[0] || "there");
 
   return (
     <div className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6 lg:px-8">
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white px-6 py-7 sm:px-9 lg:min-h-[260px] lg:px-10">
-        <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr] lg:items-end">
-          <div className="relative z-[1] max-w-lg lg:pt-2">
-            <p className="text-base font-semibold text-teal-ink">Hi {firstName}</p>
-            <h1 className="mt-2 text-balance text-3xl font-bold tracking-[-0.03em] text-navy sm:text-[2.125rem] sm:leading-[1.1]">
-              Find opportunities that fit you.
-            </h1>
-            <p className="mt-3 max-w-md text-pretty text-sm leading-6 text-navy/60 sm:text-base">
-              Explore internships that match your interests and skills and build real experience.
-            </p>
-          </div>
-          <div className="relative hidden justify-end lg:flex">
-            <Image
-              src="/assets/student-hero-illustration.png"
-              alt=""
-              width={1448}
-              height={1086}
-              priority
-              className="h-[230px] w-auto object-contain object-bottom"
-              sizes="(min-width: 1024px) 420px, 0px"
-            />
-          </div>
+      {/* Hero — compact app banner, not a landing-page hero. Text is
+          vertically centered in the card; the illustration is absolutely
+          anchored to the bottom-right so it shares the text block's visual
+          center instead of floating in its own half. */}
+      <section className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white px-6 py-6 sm:px-9 lg:h-[200px] lg:px-10">
+        <div className="relative z-[1] flex h-full max-w-lg flex-col justify-center lg:max-w-[52%]">
+          <p className="text-base font-semibold text-teal-ink">Hi {firstName}</p>
+          <h1 className="mt-1.5 text-balance text-2xl font-bold tracking-[-0.03em] text-navy sm:text-[1.875rem] sm:leading-[1.15]">
+            Find opportunities that fit you.
+          </h1>
+          <p className="mt-2 max-w-md text-pretty text-sm leading-6 text-navy/60">
+            Explore internships that match your interests and skills and build real experience.
+          </p>
+        </div>
+        <div className="pointer-events-none absolute right-6 bottom-0 hidden lg:block lg:right-8">
+          <Image
+            src="/assets/student-hero-illustration.png"
+            alt=""
+            width={1448}
+            height={1086}
+            priority
+            className="h-[220px] w-auto object-contain object-bottom"
+            sizes="(min-width: 1024px) 420px, 0px"
+          />
         </div>
       </section>
 
@@ -237,7 +245,20 @@ export default async function StudentDashboardPage() {
             </div>
           </div>
         ) : (
-          <p className="mt-4 text-sm text-navy/60">No active internship yet. Once you accept an offer, your internship workspace will show up here.</p>
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-navy/10 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-navy/5 text-navy/40" aria-hidden="true">
+                <Briefcase className="size-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-navy">No active internship yet</p>
+                <p className="mt-0.5 text-sm text-navy/56">When you accept an offer, your internship workspace will appear here.</p>
+              </div>
+            </div>
+            <Link href="/student/opportunities" className="shrink-0 text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+              Explore internships →
+            </Link>
+          </div>
         )}
       </section>
 
@@ -252,7 +273,20 @@ export default async function StudentDashboardPage() {
         </div>
 
         {savedRows.length === 0 ? (
-          <p className="mt-4 text-sm text-navy/60">Opportunities you save will show up here so you can find them again quickly.</p>
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-navy/10 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-navy/5 text-navy/40" aria-hidden="true">
+                <Bookmark className="size-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-navy">Nothing saved yet</p>
+                <p className="mt-0.5 text-sm text-navy/56">Save opportunities you like so you can come back to them quickly.</p>
+              </div>
+            </div>
+            <Link href="/student/opportunities" className="shrink-0 text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+              Explore roles →
+            </Link>
+          </div>
         ) : (
           <div className="mt-4 grid grid-cols-1 divide-y divide-navy/8 overflow-hidden rounded-2xl border border-navy/10 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             {savedRows.map((item) => (
@@ -276,7 +310,7 @@ export default async function StudentDashboardPage() {
 
       {/* Level up your profile */}
       {profileCompletion.percent < 100 && (
-        <section aria-labelledby="profile-nudge-heading" className="mt-9 mb-2">
+        <section aria-labelledby="profile-nudge-heading" className="mt-8 mb-2">
           <div className="flex flex-col gap-5 rounded-2xl border border-navy/10 bg-white px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-4">
               <svg viewBox="0 0 52 52" className="size-12 shrink-0 -rotate-90" aria-hidden="true">
