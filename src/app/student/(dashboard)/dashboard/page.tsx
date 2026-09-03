@@ -169,7 +169,7 @@ export default async function StudentDashboardPage() {
             width={1448}
             height={1086}
             priority
-            className="h-[220px] w-auto object-contain object-bottom"
+            className="h-[180px] w-auto object-contain object-bottom"
             sizes="(min-width: 1024px) 420px, 0px"
           />
         </div>
