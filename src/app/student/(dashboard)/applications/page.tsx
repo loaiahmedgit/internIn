@@ -4,7 +4,6 @@ import { ArrowRight, ClipboardList, Clock3 } from "lucide-react";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
 import { StatusRail } from "@/components/dashboard/status-rail";
-import { EmptyState } from "@/components/dashboard/empty-state";
 import { Button } from "@/components/ui/button";
 
 type ApplicationTab = "all" | "active" | "review" | "offers" | "past";
@@ -61,7 +60,21 @@ export default async function StudentApplicationsPage({ searchParams }: { search
     .where(eq(schema.applications.studentId, user.id));
 
   if (applications.length === 0) {
-    return <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8"><header><h1 className="text-balance text-3xl font-semibold tracking-[-0.045em] text-navy sm:text-4xl">Your applications</h1><p className="mt-2 text-sm text-navy/58 sm:text-base">Track progress and next steps in one place.</p></header><EmptyState icon={ClipboardList} title="No applications yet" description="Apply to an internship to start building real evidence of what you can do." ctaLabel="Explore internships" ctaHref="/student/opportunities" /></div>;
+    return (
+      <div className="mx-auto flex min-h-[calc(100dvh-4.5rem)] max-w-5xl flex-col items-center justify-center px-4 py-12 text-center sm:px-6">
+        <div className="flex size-14 items-center justify-center rounded-full bg-teal/8">
+          <ClipboardList className="size-6 text-teal-ink" aria-hidden="true" />
+        </div>
+        <h1 className="mt-5 text-xl font-semibold tracking-[-0.02em] text-navy">No applications yet</h1>
+        <p className="mt-2 max-w-sm text-sm leading-6 text-navy/58">
+          Find an internship that interests you and apply when you&apos;re ready — your progress and next steps will show up here.
+        </p>
+        <Button render={<Link href="/student/opportunities" />} nativeButton={false} className="mt-6 h-10 bg-teal px-5 text-white hover:bg-teal-ink">
+          Explore internships
+          <ArrowRight className="size-4" aria-hidden="true" />
+        </Button>
+      </div>
+    );
   }
 
   const applicationIds = applications.map((a) => a.id);
@@ -92,20 +105,20 @@ export default async function StudentApplicationsPage({ searchParams }: { search
   const tabs: { key: ApplicationTab; label: string }[] = [{ key: "all", label: "All" }, { key: "active", label: "Active" }, { key: "review", label: "Under review" }, { key: "offers", label: "Offers" }, { key: "past", label: "Past" }];
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
-      <header><h1 className="text-balance text-3xl font-semibold tracking-[-0.045em] text-navy sm:text-4xl">Your applications</h1><p className="mt-2 text-sm text-navy/58 sm:text-base">Track progress and next steps in one place.</p></header>
-      <nav aria-label="Application filters" className="mt-7 flex gap-2 overflow-x-auto pb-1">
+    <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+      <header><h1 className="text-xl font-semibold tracking-[-0.02em] text-navy sm:text-2xl">Your applications</h1><p className="mt-1 text-sm text-navy/58">Track progress and next steps in one place.</p></header>
+      <nav aria-label="Application filters" className="mt-5 flex gap-2 overflow-x-auto pb-1">
         {tabs.map((item) => <Link key={item.key} href={item.key === "all" ? "/student/applications" : `/student/applications?tab=${item.key}`} aria-current={tab === item.key ? "page" : undefined} className={`flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 ${tab === item.key ? "border-teal/15 bg-teal/10 text-teal-ink" : "border-navy/10 bg-white text-navy/58 hover:border-teal/20 hover:text-navy"}`}>{item.label}<span className="tabular-nums text-xs opacity-65">{counts[item.key]}</span></Link>)}
       </nav>
 
-      {visible.length === 0 ? <div className="mt-10 rounded-2xl border border-navy/10 bg-white px-6 py-12 text-center"><p className="font-medium text-navy">Nothing here right now</p><p className="mt-1 text-sm text-navy/52">Applications will appear here when their status changes.</p></div> : (
-        <div className="mt-7 space-y-3.5">
+      {visible.length === 0 ? <div className="mt-8 rounded-xl border border-navy/10 bg-white px-6 py-10 text-center"><p className="font-medium text-navy">Nothing here right now</p><p className="mt-1 text-sm text-navy/52">Applications will appear here when their status changes.</p></div> : (
+        <div className="mt-5 space-y-3">
           {visible.map((application) => {
             const challengeStarted = Boolean(application.challengeStartedAt);
             const badge = statusLabel({ status: application.status, hasSubmission: application.hasSubmission, challengeStarted, offerStatus: application.offerStatus });
             const label = ctaLabel({ status: application.status, hasSubmission: application.hasSubmission, challengeStarted, offerStatus: application.offerStatus });
             return (
-              <article key={application.id} className="rounded-2xl border border-navy/10 bg-white p-5 shadow-[0_8px_28px_rgba(33,50,72,0.04)] transition-[border-color,box-shadow] hover:border-teal/20 hover:shadow-[0_14px_36px_rgba(33,50,72,0.065)] sm:p-6">
+              <article key={application.id} className="rounded-xl border border-navy/10 bg-white p-4 transition-colors hover:border-teal/20 sm:p-5">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
                   <div className="flex min-w-0 flex-1 items-start gap-4">
                     <CompanyAvatar name={application.companyName} />

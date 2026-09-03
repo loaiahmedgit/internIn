@@ -41,26 +41,26 @@ export function ExploreOpportunityCard({
   return (
     <article
       className={cn(
-        "relative rounded-2xl border bg-white p-5 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(33,50,72,0.07)]",
-        selected ? "border-teal shadow-[0_12px_32px_rgba(27,165,156,0.08)]" : "border-navy/10",
+        "relative rounded-xl border bg-white p-3.5 transition-colors duration-150",
+        selected ? "border-teal/45 bg-teal/[0.028]" : "border-navy/10 hover:border-navy/20",
       )}
     >
-      <div className="flex items-start gap-3.5">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-sm font-semibold text-teal-ink" aria-hidden="true">
+      <div className="flex items-start gap-2.5">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal/10 text-xs font-semibold text-teal-ink" aria-hidden="true">
           {opportunity.companyName.charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-medium text-navy/64">{opportunity.companyName}</p>
+            <p className="truncate text-xs font-medium text-navy/62">{opportunity.companyName}</p>
             {opportunity.companyVerified ? <BadgeCheck className="size-3.5 shrink-0 text-teal-ink" aria-label="Verified company" /> : null}
             {typeof matchScore === "number" && matchScore >= 45 ? (
-              <span className="ml-1 rounded-full bg-teal/9 px-2 py-0.5 text-[11px] font-medium text-teal-ink">Strong match</span>
+              <span className="rounded-full bg-teal/9 px-1.5 py-0.5 text-[10px] font-medium text-teal-ink">Strong match</span>
             ) : null}
           </div>
           <Link
             href={href}
             aria-current={selected ? "true" : undefined}
-            className="mt-1 block text-lg font-semibold tracking-[-0.025em] text-navy hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+            className="block truncate text-base font-semibold tracking-[-0.015em] text-navy hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
           >
             {opportunity.role}
           </Link>
@@ -68,29 +68,29 @@ export function ExploreOpportunityCard({
         <SaveButton opportunityId={opportunity.id} initialSaved={saved} className="border border-navy/10 bg-white hover:border-teal/25 hover:bg-teal/5" />
       </div>
 
-      {description ? <p className="mt-3 line-clamp-2 text-sm leading-6 text-navy/58">{description}</p> : null}
+      {description ? <p className="mt-1.5 line-clamp-1 text-xs leading-5 text-navy/56">{description}</p> : null}
 
-      <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-2 text-xs text-navy/56">
-        <span className="flex items-center gap-1.5"><MapPin className="size-3.5" aria-hidden="true" />{opportunity.location}</span>
-        {opportunity.workMode ? <span className="flex items-center gap-1.5"><Monitor className="size-3.5" aria-hidden="true" />{WORK_MODE_LABEL[opportunity.workMode]}</span> : null}
-        <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{opportunity.duration}</span>
-        <span className="flex items-center gap-1.5"><BriefcaseBusiness className="size-3.5" aria-hidden="true" />{opportunity.hoursPerWeek}h/week</span>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-navy/56">
+        <span className="flex items-center gap-1"><MapPin className="size-3.5" aria-hidden="true" />{opportunity.location}</span>
+        {opportunity.workMode ? <span className="flex items-center gap-1"><Monitor className="size-3.5" aria-hidden="true" />{WORK_MODE_LABEL[opportunity.workMode]}</span> : null}
+        <span className="flex items-center gap-1"><Clock3 className="size-3.5" aria-hidden="true" />{opportunity.duration}</span>
+        <span className="flex items-center gap-1"><BriefcaseBusiness className="size-3.5" aria-hidden="true" />{opportunity.hoursPerWeek}h/week</span>
       </div>
 
       {opportunity.skills.length > 0 ? (
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {opportunity.skills.slice(0, 4).map((skill) => (
-            <span key={skill} className="rounded-full border border-navy/8 bg-[#f7f9fa] px-2.5 py-1 text-xs text-navy/58">{skill}</span>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {opportunity.skills.slice(0, 3).map((skill) => (
+            <span key={skill} className="rounded-full border border-navy/8 bg-[#f7f9fa] px-2 py-0.5 text-[11px] text-navy/58">{skill}</span>
           ))}
         </div>
       ) : null}
 
-      <div className="mt-4 flex items-center justify-between gap-4 border-t border-navy/8 pt-4">
+      <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-navy/8 pt-2.5">
         <span className="flex items-center gap-1.5 text-xs font-medium text-teal-ink">
           <Sparkles className="size-3.5" aria-hidden="true" />
-          {typeof estimatedMinutes === "number" ? `Work challenge, about ${estimatedMinutes} min` : "Opportunity details"}
+          {typeof estimatedMinutes === "number" ? `Challenge, ~${estimatedMinutes} min` : "Opportunity details"}
         </span>
-        <Link href={href} className="shrink-0 rounded-md text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+        <Link href={href} className="shrink-0 rounded-md text-xs font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
           View details
         </Link>
       </div>

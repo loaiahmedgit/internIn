@@ -125,44 +125,44 @@ export default async function StudentOpportunitiesPage({
   }
 
   return (
-    <div className="mx-auto max-w-[1440px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
+    <div className="mx-auto max-w-[1360px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <header>
-        <h1 className="text-balance text-3xl font-semibold tracking-[-0.045em] text-navy sm:text-4xl">Explore internships</h1>
-        <p className="mt-2 max-w-2xl text-pretty text-sm leading-6 text-navy/58 sm:text-base">Discover roles matched to your interests, skills, and availability.</p>
+        <h1 className="text-xl font-semibold tracking-[-0.02em] text-navy sm:text-2xl">Explore internships</h1>
+        <p className="mt-1 text-sm text-navy/58">Discover roles matched to your interests, skills, and availability.</p>
       </header>
 
-      <form method="get" className="mt-7">
-        <div className="relative max-w-4xl">
+      <form method="get" className="mt-4">
+        <div className="relative max-w-3xl">
           <label htmlFor="opportunity-search" className="sr-only">Search roles, companies, or skills</label>
-          <Search className="pointer-events-none absolute top-1/2 left-4 size-[18px] -translate-y-1/2 text-navy/38" aria-hidden="true" />
-          <input id="opportunity-search" type="search" name="q" defaultValue={qRaw} placeholder="Search by role, company, or skill…" autoComplete="off" className="h-12 w-full rounded-xl border border-navy/12 bg-white pr-14 pl-11 text-sm text-navy shadow-[0_6px_20px_rgba(33,50,72,0.04)] placeholder:text-navy/38 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40" />
-          <button type="submit" aria-label="Search internships" className="absolute top-1.5 right-1.5 flex size-9 items-center justify-center rounded-lg bg-teal text-white transition-colors hover:bg-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2">
-            <Search className="size-4" aria-hidden="true" />
+          <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-navy/38" aria-hidden="true" />
+          <input id="opportunity-search" type="search" name="q" defaultValue={qRaw} placeholder="Search by role, company, or skill…" autoComplete="off" className="h-10 w-full rounded-lg border border-navy/12 bg-white pr-12 pl-9 text-sm text-navy placeholder:text-navy/38 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40" />
+          <button type="submit" aria-label="Search internships" className="absolute top-1 right-1 flex size-8 items-center justify-center rounded-md bg-teal text-white transition-colors hover:bg-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2">
+            <Search className="size-3.5" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
           <label htmlFor="opportunity-location" className="sr-only">Location</label>
-          <select id="opportunity-location" name="location" defaultValue={location} className="h-10 rounded-lg border border-navy/12 bg-white px-3 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+          <select id="opportunity-location" name="location" defaultValue={location} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
             <option value="">All locations</option>
             {locations.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
           <label htmlFor="opportunity-duration" className="sr-only">Duration</label>
-          <select id="opportunity-duration" name="duration" defaultValue={duration} className="h-10 rounded-lg border border-navy/12 bg-white px-3 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+          <select id="opportunity-duration" name="duration" defaultValue={duration} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
             <option value="">Any duration</option>
             {durations.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
           <label htmlFor="opportunity-work-mode" className="sr-only">Work mode</label>
-          <select id="opportunity-work-mode" name="workMode" defaultValue={workMode} className="h-10 rounded-lg border border-navy/12 bg-white px-3 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+          <select id="opportunity-work-mode" name="workMode" defaultValue={workMode} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
             <option value="">Any work mode</option>
             <option value="onsite">On-site</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option>
           </select>
-          <label className="flex h-10 items-center gap-2 rounded-lg border border-navy/12 bg-white px-3 text-sm text-navy/68"><input type="checkbox" name="saved" value="1" defaultChecked={savedOnly} className="size-4 rounded border-navy/30 accent-teal" />Saved only</label>
+          <label className="flex h-9 items-center gap-1.5 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy/68"><input type="checkbox" name="saved" value="1" defaultChecked={savedOnly} className="size-3.5 rounded border-navy/30 accent-teal" />Saved only</label>
           <label htmlFor="opportunity-sort" className="sr-only">Sort opportunities</label>
-          <select id="opportunity-sort" name="sort" defaultValue={sort} className="h-10 rounded-lg border border-navy/12 bg-white px-3 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 sm:ml-auto">
+          <select id="opportunity-sort" name="sort" defaultValue={sort} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 sm:ml-auto">
             <option value="relevant">Most relevant</option><option value="newest">Newest first</option><option value="title">Role title</option>
           </select>
-          <Button type="submit" variant="outline" className="h-10 border-teal/20 bg-white px-4 text-teal-ink hover:bg-teal/5">Apply filters</Button>
+          <Button type="submit" variant="outline" className="h-9 border-teal/20 bg-white px-3 text-teal-ink hover:bg-teal/5">Apply</Button>
           {hasActiveFilters ? <Link href="/student/opportunities" className="rounded-md px-1 text-sm font-medium text-navy/50 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">Clear</Link> : null}
         </div>
       </form>
@@ -170,33 +170,33 @@ export default async function StudentOpportunitiesPage({
       {filtered.length === 0 ? (
         opportunities.length === 0 ? <EmptyState icon={SearchX} title="No published opportunities yet" description="Companies are still preparing their internships. Check back soon." /> : <EmptyState icon={SearchX} title="No opportunities match these filters" description="Try a broader search or clear one of the filters." ctaLabel="Clear filters" ctaHref="/student/opportunities" />
       ) : (
-        <div className="mt-7 grid items-start gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(390px,0.92fr)]">
+        <div className="mt-4 grid items-start gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
           <section aria-labelledby="opportunity-results-heading">
             <div className="flex items-center justify-between gap-4"><h2 id="opportunity-results-heading" className="text-sm font-semibold text-navy">{filtered.length} {filtered.length === 1 ? "opportunity" : "opportunities"}</h2><p className="text-xs text-navy/45">Select a role to preview it</p></div>
-            <div className="mt-3 space-y-3.5">
+            <div className="mt-2.5 space-y-2">
               {filtered.map((opportunity) => <ExploreOpportunityCard key={opportunity.id} opportunity={opportunity} href={cardHref(opportunity.id)} selected={opportunity.id === selectedOpportunity.id} saved={savedIds.has(opportunity.id)} estimatedMinutes={publishedChallengeInfo.get(opportunity.id)?.estimatedMinutes} matchScore={opportunity.matchScore} />)}
             </div>
           </section>
 
-          <aside className="rounded-2xl border border-navy/10 bg-white p-5 shadow-[0_16px_44px_rgba(33,50,72,0.07)] sm:p-7 xl:sticky xl:top-[6rem]" aria-label={`${selectedOpportunity.role} details`}>
-            <div className="flex items-start gap-4">
-              <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-teal/10 text-lg font-semibold text-teal-ink" aria-hidden="true">{selectedOpportunity.companyName.charAt(0).toUpperCase()}</div>
-              <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><p className="truncate text-sm font-medium text-navy/62">{selectedOpportunity.companyName}</p>{selectedOpportunity.companyVerified ? <BadgeCheck className="size-4 shrink-0 text-teal-ink" aria-label="Verified company" /> : null}</div><h2 className="mt-1 text-balance text-2xl font-semibold tracking-[-0.035em] text-navy">{selectedOpportunity.role}</h2></div>
+          <aside className="rounded-xl border border-navy/10 bg-white p-4 sm:p-5 xl:sticky xl:top-[5.5rem]" aria-label={`${selectedOpportunity.role} details`}>
+            <div className="flex items-start gap-3">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-base font-semibold text-teal-ink" aria-hidden="true">{selectedOpportunity.companyName.charAt(0).toUpperCase()}</div>
+              <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><p className="truncate text-sm font-medium text-navy/62">{selectedOpportunity.companyName}</p>{selectedOpportunity.companyVerified ? <BadgeCheck className="size-3.5 shrink-0 text-teal-ink" aria-label="Verified company" /> : null}</div><h2 className="mt-0.5 text-balance text-xl font-semibold tracking-[-0.025em] text-navy">{selectedOpportunity.role}</h2></div>
             </div>
-            <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-xs text-navy/56">
+            <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-navy/56">
               <span className="flex items-center gap-1.5"><MapPin className="size-3.5" aria-hidden="true" />{selectedOpportunity.location}</span>
               {selectedOpportunity.workMode ? <span className="flex items-center gap-1.5"><Monitor className="size-3.5" aria-hidden="true" />{WORK_MODE_LABEL[selectedOpportunity.workMode]}</span> : null}
               <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{selectedOpportunity.duration}</span>
               <span className="flex items-center gap-1.5"><BriefcaseBusiness className="size-3.5" aria-hidden="true" />{selectedOpportunity.hoursPerWeek}h/week</span>
             </div>
-            <p className="mt-6 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-navy/68">{selectedOpportunity.shortDescription || selectedOpportunity.description}</p>
-            {selectedOpportunity.skills.length > 0 ? <section className="mt-6" aria-labelledby="key-skills-heading"><h3 id="key-skills-heading" className="text-sm font-semibold text-navy">Key skills</h3><div className="mt-3 flex flex-wrap gap-2">{selectedOpportunity.skills.map((skill) => <span key={skill} className="rounded-full border border-navy/10 bg-[#f7f9fa] px-3 py-1.5 text-xs text-navy/62">{skill}</span>)}</div></section> : null}
-            {selectedOpportunity.requirements.length > 0 ? <section className="mt-6 border-t border-navy/8 pt-6" aria-labelledby="requirements-heading"><h3 id="requirements-heading" className="text-base font-semibold text-navy">Role requirements</h3><ul className="mt-3 space-y-2.5">{selectedOpportunity.requirements.slice(0, 5).map((requirement) => <li key={requirement} className="flex items-start gap-2.5 text-sm leading-6 text-navy/64"><CheckCircle2 className="mt-1 size-4 shrink-0 text-teal-ink" aria-hidden="true" /><span>{requirement}</span></li>)}</ul></section> : null}
-            {selectedOpportunity.whatYouWillLearn ? <section className="mt-6 border-t border-navy/8 pt-6" aria-labelledby="learning-heading"><h3 id="learning-heading" className="text-base font-semibold text-navy">What you will learn</h3><p className="mt-2 text-sm leading-6 text-navy/64">{selectedOpportunity.whatYouWillLearn}</p></section> : null}
-            {selectedChallenge ? <div className="mt-6 rounded-xl border border-teal/16 bg-teal/[0.055] p-4"><div className="flex items-center gap-2 text-sm font-semibold text-teal-ink"><Sparkles className="size-4" aria-hidden="true" />Work challenge</div><p className="mt-2 text-sm font-medium text-navy">{selectedChallenge.title}</p><p className="mt-1 text-xs text-navy/52">{selectedChallenge.taskCount} {selectedChallenge.taskCount === 1 ? "task" : "tasks"}, about {selectedChallenge.estimatedMinutes} minutes</p></div> : null}
-            <div className="mt-6 flex items-start gap-2.5">
-              <div className="min-w-0 flex-1">{selectedApplication ? <Button render={<Link href={`/student/applications/${selectedApplication.id}`} />} nativeButton={false} className="h-11 w-full bg-teal px-5 text-white hover:bg-teal-ink">{selectedChallengeState?.kind === "to_do" ? "Start challenge" : selectedChallengeState?.kind === "in_progress" ? "Continue challenge" : "Open application"}<ArrowRight className="size-4" aria-hidden="true" /></Button> : <ApplyButton opportunityId={selectedOpportunity.id} label="Apply now" className="h-11 w-full bg-teal px-5 text-white hover:bg-teal-ink" />}</div>
-              <SaveButton opportunityId={selectedOpportunity.id} initialSaved={savedIds.has(selectedOpportunity.id)} showLabel className="border border-navy/12 bg-white hover:border-teal/25 hover:bg-teal/5" />
+            <p className="mt-4 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-navy/68">{selectedOpportunity.shortDescription || selectedOpportunity.description}</p>
+            {selectedOpportunity.skills.length > 0 ? <section className="mt-4" aria-labelledby="key-skills-heading"><h3 id="key-skills-heading" className="text-sm font-semibold text-navy">Key skills</h3><div className="mt-2 flex flex-wrap gap-1.5">{selectedOpportunity.skills.map((skill) => <span key={skill} className="rounded-full border border-navy/10 bg-[#f7f9fa] px-2.5 py-1 text-xs text-navy/62">{skill}</span>)}</div></section> : null}
+            {selectedOpportunity.requirements.length > 0 ? <section className="mt-4 border-t border-navy/8 pt-4" aria-labelledby="requirements-heading"><h3 id="requirements-heading" className="text-sm font-semibold text-navy">Role requirements</h3><ul className="mt-2 space-y-1.5">{selectedOpportunity.requirements.slice(0, 5).map((requirement) => <li key={requirement} className="flex items-start gap-2 text-sm leading-6 text-navy/64"><CheckCircle2 className="mt-1 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" /><span>{requirement}</span></li>)}</ul></section> : null}
+            {selectedOpportunity.whatYouWillLearn ? <section className="mt-4 border-t border-navy/8 pt-4" aria-labelledby="learning-heading"><h3 id="learning-heading" className="text-sm font-semibold text-navy">What you will learn</h3><p className="mt-1.5 text-sm leading-6 text-navy/64">{selectedOpportunity.whatYouWillLearn}</p></section> : null}
+            {selectedChallenge ? <div className="mt-4 rounded-lg border border-teal/16 bg-teal/[0.05] p-3"><div className="flex items-center gap-1.5 text-sm font-semibold text-teal-ink"><Sparkles className="size-3.5" aria-hidden="true" />Work challenge</div><p className="mt-1.5 text-sm font-medium text-navy">{selectedChallenge.title}</p><p className="mt-0.5 text-xs text-navy/52">{selectedChallenge.taskCount} {selectedChallenge.taskCount === 1 ? "task" : "tasks"}, about {selectedChallenge.estimatedMinutes} minutes</p></div> : null}
+            <div className="mt-4 flex items-start gap-2">
+              <div className="min-w-0 flex-1">{selectedApplication ? <Button render={<Link href={`/student/applications/${selectedApplication.id}`} />} nativeButton={false} className="h-10 w-full bg-teal px-4 text-white hover:bg-teal-ink">{selectedChallengeState?.kind === "to_do" ? "Start challenge" : selectedChallengeState?.kind === "in_progress" ? "Continue challenge" : "Open application"}<ArrowRight className="size-4" aria-hidden="true" /></Button> : <ApplyButton opportunityId={selectedOpportunity.id} label="Apply now" className="h-10 w-full bg-teal px-4 text-white hover:bg-teal-ink" />}</div>
+              <SaveButton opportunityId={selectedOpportunity.id} initialSaved={savedIds.has(selectedOpportunity.id)} showLabel className="h-10 border border-navy/12 bg-white hover:border-teal/25 hover:bg-teal/5" />
             </div>
           </aside>
         </div>
