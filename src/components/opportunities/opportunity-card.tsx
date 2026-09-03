@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BadgeCheck, Zap, ArrowRight, CalendarClock } from "lucide-react";
+import { BadgeCheck, Zap, ArrowRight, CalendarClock, Clock3, MapPin, Monitor } from "lucide-react";
 import { SaveButton } from "@/components/opportunities/save-button";
 import type { ChallengeState } from "@/lib/opportunities/challenge-state";
 import { matchTier } from "@/lib/matching";
@@ -19,7 +19,7 @@ const MATCH_TIER_LABEL: Record<"strong" | "good", string> = {
 
 function CompanyAvatar({ name }: { name: string }) {
   return (
-    <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-teal/10 text-sm font-semibold text-teal-ink">
+    <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-sm font-semibold text-teal-ink">
       {name.charAt(0).toUpperCase()}
     </div>
   );
@@ -39,7 +39,7 @@ function ChallengeCta({ state, opportunityId }: { state: ChallengeState; opportu
     case "unavailable":
     case "not_started":
       return (
-        <Link href={`/opportunities/${opportunityId}`} className={primaryCtaClass}>
+        <Link href={`/student/opportunities?opportunity=${opportunityId}`} className={primaryCtaClass}>
           View opportunity
           <ArrowRight className="size-3.5" aria-hidden="true" />
         </Link>
@@ -78,11 +78,11 @@ function ChallengeCta({ state, opportunityId }: { state: ChallengeState; opportu
 function statusLine(state: ChallengeState): string | undefined {
   switch (state.kind) {
     case "to_do":
-      return "Applied — challenge not started";
+      return "Applied. Challenge not started";
     case "in_progress":
       return "Challenge in progress";
     case "submitted":
-      return "Submitted — awaiting review, not a hiring decision yet";
+      return "Submitted. Awaiting company review";
     case "completed":
       return "Reviewed by the company";
     default:
@@ -131,20 +131,20 @@ export function OpportunityCard({
   const tier = typeof matchScore === "number" ? matchTier(matchScore) : null;
 
   return (
-    <div className={cn("rounded-xl border border-navy/10 bg-white p-6", className)}>
+    <article className={cn("rounded-2xl border border-navy/10 bg-white p-5 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-teal/25 hover:shadow-[0_14px_36px_rgba(33,50,72,0.07)] sm:p-6", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <CompanyAvatar name={opportunity.companyName} />
           <div className="min-w-0">
             <div className="flex items-center gap-1">
-              <p className="truncate text-xs font-medium uppercase tracking-wide text-navy/45">{opportunity.companyName}</p>
+              <p className="truncate text-sm font-medium text-navy/62">{opportunity.companyName}</p>
               {opportunity.companyVerified && (
                 <BadgeCheck className="size-3.5 shrink-0 text-teal-ink" aria-label="Verified company" />
               )}
             </div>
             <Link
               href={`/opportunities/${opportunity.id}`}
-              className="mt-0.5 block text-lg font-semibold tracking-[-0.01em] text-navy hover:text-teal-ink focus-visible:outline-none focus-visible:underline"
+              className="mt-1 block text-lg font-semibold tracking-[-0.02em] text-navy hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
             >
               {opportunity.role}
             </Link>
@@ -162,21 +162,15 @@ export function OpportunityCard({
 
       {opportunity.description && <p className="mt-3 line-clamp-2 text-sm text-navy/60">{teaser(opportunity.description)}</p>}
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-navy/60">
-        <span>{opportunity.location}</span>
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-navy/58">
+        <span className="flex items-center gap-1.5"><MapPin className="size-3.5" aria-hidden="true" />{opportunity.location}</span>
         {opportunity.workMode && (
-          <>
-            <span className="text-navy/25" aria-hidden="true">·</span>
-            <span>{WORK_MODE_LABEL[opportunity.workMode]}</span>
-          </>
+          <span className="flex items-center gap-1.5"><Monitor className="size-3.5" aria-hidden="true" />{WORK_MODE_LABEL[opportunity.workMode]}</span>
         )}
-        <span className="text-navy/25" aria-hidden="true">·</span>
-        <span>{opportunity.duration}</span>
-        <span className="text-navy/25" aria-hidden="true">·</span>
+        <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{opportunity.duration}</span>
         <span>{opportunity.hoursPerWeek}h/week</span>
         {opportunity.applicationDeadline && (
           <span className="flex items-center gap-1">
-            <span className="text-navy/25" aria-hidden="true">·</span>
             <CalendarClock className="size-3.5" aria-hidden="true" />
             Deadline {formatDeadline(opportunity.applicationDeadline)}
           </span>
@@ -186,20 +180,20 @@ export function OpportunityCard({
       {skills.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {skills.slice(0, 4).map((s) => (
-            <span key={s} className="rounded-full bg-gray-light px-2.5 py-1 text-xs text-navy/60">
+            <span key={s} className="rounded-full border border-navy/7 bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">
               {s}
             </span>
           ))}
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-navy/8 pt-4">
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-navy/8 pt-4">
         <div className="min-w-0">
           {challengeRequired && (
             <div className="flex items-center gap-1.5 text-sm font-medium text-teal-ink">
               <Zap className="size-4 shrink-0" aria-hidden="true" />
               <span className="truncate">
-                Work challenge{typeof estimatedMinutes === "number" ? ` · about ${estimatedMinutes} min` : ""}
+                Work challenge{typeof estimatedMinutes === "number" ? `, about ${estimatedMinutes} min` : ""}
               </span>
             </div>
           )}
@@ -207,6 +201,6 @@ export function OpportunityCard({
         </div>
         <ChallengeCta state={challengeState} opportunityId={opportunity.id} />
       </div>
-    </div>
+    </article>
   );
 }

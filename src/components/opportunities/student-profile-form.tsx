@@ -11,6 +11,8 @@ import {
   extractCvAction,
 } from "@/lib/opportunities/student-actions";
 import { STAGE_OPTIONS, type EducationStage } from "@/lib/education-stages";
+import { CalendarClock, FileText, GraduationCap, MapPin, Sparkles, Target, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const STAGE_FIELD_LABELS: Record<EducationStage, { institution: string; program: string; year: string }> = {
   high_school: { institution: "School", program: "", year: "Expected graduation year" },
@@ -153,7 +155,7 @@ const FIELD_OPTIONS = [
 const OPPORTUNITY_TYPE_OPTIONS = ["Internship", "Part-time", "Full-time", "Volunteer"];
 
 const selectClassName =
-  "mt-1.5 h-8 w-full rounded-lg border border-gray-cool/60 bg-transparent px-2.5 text-sm text-navy outline-none focus-visible:border-teal";
+  "mt-1.5 h-8 w-full rounded-lg border border-gray-cool/60 bg-white px-2.5 text-sm text-navy focus-visible:border-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/30";
 
 function MultiChipSelect({
   label,
@@ -307,11 +309,16 @@ function SelectWithOther({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-xs text-navy/40">{label}</p>
-      <p className="mt-1 text-sm font-medium text-navy">{value || "—"}</p>
+    <div className="min-w-0">
+      <p className="text-xs font-medium text-navy/42">{label}</p>
+      <p className={cn("mt-1.5 truncate text-sm font-medium", value ? "text-navy" : "text-navy/36")}>{value || "Not added yet"}</p>
     </div>
   );
+}
+
+function ChipList({ values, emptyText }: { values: string[]; emptyText: string }) {
+  if (values.length === 0) return <p className="text-sm text-navy/40">{emptyText}</p>;
+  return <div className="flex flex-wrap gap-2">{values.map((value) => <span key={value} className="rounded-full border border-navy/8 bg-[#f7f9fa] px-3 py-1.5 text-xs font-medium text-navy/62">{value}</span>)}</div>;
 }
 
 function SectionCard({
@@ -323,6 +330,9 @@ function SectionCard({
   saving,
   children,
   view,
+  icon: Icon,
+  description,
+  className,
 }: {
   title: string;
   editing: boolean;
@@ -332,22 +342,28 @@ function SectionCard({
   saving: boolean;
   children: React.ReactNode;
   view: React.ReactNode;
+  icon: LucideIcon;
+  description: string;
+  className?: string;
 }) {
   return (
-    <div className="rounded-xl border border-navy/10 bg-white p-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-navy">{title}</h3>
+    <section className={cn("rounded-2xl border border-navy/10 bg-white p-5 shadow-[0_8px_28px_rgba(33,50,72,0.035)] sm:p-6", className)}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-teal/9 text-teal-ink" aria-hidden="true"><Icon className="size-[17px]" /></span>
+          <div><h3 className="text-base font-semibold text-navy">{title}</h3><p className="mt-0.5 text-xs leading-5 text-navy/46">{description}</p></div>
+        </div>
         {!editing && (
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-full border border-navy/15 px-3 py-1.5 text-xs font-medium text-navy/70 transition-colors hover:bg-gray-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+            className="rounded-lg border border-navy/12 bg-white px-3 py-1.5 text-xs font-medium text-navy/68 transition-colors hover:border-teal/25 hover:bg-teal/5 hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
           >
             Edit
           </button>
         )}
       </div>
-      <div className="mt-5">
+      <div className="mt-6">
         {editing ? (
           <div className="space-y-5">
             {children}
@@ -364,7 +380,7 @@ function SectionCard({
           view
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -433,7 +449,7 @@ export function StudentProfileForm({
         cvFileKey: path,
       }));
       setCvMessage(
-        `Found ${extracted.skills.length} skill(s) and ${extracted.interests.length} interest area(s) — review below, then Save to keep them.`,
+        `Found ${extracted.skills.length} skill(s) and ${extracted.interests.length} interest area(s). Review them below, then save your changes.`,
       );
     } catch (err) {
       setCvError(err instanceof Error ? err.message : "Couldn't process that file.");
@@ -614,7 +630,7 @@ export function StudentProfileForm({
         </label>
         <Input
           id="availability"
-          placeholder="e.g. 20 hours/week, starting June"
+          placeholder="20 hours/week, starting June…"
           value={values.availability}
           onChange={(e) => set("availability", e.target.value)}
           className="mt-1.5"
@@ -654,7 +670,7 @@ export function StudentProfileForm({
           Or upload your CV (optional)
         </label>
         <p className="mt-1 text-xs text-navy/50">
-          PDF only. We&apos;ll pull out skills and interest areas for you to review — nothing saves automatically.
+          PDF only. We&apos;ll pull out skills and interest areas for you to review. Nothing saves automatically.
         </p>
         <input
           id="cv-upload"
@@ -678,9 +694,12 @@ export function StudentProfileForm({
 
   if (variant === "full") {
     return (
-      <div className="mt-8 space-y-5">
+      <div className="mt-6 grid gap-5 lg:grid-cols-12">
         <SectionCard
           title="Education"
+          description="Your current education and location"
+          icon={GraduationCap}
+          className="lg:col-span-7"
           editing={editingSection === "education"}
           onEdit={() => setEditingSection("education")}
           onCancel={() => cancelSection("education")}
@@ -688,11 +707,11 @@ export function StudentProfileForm({
           saving={isPending}
           view={
             <div className="grid gap-5 sm:grid-cols-2">
-              <InfoRow label="Status" value={stageLabel} />
+              <InfoRow label="Education stage" value={stageLabel} />
               {stageLabels?.institution && <InfoRow label={stageLabels.institution} value={values.university} />}
               {stageLabels?.program && <InfoRow label={stageLabels.program} value={values.major} />}
               {stageLabels?.year && <InfoRow label={stageLabels.year} value={values.graduationYear} />}
-              <InfoRow label="Location" value={values.location} />
+              <div className="flex items-start gap-2"><MapPin className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" /><InfoRow label="Location" value={values.location} /></div>
             </div>
           }
         >
@@ -701,34 +720,33 @@ export function StudentProfileForm({
 
         <SectionCard
           title="Preferences"
+          description="The opportunities you want to discover"
+          icon={Target}
+          className="lg:col-span-5"
           editing={editingSection === "preferences"}
           onEdit={() => setEditingSection("preferences")}
           onCancel={() => cancelSection("preferences")}
           onSave={saveSection}
           saving={isPending}
           view={
-            <div className="grid gap-5 sm:grid-cols-2">
-              <InfoRow label="Fields / career areas" value={values.interests} />
-              <InfoRow label="Opportunity types" value={values.opportunityTypes} />
-            </div>
+            <div className="space-y-5"><div><p className="mb-2 text-xs font-medium text-navy/42">Career interests</p><ChipList values={toList(values.interests)} emptyText="Add a career interest to improve recommendations." /></div><div><p className="mb-2 text-xs font-medium text-navy/42">Opportunity types</p><ChipList values={toList(values.opportunityTypes)} emptyText="Add the types of opportunities you want." /></div></div>
           }
         >
           {preferencesFields}
         </SectionCard>
 
         <SectionCard
-          title="Skills & CV"
+          title="Skills & documents"
+          description="The evidence companies can review"
+          icon={Sparkles}
+          className="lg:col-span-12"
           editing={editingSection === "skills"}
           onEdit={() => setEditingSection("skills")}
           onCancel={() => cancelSection("skills")}
           onSave={saveSection}
           saving={isPending}
           view={
-            <div className="grid gap-5 sm:grid-cols-2">
-              <InfoRow label="Availability" value={values.availability} />
-              <InfoRow label="Skills" value={values.skills} />
-              <InfoRow label="CV" value={values.cvFileKey ? "Uploaded" : values.cvUrl ? values.cvUrl : ""} />
-            </div>
+            <div className="grid gap-6 lg:grid-cols-[1fr_0.72fr]"><div><p className="mb-2 text-xs font-medium text-navy/42">Skills</p><ChipList values={toList(values.skills)} emptyText="Add skills so companies can understand your strengths." /></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1"><div className="flex items-start gap-2.5 rounded-xl border border-navy/8 bg-[#f8fafb] p-3.5"><CalendarClock className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" /><InfoRow label="Availability" value={values.availability} /></div><div className="flex items-start gap-2.5 rounded-xl border border-navy/8 bg-[#f8fafb] p-3.5"><FileText className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" /><InfoRow label="CV" value={values.cvFileKey ? "Uploaded CV" : values.cvUrl ? values.cvUrl : ""} /></div></div></div>
           }
         >
           {skillsFields}

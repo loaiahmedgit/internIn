@@ -15,6 +15,9 @@ export async function getOpportunitiesWithMatch(studentUserId?: string) {
       id: schema.opportunities.id,
       role: schema.opportunities.role,
       description: schema.opportunities.description,
+      shortDescription: schema.opportunities.shortDescription,
+      whatYouWillLearn: schema.opportunities.whatYouWillLearn,
+      requirements: schema.opportunities.requirements,
       duration: schema.opportunities.duration,
       hoursPerWeek: schema.opportunities.hoursPerWeek,
       location: schema.opportunities.location,
@@ -66,15 +69,24 @@ export function countCreatedWithinMs(items: { createdAt: Date }[], windowMs: num
  * challenge" CTA never appears for a challenge that doesn't exist, and so
  * the real estimated time (never invented) can show on cards.
  */
-export async function getPublishedChallengeInfo(): Promise<Map<string, { estimatedMinutes: number }>> {
+export async function getPublishedChallengeInfo(): Promise<
+  Map<string, { estimatedMinutes: number; title: string; taskCount: number }>
+> {
   const db = getDb();
   const rows = await db
     .select({
       opportunityId: schema.challenges.opportunityId,
       estimatedMinutes: schema.challengeVersions.estimatedMinutes,
+      title: schema.challengeVersions.title,
+      tasks: schema.challengeVersions.tasks,
     })
     .from(schema.challenges)
     .innerJoin(schema.challengeVersions, eq(schema.challenges.currentVersionId, schema.challengeVersions.id))
     .where(and(eq(schema.challenges.status, "published"), isNotNull(schema.challenges.currentVersionId)));
-  return new Map(rows.map((r) => [r.opportunityId, { estimatedMinutes: r.estimatedMinutes }]));
+  return new Map(
+    rows.map((r) => [
+      r.opportunityId,
+      { estimatedMinutes: r.estimatedMinutes, title: r.title, taskCount: r.tasks.length },
+    ]),
+  );
 }
