@@ -10,7 +10,7 @@ import { getChallengeState } from "@/lib/opportunities/challenge-state";
 import { getProfileCompletion } from "@/lib/profile-completion";
 import { OpportunityCard } from "@/components/opportunities/opportunity-card";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Bookmark, ChevronRight, CircleAlert } from "lucide-react";
+import { ArrowRight, Bookmark, ChevronRight, CircleAlert, Sparkles } from "lucide-react";
 
 /**
  * One actionable item for "Needs your attention" — every entry here is
@@ -211,48 +211,62 @@ export default async function StudentDashboardPage() {
   const firstName = user.fullName.trim().split(/\s+/)[0] || "there";
 
   return (
-    <div className="mx-auto max-w-[1180px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-      <section className="relative flex items-center justify-between gap-4 overflow-hidden rounded-xl border border-navy/8 bg-white px-5 py-4 sm:px-6 sm:py-5">
-        <div className="min-w-0">
-          <p className="text-sm text-navy/55">Welcome back, {firstName}</p>
-          <h1 className="mt-0.5 text-xl font-semibold tracking-[-0.02em] text-navy sm:text-2xl">
-            Discover opportunities that fit you
+    <div className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+      <section className="relative overflow-hidden rounded-2xl border border-teal/14 bg-[linear-gradient(110deg,#ffffff_0%,#f2fbfa_58%,#eaf8f6_100%)] px-6 py-7 shadow-[0_18px_50px_rgba(33,50,72,0.05)] sm:px-9 sm:py-9 lg:min-h-[300px] lg:px-12">
+        <div className="relative z-[1] max-w-xl lg:pt-4">
+          <p className="text-sm font-medium text-teal-ink">Welcome back, {firstName}</p>
+          <h1 className="mt-3 max-w-lg text-balance text-3xl font-semibold tracking-[-0.045em] text-navy sm:text-4xl lg:text-[2.75rem] lg:leading-[1.08]">
+            Find an internship that fits where you are going.
           </h1>
-          <p className="mt-1 text-sm text-navy/55">Personalized picks based on your interests and skills.</p>
+          <p className="mt-4 max-w-md text-pretty text-base leading-7 text-navy/62">
+            Explore relevant roles, keep applications moving, and build evidence of what you can do.
+          </p>
+          <Button
+            render={<Link href="/student/opportunities" />}
+            nativeButton={false}
+            className="mt-6 h-10 bg-teal px-5 text-white shadow-[0_8px_20px_rgba(27,165,156,0.18)] hover:bg-teal-ink"
+          >
+            Explore internships
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Button>
         </div>
-        <Image
-          src="/illustrations/student-learning.png"
-          alt=""
-          width={1086}
-          height={1448}
-          priority
-          className="hidden h-20 w-auto shrink-0 object-contain object-bottom sm:block"
-        />
+        <div className="pointer-events-none absolute inset-y-0 right-2 hidden w-[40%] items-end justify-center lg:flex" aria-hidden="true">
+          <div className="absolute right-10 bottom-6 size-52 rounded-full bg-white/70 blur-2xl" />
+          <Image
+            src="/illustrations/student-learning.png"
+            alt=""
+            width={1086}
+            height={1448}
+            priority
+            className="relative h-[285px] w-auto object-contain object-bottom"
+            sizes="(min-width: 1024px) 360px, 0px"
+          />
+        </div>
       </section>
 
       {activeProgramSummary && (
-        <section aria-labelledby="current-internship-heading" className="mt-5">
-          <div className="rounded-xl border border-navy/10 bg-white px-5 py-4 sm:px-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <section aria-labelledby="current-internship-heading" className="mt-7">
+          <div className="rounded-2xl border border-navy/10 bg-white px-5 py-5 shadow-[0_10px_30px_rgba(33,50,72,0.04)] sm:px-7 sm:py-6">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p id="current-internship-heading" className="text-xs font-medium uppercase tracking-wide text-teal-ink">Current internship</p>
-                <h2 className="mt-1 text-base font-semibold tracking-[-0.015em] text-navy">{activeProgramSummary.role}</h2>
-                <p className="mt-0.5 text-sm text-navy/56">{activeProgramSummary.companyName}</p>
+                <p id="current-internship-heading" className="text-sm font-medium text-teal-ink">Current internship</p>
+                <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-navy">{activeProgramSummary.role}</h2>
+                <p className="mt-1 text-sm text-navy/56">{activeProgramSummary.companyName}</p>
               </div>
-              <div className="flex min-w-0 flex-1 items-center gap-4 sm:max-w-sm">
+              <div className="flex min-w-0 flex-1 items-center gap-4 sm:max-w-lg">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between text-xs font-medium text-navy/50">
                     <span>Week {activeProgramSummary.currentWeek}</span>
-                    <span>of {activeProgramSummary.totalWeeks}</span>
+                    <span>{activeProgramSummary.totalWeeks} weeks</span>
                   </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-navy/8" aria-hidden="true">
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-navy/8" aria-hidden="true">
                     <div
                       className="h-full rounded-full bg-teal"
                       style={{ width: `${Math.min(100, Math.max(6, (activeProgramSummary.currentWeek / activeProgramSummary.totalWeeks) * 100))}%` }}
                     />
                   </div>
                 </div>
-                <Button render={<Link href="/student/internships" />} nativeButton={false} className="h-9 bg-teal px-3.5 text-white hover:bg-teal-ink">
+                <Button render={<Link href="/student/internships" />} nativeButton={false} className="h-10 bg-teal px-4 text-white hover:bg-teal-ink">
                   Open workspace
                   <ArrowRight className="size-4" aria-hidden="true" />
                 </Button>
@@ -263,12 +277,15 @@ export default async function StudentDashboardPage() {
       )}
 
       {visibleAttentionItems.length > 0 && (
-        <section aria-labelledby="attention-heading" className="mt-8">
-          <div className="flex items-center justify-between gap-4">
-            <h2 id="attention-heading" className="text-base font-semibold text-navy">Needs your attention</h2>
-            <Link href="/student/applications" className="rounded-md text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">View all</Link>
+        <section aria-labelledby="attention-heading" className="mt-11">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 id="attention-heading" className="text-xl font-semibold tracking-[-0.025em] text-navy">Needs your attention</h2>
+              <p className="mt-1 text-sm text-navy/52">A short list of things you can act on now.</p>
+            </div>
+            <Link href="/student/applications" className="rounded-md text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">View applications</Link>
           </div>
-          <div className="mt-3 overflow-hidden rounded-xl border border-navy/10 bg-white">
+          <div className="mt-4 overflow-hidden rounded-2xl border border-navy/10 bg-white shadow-[0_10px_30px_rgba(33,50,72,0.035)]">
             {visibleAttentionItems.map((item) => (
               <div
                 key={item.key}
@@ -299,10 +316,13 @@ export default async function StudentDashboardPage() {
 
       <section
         aria-labelledby="recommended-heading"
-        className={activeProgramSummary || visibleAttentionItems.length > 0 ? "mt-9" : "mt-7"}
+        className={activeProgramSummary || visibleAttentionItems.length > 0 ? "mt-12" : "mt-10"}
       >
         <div className="flex items-center justify-between gap-4">
-          <h2 id="recommended-heading" className="text-base font-semibold text-navy">Recommended for you</h2>
+          <div>
+            <h2 id="recommended-heading" className="text-xl font-semibold tracking-[-0.025em] text-navy">Recommended for you</h2>
+            <p className="mt-1 text-sm text-navy/52">Based on your interests and profile.</p>
+          </div>
           <Link
             href="/student/opportunities"
             className="flex shrink-0 items-center gap-1 rounded-sm text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
@@ -313,22 +333,22 @@ export default async function StudentDashboardPage() {
         </div>
 
         {recommended.length === 0 ? (
-          <p className="mt-5 text-sm text-navy/60">
+          <p className="mt-6 text-navy/68">
             {opportunities.length === 0
               ? "No published opportunities yet. Companies are still building challenges. Check back soon."
               : "You've applied to everything that's currently open. Check back soon for more."}
           </p>
         ) : (
-          <ul className="mt-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="-mx-4 mt-5 grid snap-x snap-mandatory grid-flow-col auto-cols-[minmax(19rem,calc(100vw-3rem))] gap-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:auto-cols-[24rem] sm:px-6 lg:mx-0 lg:auto-cols-[calc((100%-2rem)/3)] lg:px-0">
             {recommended.map((o) => (
-              <li key={o.id}>
+              <li key={o.id} className="snap-start">
                 <OpportunityCard
                   opportunity={o}
                   skills={o.skills}
                   saved={savedIds.has(o.id)}
                   estimatedMinutes={publishedChallengeInfo.get(o.id)?.estimatedMinutes}
                   matchScore={o.matchScore}
-                  compact
+                  className="h-full shadow-[0_8px_28px_rgba(33,50,72,0.04)]"
                   challengeState={getChallengeState({
                     challengePublished: publishedChallengeInfo.has(o.id),
                     application: applicationByOpportunityId.get(o.id),
@@ -341,27 +361,27 @@ export default async function StudentDashboardPage() {
         )}
       </section>
 
-      <div className="mt-8 grid gap-4 lg:grid-cols-[1.4fr_0.6fr]">
+      <div className="mt-11 grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
       {savedOpportunities.length > 0 && (
         <section aria-labelledby="saved-heading">
           <div className="flex items-center justify-between">
-            <h2 id="saved-heading" className="text-base font-semibold text-navy">Saved opportunities</h2>
+            <h2 id="saved-heading" className="text-xl font-semibold tracking-[-0.025em] text-navy">Saved opportunities</h2>
             <Link href="/student/opportunities?saved=1" className="flex items-center rounded-sm text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
               View all
               <ChevronRight className="size-3.5" aria-hidden="true" />
             </Link>
           </div>
-          <ul className="mt-3 overflow-hidden rounded-xl border border-navy/10 bg-white">
+          <ul className="mt-4 overflow-hidden rounded-2xl border border-navy/10 bg-white shadow-[0_10px_30px_rgba(33,50,72,0.035)]">
             {savedOpportunities.map((o) => (
               <li key={o.id} className="border-b border-navy/8 last:border-b-0">
                 <Link
                   href={`/student/opportunities?opportunity=${o.id}`}
-                  className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-teal/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal/40"
+                  className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-teal/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal/40"
                 >
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal/8 text-teal-ink" aria-hidden="true"><Bookmark className="size-4" /></span>
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal/8 text-teal-ink" aria-hidden="true"><Bookmark className="size-4" /></span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-navy">{o.role}</span>
+                      <span className="block truncate text-sm font-semibold text-navy">{o.role}</span>
                       <span className="block truncate text-xs text-navy/50">{o.companyName}</span>
                     </span>
                   </span>
@@ -374,18 +394,20 @@ export default async function StudentDashboardPage() {
       )}
 
       {profileNudge && (
-        <aside className="flex items-center justify-between gap-4 rounded-xl border border-navy/8 bg-[#f8fafb] px-4 py-3.5 lg:flex-col lg:items-start lg:gap-3">
+        <aside className="flex flex-col justify-between gap-5 rounded-2xl border border-teal/18 bg-teal/[0.055] p-5 sm:flex-row sm:items-center lg:flex-col lg:items-start lg:p-6">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-navy">{profileNudge.title}</p>
-            <p className="mt-0.5 text-sm text-navy/58">{profileNudge.description}</p>
+            <span className="flex size-10 items-center justify-center rounded-xl bg-white text-teal-ink shadow-[0_4px_16px_rgba(33,50,72,0.05)]" aria-hidden="true"><Sparkles className="size-[18px]" /></span>
+            <p className="mt-4 text-base font-semibold text-navy">{profileNudge.title}</p>
+            <p className="mt-1 text-sm leading-6 text-navy/60">{profileNudge.description}</p>
           </div>
-          <Link
-            href={profileNudge.href}
-            className="flex shrink-0 items-center gap-1 text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+          <Button
+            variant="outline"
+            render={<Link href={profileNudge.href} />}
+            nativeButton={false}
+            className="h-9 w-full border-teal/20 bg-white px-3.5 text-teal-ink hover:bg-white/70 sm:w-auto"
           >
             {profileNudge.ctaLabel}
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Link>
+          </Button>
         </aside>
       )}
       </div>

@@ -114,7 +114,6 @@ export function OpportunityCard({
   estimatedMinutes,
   matchScore,
   className,
-  compact = false,
 }: {
   opportunity: OpportunityCardData;
   skills: string[];
@@ -126,48 +125,33 @@ export function OpportunityCard({
    * (a percentage reads as a fake hiring-probability claim). */
   matchScore?: number;
   className?: string;
-  /** Discovery-preview sizing (Home's Recommended grid): drops the
-   * description line and tightens padding/gaps. The full opportunity
-   * detail lives one click away — a preview card doesn't need to repeat
-   * it, only scan fast. Explore's own list uses ExploreOpportunityCard,
-   * not this prop. */
-  compact?: boolean;
 }) {
   const challengeRequired = challengeState.kind !== "unavailable";
   const status = statusLine(challengeState);
   const tier = typeof matchScore === "number" ? matchTier(matchScore) : null;
 
   return (
-    <article
-      className={cn(
-        "rounded-xl border border-navy/10 bg-white transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-teal/25 hover:shadow-[0_14px_36px_rgba(33,50,72,0.07)]",
-        compact ? "p-4" : "p-5 sm:p-6",
-        className,
-      )}
-    >
+    <article className={cn("rounded-2xl border border-navy/10 bg-white p-5 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-teal/25 hover:shadow-[0_14px_36px_rgba(33,50,72,0.07)] sm:p-6", className)}>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2.5">
+        <div className="flex min-w-0 items-start gap-3">
           <CompanyAvatar name={opportunity.companyName} />
           <div className="min-w-0">
             <div className="flex items-center gap-1">
-              <p className="truncate text-xs font-medium text-navy/60">{opportunity.companyName}</p>
+              <p className="truncate text-sm font-medium text-navy/62">{opportunity.companyName}</p>
               {opportunity.companyVerified && (
                 <BadgeCheck className="size-3.5 shrink-0 text-teal-ink" aria-label="Verified company" />
               )}
             </div>
             <Link
               href={`/opportunities/${opportunity.id}`}
-              className={cn(
-                "block font-semibold tracking-[-0.015em] text-navy hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40",
-                compact ? "mt-0.5 text-base" : "mt-1 text-lg",
-              )}
+              className="mt-1 block text-lg font-semibold tracking-[-0.02em] text-navy hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
             >
               {opportunity.role}
             </Link>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {tier && !compact && (
+        <div className="flex shrink-0 items-center gap-2">
+          {tier && (
             <span className="rounded-full bg-teal/10 px-2 py-0.5 text-xs font-medium text-teal-ink">
               {MATCH_TIER_LABEL[tier]}
             </span>
@@ -176,18 +160,16 @@ export function OpportunityCard({
         </div>
       </div>
 
-      {!compact && opportunity.description && (
-        <p className="mt-3 line-clamp-2 text-sm text-navy/60">{teaser(opportunity.description)}</p>
-      )}
+      {opportunity.description && <p className="mt-3 line-clamp-2 text-sm text-navy/60">{teaser(opportunity.description)}</p>}
 
-      <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-navy/58", compact ? "mt-2.5" : "mt-4")}>
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-navy/58">
         <span className="flex items-center gap-1.5"><MapPin className="size-3.5" aria-hidden="true" />{opportunity.location}</span>
         {opportunity.workMode && (
           <span className="flex items-center gap-1.5"><Monitor className="size-3.5" aria-hidden="true" />{WORK_MODE_LABEL[opportunity.workMode]}</span>
         )}
         <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{opportunity.duration}</span>
         <span>{opportunity.hoursPerWeek}h/week</span>
-        {!compact && opportunity.applicationDeadline && (
+        {opportunity.applicationDeadline && (
           <span className="flex items-center gap-1">
             <CalendarClock className="size-3.5" aria-hidden="true" />
             Deadline {formatDeadline(opportunity.applicationDeadline)}
@@ -196,8 +178,8 @@ export function OpportunityCard({
       </div>
 
       {skills.length > 0 && (
-        <div className={cn("flex flex-wrap gap-1.5", compact ? "mt-2.5" : "mt-3")}>
-          {skills.slice(0, compact ? 3 : 4).map((s) => (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {skills.slice(0, 4).map((s) => (
             <span key={s} className="rounded-full border border-navy/7 bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">
               {s}
             </span>
@@ -205,7 +187,7 @@ export function OpportunityCard({
         </div>
       )}
 
-      <div className={cn("flex items-center justify-between gap-3 border-t border-navy/8", compact ? "mt-3 pt-3" : "mt-5 pt-4")}>
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-navy/8 pt-4">
         <div className="min-w-0">
           {challengeRequired && (
             <div className="flex items-center gap-1.5 text-sm font-medium text-teal-ink">
@@ -215,7 +197,7 @@ export function OpportunityCard({
               </span>
             </div>
           )}
-          {!compact && status && <p className="mt-1 truncate text-xs text-navy/50">{status}</p>}
+          {status && <p className="mt-1 truncate text-xs text-navy/50">{status}</p>}
         </div>
         <ChallengeCta state={challengeState} opportunityId={opportunity.id} />
       </div>

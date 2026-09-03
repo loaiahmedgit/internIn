@@ -5,13 +5,20 @@ import { StudentProfileForm } from "@/components/opportunities/student-profile-f
 import { STAGE_OPTIONS } from "@/lib/education-stages";
 import { getProfileCompletion } from "@/lib/profile-completion";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
   BadgeCheck,
   CalendarDays,
   FileText,
   GraduationCap,
   MapPin,
   Pencil,
-  Sparkles,
 } from "lucide-react";
 
 const monthYear = new Intl.DateTimeFormat("en", { month: "short", year: "numeric" });
@@ -138,187 +145,177 @@ export default async function StudentProfilePage() {
   const interests = profile?.interests ?? [];
   const opportunityTypes = profile?.opportunityTypes ?? [];
 
-  return (
-    <div className="mx-auto max-w-[1120px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-      <div className="flex flex-col gap-4 rounded-xl border border-navy/8 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
-        <div className="flex min-w-0 items-center gap-4">
-          <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-teal/10 text-lg font-semibold text-teal-ink" aria-hidden="true">
-            {user.fullName.split(/\s+/).map((part) => part.charAt(0)).join("").slice(0, 2).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-[-0.02em] text-navy">{user.fullName}</h1>
-            <p className="mt-0.5 text-sm font-medium text-teal-ink">{focus ? `Interested in ${focus}` : stageLabel || "Student"}</p>
-            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-navy/56">
-              {profile?.major || profile?.university ? (
-                <span className="flex items-center gap-1.5">
-                  <GraduationCap className="size-3.5" aria-hidden="true" />
-                  {[profile?.major, profile?.university].filter(Boolean).join(" · ")}
-                </span>
-              ) : null}
-              {profile?.location ? (
-                <span className="flex items-center gap-1.5"><MapPin className="size-3.5" aria-hidden="true" />{profile.location}</span>
-              ) : null}
-              {profile?.availability ? (
-                <span className="flex items-center gap-1.5"><CalendarDays className="size-3.5" aria-hidden="true" />{profile.availability}</span>
-              ) : null}
-            </div>
-          </div>
-        </div>
+  const editTriggerClass =
+    "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-navy/12 bg-white px-3.5 text-sm font-medium text-navy transition-colors hover:border-teal/25 hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40";
+  const editLinkClass = "font-medium text-teal-ink hover:underline";
 
-        <div className="flex shrink-0 flex-col gap-2 sm:items-end">
-          <a
-            href="#profile-details"
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-navy/12 bg-white px-3.5 text-sm font-medium text-navy transition-colors hover:border-teal/25 hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
-          >
-            <Pencil className="size-3.5" aria-hidden="true" />
-            Edit profile
-          </a>
-          {profileCompletion.percent < 100 && (
-            <div className="w-full sm:w-40">
-              <p className="text-xs text-navy/50">Profile {profileCompletion.percent}% complete</p>
-              <div className="mt-1 h-1 overflow-hidden rounded-full bg-navy/8" aria-hidden="true">
-                <div className="h-full rounded-full bg-teal" style={{ width: `${profileCompletion.percent}%` }} />
+  return (
+    <Sheet>
+      <div className="mx-auto max-w-[1120px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+        <div className="flex flex-col gap-4 rounded-xl border border-navy/8 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-teal/10 text-lg font-semibold text-teal-ink" aria-hidden="true">
+              {user.fullName.split(/\s+/).map((part) => part.charAt(0)).join("").slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-[-0.02em] text-navy">{user.fullName}</h1>
+              <p className="mt-0.5 text-sm font-medium text-teal-ink">{focus ? `Interested in ${focus}` : stageLabel || "Student"}</p>
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-navy/56">
+                {profile?.major || profile?.university ? (
+                  <span className="flex items-center gap-1.5">
+                    <GraduationCap className="size-3.5" aria-hidden="true" />
+                    {[profile?.major, profile?.university].filter(Boolean).join(" · ")}
+                  </span>
+                ) : null}
+                {profile?.location ? (
+                  <span className="flex items-center gap-1.5"><MapPin className="size-3.5" aria-hidden="true" />{profile.location}</span>
+                ) : null}
+                {profile?.availability ? (
+                  <span className="flex items-center gap-1.5"><CalendarDays className="size-3.5" aria-hidden="true" />{profile.availability}</span>
+                ) : null}
               </div>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[1.55fr_1fr]">
-        <div className="min-w-0 space-y-6">
-          {evidence.length > 0 && (
+          <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+            <SheetTrigger className={editTriggerClass}>
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Edit profile
+            </SheetTrigger>
+            {profileCompletion.percent < 100 && (
+              <p className="text-xs text-navy/50">Profile {profileCompletion.percent}% complete</p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+          <div className="min-w-0 space-y-6">
             <section aria-labelledby="evidence-heading">
               <h2 id="evidence-heading" className="text-base font-semibold text-navy">Verified work</h2>
-              <div className="mt-3 space-y-3">
-                {evidence.map((item) => (
-                  <div key={item.key} className="rounded-xl border border-navy/10 bg-white p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-navy">{item.title}</p>
-                        <p className="mt-0.5 text-xs text-navy/55">
-                          {item.kind === "internship" ? "Internship" : "Company challenge"}
-                          {item.companyName ? ` · ${item.companyName}` : ""}
-                        </p>
+              {evidence.length > 0 ? (
+                <div className="mt-3 space-y-3">
+                  {evidence.map((item) => (
+                    <div key={item.key} className="rounded-xl border border-navy/10 bg-white p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-navy">{item.title}</p>
+                          <p className="mt-0.5 text-xs text-navy/55">
+                            {item.kind === "internship" ? "Internship" : "Company challenge"}
+                            {item.companyName ? ` · ${item.companyName}` : ""}
+                          </p>
+                        </div>
+                        {item.date && <p className="shrink-0 text-xs text-navy/45">{monthYear.format(item.date)}</p>}
                       </div>
-                      {item.date && <p className="shrink-0 text-xs text-navy/45">{monthYear.format(item.date)}</p>}
+                      {item.skills.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {item.skills.slice(0, 6).map((skill) => (
+                            <span key={skill} className="rounded-full border border-navy/7 bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">{skill}</span>
+                          ))}
+                        </div>
+                      )}
+                      <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-teal-ink">
+                        <BadgeCheck className="size-3.5" aria-hidden="true" />
+                        Company verified
+                      </p>
                     </div>
-                    {item.skills.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {item.skills.slice(0, 6).map((skill) => (
-                          <span key={skill} className="rounded-full border border-navy/7 bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">{skill}</span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-navy/58">Your verified internship work and completed company challenges will appear here.</p>
+              )}
+            </section>
+
+            <section aria-labelledby="education-heading">
+              <h2 id="education-heading" className="text-base font-semibold text-navy">Education</h2>
+              {profile?.university || profile?.major ? (
+                <div className="mt-3 rounded-xl border border-navy/10 bg-white p-4">
+                  <p className="text-sm font-medium text-navy">{profile.university || "University not set"}</p>
+                  <p className="mt-0.5 text-sm text-navy/58">
+                    {[profile.major, profile.graduationYear ? `Expected ${profile.graduationYear}` : null].filter(Boolean).join(" · ")}
+                  </p>
+                  {profile.location && <p className="mt-0.5 text-xs text-navy/48">{profile.location}</p>}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-navy/58">Add your education so companies know your background.</p>
+              )}
+            </section>
+          </div>
+
+          <div className="space-y-6">
+            <section aria-labelledby="skills-heading">
+              <h2 id="skills-heading" className="text-base font-semibold text-navy">Skills</h2>
+              {skills.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {skills.map((skill) => (
+                    <span key={skill} className="rounded-full border border-navy/8 bg-white px-2.5 py-1 text-xs text-navy/62">{skill}</span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-navy/55">
+                  No skills added yet. <SheetTrigger className={editLinkClass}>Add skills →</SheetTrigger>
+                </p>
+              )}
+            </section>
+
+            <section aria-labelledby="cv-heading">
+              <h2 id="cv-heading" className="text-base font-semibold text-navy">CV</h2>
+              {profile?.cvFileKey || profile?.cvUrl ? (
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-navy/10 bg-white p-3.5">
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <FileText className="size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+                    <span className="min-w-0 text-sm font-medium text-navy">{profile.cvFileKey ? "CV on file" : "CV link added"}</span>
+                  </span>
+                  {profile.cvUrl ? (
+                    <a href={profile.cvUrl} target="_blank" rel="noreferrer" className="shrink-0 text-sm font-medium text-teal-ink hover:underline">View</a>
+                  ) : (
+                    <SheetTrigger className="shrink-0 text-sm font-medium text-teal-ink hover:underline">Replace</SheetTrigger>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <p className="text-sm text-navy/60">Upload your CV to make applications faster.</p>
+                  <SheetTrigger className="mt-1.5 inline-block text-sm font-medium text-teal-ink hover:underline">Upload →</SheetTrigger>
+                </div>
+              )}
+            </section>
+
+            {(interests.length > 0 || opportunityTypes.length > 0) && (
+              <section aria-labelledby="preferences-heading">
+                <h2 id="preferences-heading" className="text-base font-semibold text-navy">Preferences</h2>
+                <div className="mt-3 space-y-3 rounded-xl border border-navy/10 bg-white p-3.5">
+                  {interests.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-navy/45">Interested in</p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {interests.map((item) => (
+                          <span key={item} className="rounded-full bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">{item}</span>
                         ))}
                       </div>
-                    )}
-                    <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-teal-ink">
-                      <BadgeCheck className="size-3.5" aria-hidden="true" />
-                      Company verified
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          <section aria-labelledby="education-heading">
-            <h2 id="education-heading" className="text-base font-semibold text-navy">Education</h2>
-            {profile?.university || profile?.major ? (
-              <div className="mt-3 rounded-xl border border-navy/10 bg-white p-4">
-                <p className="text-sm font-medium text-navy">{profile.university || "University not set"}</p>
-                <p className="mt-0.5 text-sm text-navy/58">
-                  {[profile.major, profile.graduationYear ? `Expected ${profile.graduationYear}` : null].filter(Boolean).join(" · ")}
-                </p>
-                {profile.location && <p className="mt-0.5 text-xs text-navy/48">{profile.location}</p>}
-              </div>
-            ) : (
-              <div className="mt-3 rounded-xl border border-dashed border-navy/15 px-4 py-3.5">
-                <p className="text-sm text-navy/60">Add your education so companies know your background.</p>
-              </div>
-            )}
-          </section>
-        </div>
-
-        <div className="space-y-6">
-          <section aria-labelledby="skills-heading">
-            <h2 id="skills-heading" className="text-base font-semibold text-navy">Skills</h2>
-            {skills.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {skills.map((skill) => (
-                  <span key={skill} className="rounded-full border border-navy/8 bg-white px-2.5 py-1 text-xs text-navy/62">{skill}</span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-2 text-sm text-navy/55">
-                No skills added yet. <a href="#profile-details" className="font-medium text-teal-ink hover:underline">Add skills →</a>
-              </p>
-            )}
-          </section>
-
-          <section aria-labelledby="cv-heading">
-            <h2 id="cv-heading" className="text-base font-semibold text-navy">CV</h2>
-            {profile?.cvFileKey || profile?.cvUrl ? (
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-navy/10 bg-white p-3.5">
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <FileText className="size-4 shrink-0 text-teal-ink" aria-hidden="true" />
-                  <span className="min-w-0 text-sm font-medium text-navy">{profile.cvFileKey ? "CV on file" : "CV link added"}</span>
-                </span>
-                {profile.cvUrl ? (
-                  <a href={profile.cvUrl} target="_blank" rel="noreferrer" className="shrink-0 text-sm font-medium text-teal-ink hover:underline">View</a>
-                ) : (
-                  <a href="#profile-details" className="shrink-0 text-sm font-medium text-teal-ink hover:underline">Replace</a>
-                )}
-              </div>
-            ) : (
-              <div className="mt-3 rounded-xl border border-dashed border-navy/15 px-3.5 py-3">
-                <p className="text-sm text-navy/60">Upload your CV to make applications faster.</p>
-                <a href="#profile-details" className="mt-1.5 inline-block text-sm font-medium text-teal-ink hover:underline">Upload →</a>
-              </div>
-            )}
-          </section>
-
-          {(interests.length > 0 || opportunityTypes.length > 0) && (
-            <section aria-labelledby="preferences-heading">
-              <h2 id="preferences-heading" className="text-base font-semibold text-navy">Preferences</h2>
-              <div className="mt-3 space-y-3 rounded-xl border border-navy/10 bg-white p-3.5">
-                {interests.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-navy/45">Interested in</p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {interests.map((item) => (
-                        <span key={item} className="rounded-full bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">{item}</span>
-                      ))}
                     </div>
-                  </div>
-                )}
-                {opportunityTypes.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-navy/45">Looking for</p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {opportunityTypes.map((item) => (
-                        <span key={item} className="rounded-full bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">{item}</span>
-                      ))}
+                  )}
+                  {opportunityTypes.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-navy/45">Looking for</p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {opportunityTypes.map((item) => (
+                          <span key={item} className="rounded-full bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">{item}</span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
-
-          {evidence.length === 0 && (
-            <section className="rounded-xl border border-dashed border-navy/15 px-3.5 py-4" aria-labelledby="no-evidence-heading">
-              <p id="no-evidence-heading" className="flex items-center gap-1.5 text-sm font-medium text-navy">
-                <Sparkles className="size-4 text-teal-ink" aria-hidden="true" />
-                No verified work yet
-              </p>
-              <p className="mt-1 text-sm text-navy/58">Complete a company challenge or internship to start building real evidence here.</p>
-            </section>
-          )}
+                  )}
+                </div>
+              </section>
+            )}
+          </div>
         </div>
       </div>
 
-      <div id="profile-details" className="mt-9 scroll-mt-24 border-t border-navy/8 pt-7">
-        <h2 className="text-base font-semibold text-navy">Edit your details</h2>
-        <p className="mt-1 text-sm text-navy/55">This information stays private to internIn — companies see it through your applications and profile summary above.</p>
-        <div className="mt-5">
+      <SheetContent className="flex flex-col gap-0 overflow-y-auto p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md data-[side=right]:lg:max-w-lg">
+        <SheetHeader className="border-b border-navy/8 px-5 py-4">
+          <SheetTitle>Edit profile</SheetTitle>
+          <SheetDescription>This information stays private to internIn — companies see it through your applications and profile summary.</SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 px-5 py-5">
           <StudentProfileForm
             initial={{
               educationStage: profile?.educationStage ?? "",
@@ -335,7 +332,7 @@ export default async function StudentProfilePage() {
             }}
           />
         </div>
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 }

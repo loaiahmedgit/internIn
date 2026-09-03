@@ -1,33 +1,15 @@
 import Link from "next/link";
 import { eq, inArray } from "drizzle-orm";
-import {
-  ArrowRight,
-  BadgeCheck,
-  BriefcaseBusiness,
-  CheckCircle2,
-  Clock3,
-  MapPin,
-  Monitor,
-  Search,
-  SearchX,
-  Sparkles,
-} from "lucide-react";
+import { Search, SearchX } from "lucide-react";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
 import { getOpportunitiesWithMatch, getPublishedChallengeInfo } from "@/lib/opportunities/browse";
 import { getSavedOpportunityIds } from "@/lib/opportunities/saved";
 import { getChallengeState } from "@/lib/opportunities/challenge-state";
 import { ExploreOpportunityCard } from "@/components/student/explore-opportunity-card";
+import { OpportunityDetailSheet, type OpportunityDetail } from "@/components/student/opportunity-detail-sheet";
 import { EmptyState } from "@/components/dashboard/empty-state";
-import { ApplyButton } from "@/components/opportunities/apply-button";
-import { SaveButton } from "@/components/opportunities/save-button";
 import { Button } from "@/components/ui/button";
-
-const WORK_MODE_LABEL: Record<"remote" | "onsite" | "hybrid", string> = {
-  remote: "Remote",
-  onsite: "On-site",
-  hybrid: "Hybrid",
-};
 
 function valueOf(value: string | string[] | undefined) {
   return typeof value === "string" ? value : "";
@@ -99,17 +81,9 @@ export default async function StudentOpportunitiesPage({
   if (sort === "newest") filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   if (sort === "title") filtered.sort((a, b) => a.role.localeCompare(b.role));
 
-  const selectedOpportunity = filtered.find((o) => o.id === selectedId) ?? filtered[0];
-  const selectedApplication = selectedOpportunity ? applicationByOpportunityId.get(selectedOpportunity.id) : undefined;
-  const selectedSubmission = selectedApplication ? submissionByApplicationId.get(selectedApplication.id) : undefined;
-  const selectedChallenge = selectedOpportunity ? publishedChallengeInfo.get(selectedOpportunity.id) : undefined;
-  const selectedChallengeState = selectedApplication
-    ? getChallengeState({
-        challengePublished: Boolean(selectedChallenge),
-        application: selectedApplication,
-        submission: selectedSubmission,
-      })
-    : undefined;
+  // Closed by default: only a real match for the `?opportunity=` param
+  // opens the sheet — never fall back to the first result in the list.
+  const selectedOpportunity = filtered.find((o) => o.id === selectedId);
   const hasActiveFilters = Boolean(q || location || duration || workMode || savedOnly);
 
   function cardHref(opportunityId: string) {
@@ -124,8 +98,54 @@ export default async function StudentOpportunitiesPage({
     return `/student/opportunities?${next.toString()}`;
   }
 
+  function closeHref() {
+    const next = new URLSearchParams();
+    if (qRaw) next.set("q", qRaw);
+    if (location) next.set("location", location);
+    if (duration) next.set("duration", duration);
+    if (workMode) next.set("workMode", workMode);
+    if (savedOnly) next.set("saved", "1");
+    if (sort !== "relevant") next.set("sort", sort);
+    const qs = next.toString();
+    return qs ? `/student/opportunities?${qs}` : "/student/opportunities";
+  }
+
+  let detail: OpportunityDetail | null = null;
+  if (selectedOpportunity) {
+    const application = applicationByOpportunityId.get(selectedOpportunity.id);
+    const submission = application ? submissionByApplicationId.get(application.id) : undefined;
+    const challenge = publishedChallengeInfo.get(selectedOpportunity.id);
+    const challengeState = application
+      ? getChallengeState({ challengePublished: Boolean(challenge), application, submission })
+      : undefined;
+    detail = {
+      id: selectedOpportunity.id,
+      role: selectedOpportunity.role,
+      companyName: selectedOpportunity.companyName,
+      companyVerified: selectedOpportunity.companyVerified,
+      location: selectedOpportunity.location,
+      workMode: selectedOpportunity.workMode,
+      duration: selectedOpportunity.duration,
+      hoursPerWeek: selectedOpportunity.hoursPerWeek,
+      description: selectedOpportunity.description,
+      shortDescription: selectedOpportunity.shortDescription,
+      skills: selectedOpportunity.skills,
+      requirements: selectedOpportunity.requirements,
+      whatYouWillLearn: selectedOpportunity.whatYouWillLearn,
+      saved: savedIds.has(selectedOpportunity.id),
+      challenge,
+      application: application
+        ? {
+            id: application.id,
+            ctaLabel:
+              challengeState?.kind === "to_do" ? "Start challenge" : challengeState?.kind === "in_progress" ? "Continue challenge" : "Open application",
+          }
+        : undefined,
+    };
+  }
+
   return (
-    <div className="mx-auto max-w-[1360px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+    <div className="mx-auto max-w-[1120px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <header>
         <h1 className="text-xl font-semibold tracking-[-0.02em] text-navy sm:text-2xl">Explore internships</h1>
         <p className="mt-1 text-sm text-navy/58">Discover roles matched to your interests, skills, and availability.</p>
@@ -170,37 +190,25 @@ export default async function StudentOpportunitiesPage({
       {filtered.length === 0 ? (
         opportunities.length === 0 ? <EmptyState icon={SearchX} title="No published opportunities yet" description="Companies are still preparing their internships. Check back soon." /> : <EmptyState icon={SearchX} title="No opportunities match these filters" description="Try a broader search or clear one of the filters." ctaLabel="Clear filters" ctaHref="/student/opportunities" />
       ) : (
-        <div className="mt-4 grid items-start gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
-          <section aria-labelledby="opportunity-results-heading">
-            <div className="flex items-center justify-between gap-4"><h2 id="opportunity-results-heading" className="text-sm font-semibold text-navy">{filtered.length} {filtered.length === 1 ? "opportunity" : "opportunities"}</h2><p className="text-xs text-navy/45">Select a role to preview it</p></div>
-            <div className="mt-2.5 space-y-2">
-              {filtered.map((opportunity) => <ExploreOpportunityCard key={opportunity.id} opportunity={opportunity} href={cardHref(opportunity.id)} selected={opportunity.id === selectedOpportunity.id} saved={savedIds.has(opportunity.id)} estimatedMinutes={publishedChallengeInfo.get(opportunity.id)?.estimatedMinutes} matchScore={opportunity.matchScore} />)}
-            </div>
-          </section>
-
-          <aside className="rounded-xl border border-navy/10 bg-white p-4 sm:p-5 xl:sticky xl:top-[5.5rem]" aria-label={`${selectedOpportunity.role} details`}>
-            <div className="flex items-start gap-3">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-base font-semibold text-teal-ink" aria-hidden="true">{selectedOpportunity.companyName.charAt(0).toUpperCase()}</div>
-              <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><p className="truncate text-sm font-medium text-navy/62">{selectedOpportunity.companyName}</p>{selectedOpportunity.companyVerified ? <BadgeCheck className="size-3.5 shrink-0 text-teal-ink" aria-label="Verified company" /> : null}</div><h2 className="mt-0.5 text-balance text-xl font-semibold tracking-[-0.025em] text-navy">{selectedOpportunity.role}</h2></div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-navy/56">
-              <span className="flex items-center gap-1.5"><MapPin className="size-3.5" aria-hidden="true" />{selectedOpportunity.location}</span>
-              {selectedOpportunity.workMode ? <span className="flex items-center gap-1.5"><Monitor className="size-3.5" aria-hidden="true" />{WORK_MODE_LABEL[selectedOpportunity.workMode]}</span> : null}
-              <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{selectedOpportunity.duration}</span>
-              <span className="flex items-center gap-1.5"><BriefcaseBusiness className="size-3.5" aria-hidden="true" />{selectedOpportunity.hoursPerWeek}h/week</span>
-            </div>
-            <p className="mt-4 line-clamp-5 whitespace-pre-wrap text-sm leading-6 text-navy/68">{selectedOpportunity.shortDescription || selectedOpportunity.description}</p>
-            {selectedOpportunity.skills.length > 0 ? <section className="mt-4" aria-labelledby="key-skills-heading"><h3 id="key-skills-heading" className="text-sm font-semibold text-navy">Key skills</h3><div className="mt-2 flex flex-wrap gap-1.5">{selectedOpportunity.skills.map((skill) => <span key={skill} className="rounded-full border border-navy/10 bg-[#f7f9fa] px-2.5 py-1 text-xs text-navy/62">{skill}</span>)}</div></section> : null}
-            {selectedOpportunity.requirements.length > 0 ? <section className="mt-4 border-t border-navy/8 pt-4" aria-labelledby="requirements-heading"><h3 id="requirements-heading" className="text-sm font-semibold text-navy">Role requirements</h3><ul className="mt-2 space-y-1.5">{selectedOpportunity.requirements.slice(0, 5).map((requirement) => <li key={requirement} className="flex items-start gap-2 text-sm leading-6 text-navy/64"><CheckCircle2 className="mt-1 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" /><span>{requirement}</span></li>)}</ul></section> : null}
-            {selectedOpportunity.whatYouWillLearn ? <section className="mt-4 border-t border-navy/8 pt-4" aria-labelledby="learning-heading"><h3 id="learning-heading" className="text-sm font-semibold text-navy">What you will learn</h3><p className="mt-1.5 text-sm leading-6 text-navy/64">{selectedOpportunity.whatYouWillLearn}</p></section> : null}
-            {selectedChallenge ? <div className="mt-4 rounded-lg border border-teal/16 bg-teal/[0.05] p-3"><div className="flex items-center gap-1.5 text-sm font-semibold text-teal-ink"><Sparkles className="size-3.5" aria-hidden="true" />Work challenge</div><p className="mt-1.5 text-sm font-medium text-navy">{selectedChallenge.title}</p><p className="mt-0.5 text-xs text-navy/52">{selectedChallenge.taskCount} {selectedChallenge.taskCount === 1 ? "task" : "tasks"}, about {selectedChallenge.estimatedMinutes} minutes</p></div> : null}
-            <div className="mt-4 flex items-start gap-2">
-              <div className="min-w-0 flex-1">{selectedApplication ? <Button render={<Link href={`/student/applications/${selectedApplication.id}`} />} nativeButton={false} className="h-10 w-full bg-teal px-4 text-white hover:bg-teal-ink">{selectedChallengeState?.kind === "to_do" ? "Start challenge" : selectedChallengeState?.kind === "in_progress" ? "Continue challenge" : "Open application"}<ArrowRight className="size-4" aria-hidden="true" /></Button> : <ApplyButton opportunityId={selectedOpportunity.id} label="Apply now" className="h-10 w-full bg-teal px-4 text-white hover:bg-teal-ink" />}</div>
-              <SaveButton opportunityId={selectedOpportunity.id} initialSaved={savedIds.has(selectedOpportunity.id)} showLabel className="h-10 border border-navy/12 bg-white hover:border-teal/25 hover:bg-teal/5" />
-            </div>
-          </aside>
-        </div>
+        <section aria-labelledby="opportunity-results-heading" className="mt-4">
+          <h2 id="opportunity-results-heading" className="text-sm font-semibold text-navy">{filtered.length} {filtered.length === 1 ? "opportunity" : "opportunities"}</h2>
+          <div className="mt-2.5 space-y-2">
+            {filtered.map((opportunity) => (
+              <ExploreOpportunityCard
+                key={opportunity.id}
+                opportunity={opportunity}
+                href={cardHref(opportunity.id)}
+                selected={opportunity.id === selectedOpportunity?.id}
+                saved={savedIds.has(opportunity.id)}
+                estimatedMinutes={publishedChallengeInfo.get(opportunity.id)?.estimatedMinutes}
+                matchScore={opportunity.matchScore}
+              />
+            ))}
+          </div>
+        </section>
       )}
+
+      <OpportunityDetailSheet opportunity={detail} closeHref={closeHref()} />
     </div>
   );
 }
