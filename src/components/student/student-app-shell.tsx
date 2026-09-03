@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, Compass, Home, User } from "lucide-react";
+import { ArrowRight, Briefcase, ClipboardList, Compass, Home, User } from "lucide-react";
 import { AccountMenu } from "@/components/dashboard/account-menu";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { Wordmark } from "@/components/ui/wordmark";
@@ -55,7 +55,18 @@ function MobileNavLink({ item, active }: { item: NavItem; active: boolean }) {
  * company DashboardShell: discovery and applications use top-level app
  * navigation on desktop and compact bottom navigation on mobile.
  */
-export function StudentAppShell({ children, displayName }: { children: React.ReactNode; displayName: string }) {
+export function StudentAppShell({
+  children,
+  displayName,
+  activeInternship,
+}: {
+  children: React.ReactNode;
+  displayName: string;
+  /** Accepted internship's role — only enough to label the persistent entry
+   * point below. Null/undefined when the student has none; full program
+   * detail lives in the separate Internship Workspace, not here. */
+  activeInternship?: { role: string } | null;
+}) {
   const pathname = usePathname();
 
   return (
@@ -84,6 +95,16 @@ export function StudentAppShell({ children, displayName }: { children: React.Rea
           </nav>
 
           <div className="ml-auto flex items-center gap-1.5 md:justify-self-end">
+            {activeInternship && (
+              <Link
+                href="/student/internships"
+                className="hidden items-center gap-1.5 rounded-full border border-teal/20 bg-teal/6 px-3 py-1.5 text-xs font-medium text-teal-ink transition-colors hover:bg-teal/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 sm:flex"
+              >
+                <Briefcase className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="max-w-[9rem] truncate">{activeInternship.role}</span>
+                <ArrowRight className="size-3 shrink-0" aria-hidden="true" />
+              </Link>
+            )}
             <NotificationBell />
             <AccountMenu label={displayName} subLabel="Student account" variant="topbar" />
           </div>

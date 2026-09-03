@@ -1,36 +1,39 @@
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { eq, inArray, desc } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
 import { getOpportunitiesWithMatch, getPublishedChallengeInfo } from "@/lib/opportunities/browse";
 import { getSavedOpportunityIds } from "@/lib/opportunities/saved";
+import { getChallengeState } from "@/lib/opportunities/challenge-state";
 import { getProfileCompletion } from "@/lib/profile-completion";
-import { formatSavedAgo } from "@/lib/format-date";
 import { HomeOpportunityCard } from "@/components/student/home-opportunity-card";
-import { SaveButton } from "@/components/opportunities/save-button";
+import { NewThisWeekCard } from "@/components/student/new-this-week-card";
 import { Button } from "@/components/ui/button";
-import {
-  ArrowRight,
-  Bookmark,
-  Briefcase,
-  CalendarDays,
-  CheckCircle2,
-  Circle,
-  Clock3,
-  MapPin,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2, Circle } from "lucide-react";
 
 /** Display-only capitalization for a first name — never touches the stored value. */
 function toDisplayName(name: string): string {
   return name.length ? name.charAt(0).toUpperCase() + name.slice(1) : name;
 }
 
+/** Plain helper (not a component) so calling Date.now() here never trips the render-purity lint rule. */
+function isWithinLastWeek(date: Date, windowMs: number): boolean {
+  return Date.now() - date.getTime() < windowMs;
+}
+
 const RECOMMENDED_COUNT = 3;
-const SAVED_COUNT = 3;
+const NEW_THIS_WEEK_COUNT = 3;
+const CONTINUE_COUNT = 3;
+const NEW_THIS_WEEK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const PROFILE_RING_RADIUS = 22;
 const PROFILE_RING_CIRCUMFERENCE = 2 * Math.PI * PROFILE_RING_RADIUS;
+
+/** One real, actionable item for "Continue where you left off" — a pending
+ * offer to respond to, or a challenge the student has started but not
+ * finished (or hasn't started at all). Never a passive status change. */
+type ContinueItem = { key: string; title: string; role: string; companyName: string; status: string; href: string };
 
 export default async function StudentDashboardPage() {
   const { user } = await requireCurrentStudent();
@@ -59,8 +62,7 @@ export default async function StudentDashboardPage() {
       opportunityId: schema.applications.opportunityId,
       role: schema.opportunities.role,
       companyName: schema.companies.name,
-      hoursPerWeek: schema.opportunities.hoursPerWeek,
-      location: schema.opportunities.location,
+      challengeStartedAt: schema.applications.challengeStartedAt,
     })
     .from(schema.applications)
     .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
@@ -74,26 +76,29 @@ export default async function StudentDashboardPage() {
         .from(schema.internshipOffers)
         .where(inArray(schema.internshipOffers.applicationId, applicationIds))
     : [];
+  const submissions = applicationIds.length
+    ? await db
+        .select({ id: schema.submissions.id, applicationId: schema.submissions.applicationId })
+        .from(schema.submissions)
+        .where(inArray(schema.submissions.applicationId, applicationIds))
+    : [];
+  const submissionIds = submissions.map((s) => s.id);
+  const evidenceRows = submissionIds.length
+    ? await db
+        .select({ submissionId: schema.candidateEvidence.submissionId })
+        .from(schema.candidateEvidence)
+        .where(inArray(schema.candidateEvidence.submissionId, submissionIds))
+    : [];
+  const evidencedSubmissionIds = new Set(evidenceRows.map((e) => e.submissionId));
+  const submissionByApplicationId = new Map(
+    submissions.map((s) => [s.applicationId, { hasEvidence: evidencedSubmissionIds.has(s.id) }]),
+  );
 
   const [{ opportunities, hasMatchData }, publishedChallengeInfo, savedIds] = await Promise.all([
     getOpportunitiesWithMatch(user.id),
     getPublishedChallengeInfo(),
     getSavedOpportunityIds(user.id),
   ]);
-
-  const savedRows = await db
-    .select({
-      opportunityId: schema.opportunities.id,
-      role: schema.opportunities.role,
-      companyName: schema.companies.name,
-      createdAt: schema.savedOpportunities.createdAt,
-    })
-    .from(schema.savedOpportunities)
-    .innerJoin(schema.opportunities, eq(schema.savedOpportunities.opportunityId, schema.opportunities.id))
-    .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
-    .where(eq(schema.savedOpportunities.studentId, user.id))
-    .orderBy(desc(schema.savedOpportunities.createdAt))
-    .limit(SAVED_COUNT);
 
   const profileCompletion = getProfileCompletion(profile);
   const profileSteps = [
@@ -102,47 +107,58 @@ export default async function StudentDashboardPage() {
     { key: "interests", label: "Add interests", done: (profile?.interests.length ?? 0) > 0 },
   ];
 
-  // An active internship outranks everything else in "what matters right
-  // now" — real week/progress, derived from actual task completion.
-  const acceptedOffer = offers.find((o) => o.status === "accepted");
-  let activeProgramSummary:
-    | { role: string; companyName: string; hoursPerWeek: number; location: string; currentWeek: number; totalWeeks: number; percent: number }
-    | undefined;
-  if (acceptedOffer) {
-    const [program] = await db
-      .select({ id: schema.internshipPrograms.id, durationWeeks: schema.internshipPrograms.durationWeeks })
-      .from(schema.internshipPrograms)
-      .where(eq(schema.internshipPrograms.offerId, acceptedOffer.id))
-      .limit(1);
-    const application = applications.find((a) => a.id === acceptedOffer.applicationId);
-    if (program && application) {
-      const weeks = await db
-        .select({ id: schema.internshipWeeks.id, weekNumber: schema.internshipWeeks.weekNumber })
-        .from(schema.internshipWeeks)
-        .where(eq(schema.internshipWeeks.programId, program.id));
-      const weekIds = weeks.map((w) => w.id);
-      const tasks = weekIds.length
-        ? await db.select({ weekId: schema.internshipTasks.weekId, status: schema.internshipTasks.status }).from(schema.internshipTasks).where(inArray(schema.internshipTasks.weekId, weekIds))
-        : [];
-      const sortedWeeks = [...weeks].sort((a, b) => a.weekNumber - b.weekNumber);
-      const firstIncomplete = sortedWeeks.find((w) => tasks.some((t) => t.weekId === w.id && t.status !== "done"));
-      const currentWeek = firstIncomplete?.weekNumber ?? sortedWeeks[sortedWeeks.length - 1]?.weekNumber ?? 1;
-
-      activeProgramSummary = {
-        role: application.role,
-        companyName: application.companyName,
-        hoursPerWeek: application.hoursPerWeek,
-        location: application.location,
-        currentWeek,
-        totalWeeks: program.durationWeeks,
-        percent: Math.round((currentWeek / program.durationWeeks) * 100),
-      };
-    }
-  }
-
   const appliedOpportunityIds = new Set(applications.map((a) => a.opportunityId));
   const notApplied = opportunities.filter((o) => !appliedOpportunityIds.has(o.id));
   const recommended = (hasMatchData ? notApplied : [...notApplied].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())).slice(0, RECOMMENDED_COUNT);
+
+  const newThisWeek = [...notApplied]
+    .filter((o) => isWithinLastWeek(o.createdAt, NEW_THIS_WEEK_WINDOW_MS))
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, NEW_THIS_WEEK_COUNT);
+
+  // Real, actionable items only — a pending offer to respond to, or a
+  // challenge not yet finished. Never a restatement of every application.
+  const continueItems: ContinueItem[] = [];
+  for (const offer of offers) {
+    if (offer.status !== "pending") continue;
+    const application = applications.find((a) => a.id === offer.applicationId);
+    if (!application) continue;
+    continueItems.push({
+      key: `offer-${offer.id}`,
+      title: "Respond to offer",
+      role: application.role,
+      companyName: application.companyName,
+      status: "Offer received",
+      href: `/student/applications/${application.id}`,
+    });
+  }
+  for (const application of applications) {
+    const challengeState = getChallengeState({
+      challengePublished: publishedChallengeInfo.has(application.opportunityId),
+      application,
+      submission: submissionByApplicationId.get(application.id),
+    });
+    if (challengeState.kind === "in_progress") {
+      continueItems.push({
+        key: `inprogress-${application.id}`,
+        title: "Continue challenge",
+        role: application.role,
+        companyName: application.companyName,
+        status: "Challenge in progress",
+        href: `/student/applications/${application.id}`,
+      });
+    } else if (challengeState.kind === "to_do") {
+      continueItems.push({
+        key: `todo-${application.id}`,
+        title: "Start challenge",
+        role: application.role,
+        companyName: application.companyName,
+        status: "Challenge not started",
+        href: `/student/applications/${application.id}`,
+      });
+    }
+  }
+  const visibleContinueItems = continueItems.slice(0, CONTINUE_COUNT);
 
   const firstName = toDisplayName(user.fullName.trim().split(/\s+/)[0] || "there");
 
@@ -175,142 +191,9 @@ export default async function StudentDashboardPage() {
         </div>
       </section>
 
-      {/* Recommended for you */}
-      <section aria-labelledby="recommended-heading" className="mt-9">
-        <div className="flex items-center justify-between gap-4">
-          <h2 id="recommended-heading" className="text-lg font-semibold tracking-[-0.02em] text-navy">Recommended for you</h2>
-          <Link href="/student/opportunities" className="flex shrink-0 items-center gap-1 text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
-            View all
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Link>
-        </div>
-
-        {recommended.length === 0 ? (
-          <p className="mt-4 text-sm text-navy/60">
-            {opportunities.length === 0
-              ? "No published opportunities yet. Companies are still building challenges. Check back soon."
-              : "You've applied to everything that's currently open. Check back soon for more."}
-          </p>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {recommended.map((o) => (
-              <HomeOpportunityCard
-                key={o.id}
-                opportunity={o}
-                href={`/student/opportunities?opportunity=${o.id}`}
-                saved={savedIds.has(o.id)}
-                estimatedMinutes={publishedChallengeInfo.get(o.id)?.estimatedMinutes}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Current internship */}
-      <section aria-labelledby="current-internship-heading" className="mt-9">
-        <div className="flex items-center justify-between gap-4">
-          <h2 id="current-internship-heading" className="text-lg font-semibold tracking-[-0.02em] text-navy">Current internship</h2>
-        </div>
-
-        {activeProgramSummary ? (
-          <div className="mt-4 rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:px-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-6">
-              <div className="flex min-w-0 items-center gap-3 lg:w-64 lg:shrink-0">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-sm font-semibold text-teal-ink" aria-hidden="true">
-                  {activeProgramSummary.companyName.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-base font-semibold text-navy">{activeProgramSummary.role}</p>
-                  <p className="truncate text-sm text-navy/56">{activeProgramSummary.companyName}</p>
-                </div>
-              </div>
-
-              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-navy/56 lg:shrink-0">
-                <span className="flex items-center gap-1.5"><CalendarDays className="size-3.5" aria-hidden="true" />Week {activeProgramSummary.currentWeek} of {activeProgramSummary.totalWeeks}</span>
-                <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{activeProgramSummary.hoursPerWeek}h/week</span>
-                <span className="flex items-center gap-1.5"><MapPin className="size-3.5" aria-hidden="true" />{activeProgramSummary.location}</span>
-              </div>
-
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-navy/8" aria-hidden="true">
-                  <div className="h-full rounded-full bg-teal" style={{ width: `${activeProgramSummary.percent}%` }} />
-                </div>
-                <span className="shrink-0 text-xs font-medium tabular-nums text-navy/56">{activeProgramSummary.percent}%</span>
-              </div>
-
-              <Button render={<Link href="/student/internships" />} nativeButton={false} variant="outline" className="h-9 shrink-0 border-teal/25 bg-white px-3.5 text-teal-ink hover:bg-teal/5">
-                Open workspace
-                <ArrowRight className="size-3.5" aria-hidden="true" />
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <div className="flex items-center gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-navy/5 text-navy/40" aria-hidden="true">
-                <Briefcase className="size-4" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-navy">No active internship yet</p>
-                <p className="mt-0.5 text-sm text-navy/56">When you accept an offer, your internship workspace will appear here.</p>
-              </div>
-            </div>
-            <Link href="/student/opportunities" className="shrink-0 text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
-              Explore internships →
-            </Link>
-          </div>
-        )}
-      </section>
-
-      {/* Saved opportunities */}
-      <section aria-labelledby="saved-heading" className="mt-9">
-        <div className="flex items-center justify-between gap-4">
-          <h2 id="saved-heading" className="text-lg font-semibold tracking-[-0.02em] text-navy">Saved opportunities</h2>
-          <Link href="/student/opportunities?saved=1" className="flex shrink-0 items-center gap-1 text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
-            View all
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Link>
-        </div>
-
-        {savedRows.length === 0 ? (
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <div className="flex items-center gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-navy/5 text-navy/40" aria-hidden="true">
-                <Bookmark className="size-4" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-navy">Nothing saved yet</p>
-                <p className="mt-0.5 text-sm text-navy/56">Save opportunities you like so you can come back to them quickly.</p>
-              </div>
-            </div>
-            <Link href="/student/opportunities" className="shrink-0 text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
-              Explore roles →
-            </Link>
-          </div>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 divide-y divide-navy/8 overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            {savedRows.map((item) => (
-              <div key={item.opportunityId} className="flex items-start justify-between gap-3 px-5 py-4">
-                <Link href={`/student/opportunities?opportunity=${item.opportunityId}`} className="flex min-w-0 items-start gap-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal/10 text-xs font-semibold text-teal-ink" aria-hidden="true">
-                    {item.companyName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-xs text-navy/52">{item.companyName}</p>
-                    <p className="truncate text-sm font-semibold text-navy">{item.role}</p>
-                    <p className="mt-0.5 truncate text-xs text-navy/45">{formatSavedAgo(item.createdAt)}</p>
-                  </div>
-                </Link>
-                <SaveButton opportunityId={item.opportunityId} initialSaved className="shrink-0" />
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
       {/* Level up your profile */}
       {profileCompletion.percent < 100 && (
-        <section aria-labelledby="profile-nudge-heading" className="mt-8 mb-2">
+        <section aria-labelledby="profile-nudge-heading" className="mt-8">
           <div className="flex flex-col gap-5 rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:px-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-4">
               <svg viewBox="0 0 52 52" className="size-12 shrink-0 -rotate-90" aria-hidden="true">
@@ -355,6 +238,81 @@ export default async function StudentDashboardPage() {
               Improve profile
               <ArrowRight className="size-4" aria-hidden="true" />
             </Button>
+          </div>
+        </section>
+      )}
+
+      {/* Recommended for you */}
+      <section aria-labelledby="recommended-heading" className="mt-9">
+        <div className="flex items-center justify-between gap-4">
+          <h2 id="recommended-heading" className="text-lg font-semibold tracking-[-0.02em] text-navy">Recommended for you</h2>
+          <Link href="/student/opportunities" className="flex shrink-0 items-center gap-1 text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+            View all
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Link>
+        </div>
+
+        {recommended.length === 0 ? (
+          <p className="mt-4 text-sm text-navy/60">
+            {opportunities.length === 0
+              ? "No published opportunities yet. Companies are still building challenges. Check back soon."
+              : "You've applied to everything that's currently open. Check back soon for more."}
+          </p>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {recommended.map((o) => (
+              <HomeOpportunityCard
+                key={o.id}
+                opportunity={o}
+                href={`/student/opportunities?opportunity=${o.id}`}
+                saved={savedIds.has(o.id)}
+                estimatedMinutes={publishedChallengeInfo.get(o.id)?.estimatedMinutes}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Continue where you left off — real actionable items only; the
+          whole section is omitted when there is nothing to act on. */}
+      {visibleContinueItems.length > 0 && (
+        <section aria-labelledby="continue-heading" className="mt-9">
+          <h2 id="continue-heading" className="text-lg font-semibold tracking-[-0.02em] text-navy">Continue where you left off</h2>
+          <div className="mt-4 divide-y divide-navy/8 overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+            {visibleContinueItems.map((item) => (
+              <div key={item.key} className="flex items-center justify-between gap-4 px-5 py-3.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal/10 text-xs font-semibold text-teal-ink" aria-hidden="true">
+                    {item.companyName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-navy">{item.title}</p>
+                    <p className="truncate text-xs text-navy/52">{item.role} · {item.companyName}</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="hidden text-xs text-navy/45 sm:inline">{item.status}</span>
+                  <Link href={item.href} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+                    Continue
+                    <ArrowRight className="size-3.5" aria-hidden="true" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* New this week — fresh opportunities, omitted entirely when none
+          were published in the last 7 days. */}
+      {newThisWeek.length > 0 && (
+        <section aria-labelledby="new-this-week-heading" className="mt-9 mb-2">
+          <h2 id="new-this-week-heading" className="text-lg font-semibold tracking-[-0.02em] text-navy">New this week</h2>
+          <p className="mt-0.5 text-sm text-navy/52">Fresh opportunities matching your interests.</p>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {newThisWeek.map((o) => (
+              <NewThisWeekCard key={o.id} opportunity={o} href={`/student/opportunities?opportunity=${o.id}`} />
+            ))}
           </div>
         </section>
       )}
