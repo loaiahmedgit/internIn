@@ -166,8 +166,8 @@ export default async function StudentDashboardPage() {
           <Image
             src="/assets/student-hero-illustration.png"
             alt=""
-            width={1448}
-            height={1086}
+            width={1382}
+            height={998}
             priority
             className="h-[210px] w-auto object-contain object-bottom"
             sizes="(min-width: 1024px) 420px, 0px"
