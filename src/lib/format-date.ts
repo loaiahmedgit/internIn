@@ -29,3 +29,15 @@ export function formatRecentDate(date: Date, now = new Date(), timeZone = "Asia/
   if (daysAgo === 1) return "Yesterday";
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(date);
 }
+
+/** "Saved 2 days ago" / "Saved 1 week ago" style relative label for a saved-item timestamp. */
+export function formatSavedAgo(date: Date, now = new Date()): string {
+  const days = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 86400000));
+  if (days === 0) return "Saved today";
+  if (days === 1) return "Saved yesterday";
+  if (days < 7) return `Saved ${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `Saved ${weeks} ${weeks === 1 ? "week" : "weeks"} ago`;
+  const months = Math.floor(days / 30);
+  return `Saved ${Math.max(1, months)} ${months === 1 ? "month" : "months"} ago`;
+}
