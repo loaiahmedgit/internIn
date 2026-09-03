@@ -152,7 +152,7 @@ export default async function StudentDashboardPage() {
           vertically centered in the card; the illustration is absolutely
           anchored to the bottom-right so it shares the text block's visual
           center instead of floating in its own half. */}
-      <section className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white px-6 py-6 sm:px-9 lg:h-[200px] lg:px-10">
+      <section className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white px-6 py-6 sm:px-9 lg:h-[224px] lg:px-10">
         <div className="relative z-[1] flex h-full max-w-lg flex-col justify-center lg:max-w-[52%]">
           <p className="text-base font-semibold text-teal-ink">Hi {firstName}</p>
           <h1 className="mt-1.5 text-balance text-2xl font-bold tracking-[-0.03em] text-navy sm:text-[1.875rem] sm:leading-[1.15]">
@@ -162,14 +162,14 @@ export default async function StudentDashboardPage() {
             Explore internships that match your interests and skills and build real experience.
           </p>
         </div>
-        <div className="pointer-events-none absolute right-6 bottom-0 hidden lg:block lg:right-8">
+        <div className="pointer-events-none absolute right-3 bottom-0 hidden lg:block">
           <Image
             src="/assets/student-hero-illustration.png"
             alt=""
             width={1448}
             height={1086}
             priority
-            className="h-[180px] w-auto object-contain object-bottom"
+            className="h-[210px] w-auto object-contain object-bottom"
             sizes="(min-width: 1024px) 420px, 0px"
           />
         </div>
