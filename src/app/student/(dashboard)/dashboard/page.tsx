@@ -8,7 +8,8 @@ import { getSavedOpportunityIds } from "@/lib/opportunities/saved";
 import { getChallengeState } from "@/lib/opportunities/challenge-state";
 import { getProfileCompletion } from "@/lib/profile-completion";
 import { OpportunityCard } from "@/components/opportunities/opportunity-card";
-import { StudentPageHeader } from "@/components/dashboard/student-page-header";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, ChevronRight } from "lucide-react";
 
 /**
@@ -208,64 +209,73 @@ export default async function StudentDashboardPage() {
   }
 
   return (
-    <div className="@container mx-auto max-w-4xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
-      <StudentPageHeader
-        eyebrow="For You"
-        title="For You"
-        description="Internships matched to your interests and experience."
-      />
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+      <header className="max-w-2xl">
+        <h1 className="text-balance text-2xl font-semibold tracking-[-0.03em] text-navy sm:text-3xl">Opportunities for you</h1>
+        <p className="mt-2 text-sm leading-6 text-navy/60">Discover internships based on your interests, skills, and experience.</p>
+      </header>
 
       {activeProgramSummary && (
-        <div className="mt-8 rounded-xl border border-teal/30 bg-teal/5 p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-teal-ink">Current internship</p>
-          <h2 className="mt-1.5 text-lg font-semibold text-navy">
-            {activeProgramSummary.role} · {activeProgramSummary.companyName}
-          </h2>
-          <p className="mt-1 text-sm text-navy/60">
-            Week {activeProgramSummary.currentWeek} of {activeProgramSummary.totalWeeks}
-          </p>
-          <Link
-            href={`/student/applications/${activeProgramSummary.applicationId}`}
-            className="mt-4 inline-flex rounded-lg bg-teal px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal/90"
-          >
-            Open internship workspace
-          </Link>
-        </div>
+        <section aria-labelledby="current-internship-heading" className="mt-8">
+          <Card className="gap-0 bg-teal/5 py-0 ring-teal/20">
+            <CardContent className="flex flex-col gap-5 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div className="min-w-0">
+                <p id="current-internship-heading" className="text-sm font-medium text-teal-ink">Current internship</p>
+                <h2 className="mt-1 text-lg font-semibold text-navy">{activeProgramSummary.role}</h2>
+                <p className="mt-1 text-sm text-navy/58">
+                  {activeProgramSummary.companyName} · Week {activeProgramSummary.currentWeek} of {activeProgramSummary.totalWeeks}
+                </p>
+              </div>
+              <Button
+                render={<Link href="/student/internships" />}
+                nativeButton={false}
+                className="h-9 w-full bg-teal px-4 text-white hover:bg-teal/90 sm:w-auto"
+              >
+                Open workspace
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
       )}
 
       {visibleAttentionItems.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/50">Needs your attention</h2>
-          <div className="mt-3 space-y-2">
+        <section aria-labelledby="attention-heading" className="mt-10 max-w-4xl">
+          <h2 id="attention-heading" className="text-lg font-semibold tracking-[-0.02em] text-navy">Needs your attention</h2>
+          <Card className="mt-4 gap-0 divide-y divide-navy/8 py-0">
             {visibleAttentionItems.map((item) => (
               <div
                 key={item.key}
-                className="flex items-center justify-between gap-4 rounded-xl border border-navy/10 bg-white px-5 py-4"
+                className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-navy">
-                    {item.role} · {item.companyName}
-                  </p>
-                  <p className="mt-0.5 text-sm text-teal-ink">{item.description}</p>
+                  <p className="truncate text-sm font-semibold text-navy">{item.role}</p>
+                  <p className="mt-0.5 truncate text-sm text-navy/55">{item.companyName} · {item.description}</p>
                 </div>
-                <Link
-                  href={item.href}
-                  className="shrink-0 rounded-lg border border-teal/30 px-3.5 py-1.5 text-sm font-medium text-teal-ink transition-colors hover:bg-teal/5"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  render={<Link href={item.href} />}
+                  nativeButton={false}
+                  className="w-full border-teal/25 text-teal-ink hover:bg-teal/5 sm:w-auto"
                 >
                   {item.ctaLabel}
-                </Link>
+                </Button>
               </div>
             ))}
-          </div>
-        </div>
+          </Card>
+        </section>
       )}
 
-      <div className={activeProgramSummary || visibleAttentionItems.length > 0 ? "mt-10" : "mt-8"}>
+      <section
+        aria-labelledby="recommended-heading"
+        className={activeProgramSummary || visibleAttentionItems.length > 0 ? "mt-12" : "mt-9"}
+      >
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold tracking-[-0.02em] text-navy">Recommended for you</h2>
+          <h2 id="recommended-heading" className="text-xl font-semibold tracking-[-0.02em] text-navy">Recommended for you</h2>
           <Link
             href="/student/opportunities"
-            className="flex shrink-0 items-center gap-1 text-sm font-medium text-teal-ink hover:underline"
+            className="flex shrink-0 items-center gap-1 rounded-sm text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
           >
             View all
             <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -275,69 +285,75 @@ export default async function StudentDashboardPage() {
         {recommended.length === 0 ? (
           <p className="mt-6 text-navy/68">
             {opportunities.length === 0
-              ? "No published opportunities yet. Companies are still building challenges — check back soon."
-              : "You've applied to everything that's currently open — nice work. Check back soon for more."}
+              ? "No published opportunities yet. Companies are still building challenges. Check back soon."
+              : "You've applied to everything that's currently open. Check back soon for more."}
           </p>
         ) : (
-          <div className="mt-5 grid grid-cols-1 gap-5 @2xl:grid-cols-2">
+          <ul className="-mx-4 mt-5 grid snap-x snap-mandatory grid-flow-col auto-cols-[minmax(18rem,calc(100vw-3rem))] gap-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:auto-cols-[23rem] sm:px-6 lg:-mx-8 lg:px-8">
             {recommended.map((o) => (
-              <OpportunityCard
-                key={o.id}
-                opportunity={o}
-                skills={o.skills}
-                saved={savedIds.has(o.id)}
-                estimatedMinutes={publishedChallengeInfo.get(o.id)?.estimatedMinutes}
-                matchScore={o.matchScore}
-                challengeState={getChallengeState({
-                  challengePublished: publishedChallengeInfo.has(o.id),
-                  application: applicationByOpportunityId.get(o.id),
-                  submission: undefined,
-                })}
-              />
+              <li key={o.id} className="snap-start">
+                <OpportunityCard
+                  opportunity={o}
+                  skills={o.skills}
+                  saved={savedIds.has(o.id)}
+                  estimatedMinutes={publishedChallengeInfo.get(o.id)?.estimatedMinutes}
+                  matchScore={o.matchScore}
+                  className="h-full"
+                  challengeState={getChallengeState({
+                    challengePublished: publishedChallengeInfo.has(o.id),
+                    application: applicationByOpportunityId.get(o.id),
+                    submission: undefined,
+                  })}
+                />
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
 
       {savedOpportunities.length > 0 && (
-        <div className="mt-10">
+        <section aria-labelledby="saved-heading" className="mt-10 max-w-4xl">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/50">Saved</h2>
-            <Link href="/student/opportunities?saved=1" className="flex items-center text-xs font-medium text-teal-ink hover:underline">
+            <h2 id="saved-heading" className="text-lg font-semibold tracking-[-0.02em] text-navy">Saved for later</h2>
+            <Link href="/student/opportunities?saved=1" className="flex items-center rounded-sm text-sm font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
               View all
               <ChevronRight className="size-3.5" aria-hidden="true" />
             </Link>
           </div>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 border-y border-navy/10">
             {savedOpportunities.map((o) => (
-              <li key={o.id}>
+              <li key={o.id} className="border-b border-navy/8 last:border-b-0">
                 <Link
                   href={`/opportunities/${o.id}`}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-navy/10 bg-white px-5 py-3.5 hover:border-teal/30"
+                  className="flex items-center justify-between gap-4 px-1 py-4 hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-navy">{o.role}</span>
                     <span className="block truncate text-xs text-navy/50">{o.companyName}</span>
                   </span>
+                  <ChevronRight className="size-4 shrink-0 text-navy/35" aria-hidden="true" />
                 </Link>
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
 
       {profileNudge && (
-        <div className="mt-10 flex items-center justify-between gap-4 rounded-xl border border-navy/10 bg-white px-5 py-4">
+        <div className="mt-10 flex max-w-4xl flex-col gap-4 border-t border-navy/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-navy">{profileNudge.title}</p>
             <p className="mt-0.5 text-sm text-navy/60">{profileNudge.description}</p>
           </div>
-          <Link
-            href={profileNudge.href}
-            className="shrink-0 rounded-lg border border-navy/15 px-3.5 py-1.5 text-sm font-medium text-navy transition-colors hover:bg-navy/5"
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href={profileNudge.href} />}
+            nativeButton={false}
+            className="w-full sm:w-auto"
           >
             {profileNudge.ctaLabel}
-          </Link>
+          </Button>
         </div>
       )}
     </div>

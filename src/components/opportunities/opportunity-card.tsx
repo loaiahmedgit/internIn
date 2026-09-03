@@ -4,6 +4,7 @@ import { SaveButton } from "@/components/opportunities/save-button";
 import type { ChallengeState } from "@/lib/opportunities/challenge-state";
 import { matchTier } from "@/lib/matching";
 import { formatDeadline } from "@/lib/format-date";
+import { cn } from "@/lib/utils";
 
 const WORK_MODE_LABEL: Record<"remote" | "onsite" | "hybrid", string> = {
   remote: "Remote",
@@ -112,6 +113,7 @@ export function OpportunityCard({
   challengeState,
   estimatedMinutes,
   matchScore,
+  className,
 }: {
   opportunity: OpportunityCardData;
   skills: string[];
@@ -122,13 +124,14 @@ export function OpportunityCard({
    * qualitative "Strong match"/"Good match" cue only, never the raw number
    * (a percentage reads as a fake hiring-probability claim). */
   matchScore?: number;
+  className?: string;
 }) {
   const challengeRequired = challengeState.kind !== "unavailable";
   const status = statusLine(challengeState);
   const tier = typeof matchScore === "number" ? matchTier(matchScore) : null;
 
   return (
-    <div className="rounded-xl border border-navy/10 bg-white p-6">
+    <div className={cn("rounded-xl border border-navy/10 bg-white p-6", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <CompanyAvatar name={opportunity.companyName} />
