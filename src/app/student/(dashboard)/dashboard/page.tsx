@@ -152,7 +152,7 @@ export default async function StudentDashboardPage() {
           vertically centered in the card; the illustration is absolutely
           anchored to the bottom-right so it shares the text block's visual
           center instead of floating in its own half. */}
-      <section className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white px-6 py-6 sm:px-9 lg:h-[224px] lg:px-10">
+      <section className="relative overflow-hidden rounded-2xl border border-black/[0.04] bg-white px-6 py-6 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:px-9 lg:h-[224px] lg:px-10">
         <div className="relative z-[1] flex h-full max-w-lg flex-col justify-center lg:max-w-[52%]">
           <p className="text-base font-semibold text-teal-ink">Hi {firstName}</p>
           <h1 className="mt-1.5 text-balance text-2xl font-bold tracking-[-0.03em] text-navy sm:text-[1.875rem] sm:leading-[1.15]">
@@ -213,7 +213,7 @@ export default async function StudentDashboardPage() {
         </div>
 
         {activeProgramSummary ? (
-          <div className="mt-4 rounded-2xl border border-navy/10 bg-white px-5 py-4 sm:px-6">
+          <div className="mt-4 rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:px-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-6">
               <div className="flex min-w-0 items-center gap-3 lg:w-64 lg:shrink-0">
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-sm font-semibold text-teal-ink" aria-hidden="true">
@@ -245,7 +245,7 @@ export default async function StudentDashboardPage() {
             </div>
           </div>
         ) : (
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-navy/10 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex items-center gap-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-navy/5 text-navy/40" aria-hidden="true">
                 <Briefcase className="size-4" />
@@ -273,7 +273,7 @@ export default async function StudentDashboardPage() {
         </div>
 
         {savedRows.length === 0 ? (
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-navy/10 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex items-center gap-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-navy/5 text-navy/40" aria-hidden="true">
                 <Bookmark className="size-4" />
@@ -288,7 +288,7 @@ export default async function StudentDashboardPage() {
             </Link>
           </div>
         ) : (
-          <div className="mt-4 grid grid-cols-1 divide-y divide-navy/8 overflow-hidden rounded-2xl border border-navy/10 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="mt-4 grid grid-cols-1 divide-y divide-navy/8 overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             {savedRows.map((item) => (
               <div key={item.opportunityId} className="flex items-start justify-between gap-3 px-5 py-4">
                 <Link href={`/student/opportunities?opportunity=${item.opportunityId}`} className="flex min-w-0 items-start gap-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
@@ -311,7 +311,7 @@ export default async function StudentDashboardPage() {
       {/* Level up your profile */}
       {profileCompletion.percent < 100 && (
         <section aria-labelledby="profile-nudge-heading" className="mt-8 mb-2">
-          <div className="flex flex-col gap-5 rounded-2xl border border-navy/10 bg-white px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-5 rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:px-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-4">
               <svg viewBox="0 0 52 52" className="size-12 shrink-0 -rotate-90" aria-hidden="true">
                 <circle cx="26" cy="26" r={PROFILE_RING_RADIUS} className="fill-none stroke-navy/8" strokeWidth="4" />

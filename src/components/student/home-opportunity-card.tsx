@@ -42,7 +42,7 @@ export function HomeOpportunityCard({
   const extraSkillCount = opportunity.skills.length - visibleSkills.length;
 
   return (
-    <article className="flex h-full flex-col rounded-2xl border border-navy/10 bg-white p-4 transition-[border-color,box-shadow] hover:border-teal/25 hover:shadow-[0_10px_28px_rgba(33,50,72,0.06)]">
+    <article className="flex h-full flex-col rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] transition-shadow duration-200 hover:shadow-[0_2px_4px_rgba(16,24,40,0.05),0_14px_32px_-6px_rgba(16,24,40,0.14)]">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal/10 text-xs font-semibold text-teal-ink" aria-hidden="true">
