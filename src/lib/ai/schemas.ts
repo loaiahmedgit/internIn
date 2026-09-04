@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CHALLENGE_RESOURCE_TYPES, SUBMISSION_ARTIFACT_KINDS, SUBMISSION_INPUT_MODES } from "@/lib/challenges/submission-model";
 
 /**
  * Structured-output contracts for every AIProvider method.
@@ -41,14 +42,71 @@ export type ChallengeTask = z.infer<typeof ChallengeTaskSchema>;
 export const RubricCriterionSchema = z.object({
   criterion: z.string().trim().min(1).max(160),
   description: z.string().trim().min(1).max(1500),
+  /** 0-100; siblings should sum to 100 — enforced defensively by normalizeRubricWeights (challenge-generation.ts) rather than trusted from the model. */
+  weight: z.number().int().min(0).max(100),
 });
 export type RubricCriterion = z.infer<typeof RubricCriterionSchema>;
+
+/**
+ * The AI-authored content design behind a generated resource — server code
+ * (resource-generation.ts) turns this into real bytes. Optional: a resource
+ * without one falls back to best-effort generation from name+description.
+ */
+export const ResourceContentSpecSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("spreadsheet"),
+    sheetName: z.string().trim().max(80).optional(),
+    columns: z
+      .array(z.object({ name: z.string().trim().min(1).max(80), dataType: z.enum(["text", "number", "date", "boolean"]) }))
+      .min(1)
+      .max(20),
+    rowCount: z.number().int().min(1).max(500),
+    rowGenerationHint: z.string().trim().max(500).optional(),
+  }),
+  z.object({
+    kind: z.literal("document"),
+    title: z.string().trim().min(1).max(160),
+    sections: z
+      .array(z.object({ heading: z.string().trim().min(1).max(160), paragraphs: z.array(z.string().trim().min(1).max(1000)).min(1).max(10) }))
+      .min(1)
+      .max(10),
+  }),
+  z.object({
+    kind: z.literal("structured_data"),
+    schemaDescription: z.string().trim().min(1).max(500),
+    sampleRecords: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))).min(1).max(50),
+  }),
+]);
+export type ResourceContentSpecInput = z.infer<typeof ResourceContentSpecSchema>;
 
 export const ChallengeAssetFileSchema = z.object({
   name: z.string().trim().min(1).max(180),
   description: z.string().trim().min(1).max(1000),
+  /** "file" (a real generated/uploaded file) or "link" (a real external URL, see externalUrl). Optional — undefined defaults to "file" wherever this is consumed, kept optional rather than `.default()` so plain object literals typed against this schema aren't forced to always include it. */
+  resourceType: z.enum(CHALLENGE_RESOURCE_TYPES).optional(),
+  /** Informational — the generator primarily dispatches on the file extension in `name`; this mainly drives display labeling and the requires_upload fallback for kinds it can't synthesize (image/video/audio/etc). Optional, same reasoning as resourceType. */
+  artifactKind: z.enum(SUBMISSION_ARTIFACT_KINDS).optional(),
+  /** Only for resourceType "link" — a real external URL, never fabricated. */
+  externalUrl: z.string().trim().url().max(2000).nullable().optional(),
+  contentSpec: ResourceContentSpecSchema.nullable().optional(),
 });
 export type ChallengeAssetFile = z.infer<typeof ChallengeAssetFileSchema>;
+
+/** What the student must actually submit — drives real submission validation, not just display copy. */
+export const SubmissionRequirementSchema = z.object({
+  id: z.string().trim().min(1).max(100),
+  label: z.string().trim().min(1).max(160),
+  inputMode: z.enum(SUBMISSION_INPUT_MODES),
+  artifactKind: z.enum(SUBMISSION_ARTIFACT_KINDS),
+  required: z.boolean(),
+  acceptedFormats: z.array(z.string().trim().min(1).max(20)).max(10).optional(),
+  providers: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
+  minFiles: z.number().int().min(1).max(20).optional(),
+  maxFiles: z.number().int().min(1).max(20).optional(),
+  maxFileSizeBytes: z.number().int().min(1).optional(),
+  instructions: z.string().trim().max(500).optional(),
+});
+export type SubmissionRequirementInput = z.infer<typeof SubmissionRequirementSchema>;
 
 export const ChallengeSchema = z.object({
   title: z.string().trim().min(2).max(180),
@@ -63,6 +121,8 @@ export const ChallengeSchema = z.object({
   deliverables: z.array(z.string().trim().min(1).max(500)).min(1).max(15),
   files: z.array(ChallengeAssetFileSchema).max(10),
   rubric: z.array(RubricCriterionSchema).min(1).max(20),
+  /** Every internIn challenge requires at least one real submission — no "no challenge" path. */
+  submissionRequirements: z.array(SubmissionRequirementSchema).min(1).max(10),
   /**
    * draft: not yet generated / being edited by hand
    * ai_generated: fresh model output, unreviewed
@@ -119,6 +179,35 @@ export const InternshipProgramSchema = z.object({
   weeks: z.array(InternshipWeekSchema),
 });
 export type InternshipProgram = z.infer<typeof InternshipProgramSchema>;
+
+/**
+ * Adaptive, per-challenge evaluation output — metrics come from the
+ * challenge's own rubric criteria (already role/challenge-specific, see
+ * RubricCriterionSchema), never a universal fixed list. `level` is
+ * qualitative, matching this codebase's existing convention of never
+ * inventing a numeric verdict-style score. Any metric that cites text
+ * must carry a real quote, verified against its source the same way
+ * groundedHighlights already does — never a fabricated quote.
+ */
+export const EvidenceLevelSchema = z.enum(["strong", "solid", "developing", "insufficient", "not_demonstrated"]);
+export type EvidenceLevel = z.infer<typeof EvidenceLevelSchema>;
+
+export const RubricMetricSchema = z.object({
+  criterion: z.string().trim().min(1).max(160),
+  level: EvidenceLevelSchema,
+  rationale: z.string().trim().min(1).max(600),
+  evidenceQuote: z.string().trim().min(1).max(400).nullable().optional(),
+  sourceId: z.string().trim().min(1).max(100).nullable().optional(),
+});
+export type RubricMetric = z.infer<typeof RubricMetricSchema>;
+
+export const RubricEvaluationSchema = z.object({
+  metrics: z.array(RubricMetricSchema).max(20),
+  strengths: z.array(z.string().trim().min(1).max(300)).max(6),
+  gaps: z.array(z.string().trim().min(1).max(300)).max(6),
+  confidence: z.enum(["low", "medium", "high"]),
+});
+export type RubricEvaluation = z.infer<typeof RubricEvaluationSchema>;
 
 export const ResumeExtractionSchema = z.object({
   skills: z.array(z.string()).describe("Concrete skills mentioned in the resume — tools, languages, technical or soft skills"),

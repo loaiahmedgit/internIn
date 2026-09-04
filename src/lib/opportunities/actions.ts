@@ -16,6 +16,8 @@ import {
   type InternshipProgram,
   type Challenge,
 } from "@/lib/ai";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { generateResourceFile } from "@/lib/challenges/resource-generation";
 
 const IdSchema = z.string().uuid();
 const VersionSourceSchema = z.enum(["ai_generated", "human_edited", "approved"]);
@@ -53,6 +55,109 @@ async function assertOwnsOpportunity(opportunityId: string, companyId: string) {
     throw new Error("Not authorized for this opportunity.");
   }
   return opportunity;
+}
+
+/**
+ * Turns each AI-named/company-named resource on a Challenge into a real
+ * `challenge_resources` row — the fix for "the challenge mentions a file
+ * that never actually exists". A resource whose format the pipeline can
+ * synthesize gets real bytes uploaded to the private `challenge-resources`
+ * bucket and `generationStatus: "ready"`; a real external link is recorded
+ * as-is; anything else gets a row with `generationStatus: "requires_upload"`
+ * — never silently dropped, never hidden from the employer.
+ */
+async function persistChallengeResources(versionId: string, files: Challenge["files"]) {
+  if (files.length === 0) return;
+  const db = getDb();
+  const admin = createAdminClient();
+  const rows: (typeof schema.challengeResources.$inferInsert)[] = [];
+
+  for (const file of files) {
+    const resourceType = file.resourceType ?? "file";
+    const artifactKind = file.artifactKind ?? "document";
+
+    if (resourceType === "link") {
+      rows.push({
+        challengeVersionId: versionId,
+        name: file.name,
+        resourceType: "link",
+        artifactKind,
+        externalUrl: file.externalUrl ?? null,
+        description: file.description,
+        generationStatus: file.externalUrl ? "ready" : "requires_upload",
+      });
+      continue;
+    }
+
+    const generated = await generateResourceFile({ name: file.name, description: file.description, contentSpec: file.contentSpec });
+    if (!generated) {
+      rows.push({
+        challengeVersionId: versionId,
+        name: file.name,
+        resourceType: "file",
+        artifactKind,
+        description: file.description,
+        contentSpec: file.contentSpec ?? null,
+        generationStatus: "requires_upload",
+      });
+      continue;
+    }
+
+    const resourceId = crypto.randomUUID();
+    const extension = file.name.match(/\.[a-zA-Z0-9]+$/)?.[0] ?? "";
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storagePath = `${versionId}/${resourceId}-${safeName}`;
+    const { error } = await admin.storage
+      .from("challenge-resources")
+      .upload(storagePath, generated.buffer, { contentType: generated.mimeType, upsert: false });
+
+    rows.push({
+      id: resourceId,
+      challengeVersionId: versionId,
+      name: file.name,
+      resourceType: "file",
+      artifactKind,
+      mimeType: generated.mimeType,
+      fileExtension: extension,
+      storagePath: error ? null : storagePath,
+      sizeBytes: generated.buffer.byteLength,
+      description: file.description,
+      contentSpec: file.contentSpec ?? null,
+      generationStatus: error ? "failed" : "ready",
+    });
+    if (error) console.error(`[persistChallengeResources] upload failed for "${file.name}":`, error.message);
+  }
+
+  if (rows.length) await db.insert(schema.challengeResources).values(rows);
+}
+
+/** Every internIn challenge needs real substance before it can be
+ * approved — no "no challenge" path. Checked against the Challenge object
+ * itself, before anything is written. */
+function assertChallengeSubstance(challenge: Challenge) {
+  if (!challenge.scenario.trim()) throw new Error("This challenge has no scenario.");
+  if (challenge.tasks.length === 0) throw new Error("This challenge has no tasks.");
+  if (!challenge.submissionRequirements.some((r) => r.required)) {
+    throw new Error("This challenge has no required submission requirement — every internIn challenge needs at least one real thing the candidate must hand in.");
+  }
+  if (challenge.rubric.length === 0) throw new Error("This challenge has no evaluation rubric.");
+}
+
+/** Checked after resources are persisted for a version — approval/publish
+ * must not proceed while a required resource is missing, failed, or still
+ * pending generation. */
+async function assertChallengeResourcesReady(versionId: string) {
+  const db = getDb();
+  const resources = await db
+    .select({ name: schema.challengeResources.name, generationStatus: schema.challengeResources.generationStatus })
+    .from(schema.challengeResources)
+    .where(eq(schema.challengeResources.challengeVersionId, versionId));
+  const notReady = resources.filter((r) => r.generationStatus !== "ready");
+  if (notReady.length > 0) {
+    throw new Error(
+      `These resources need attention before this challenge can be approved: ${notReady.map((r) => `"${r.name}" (${r.generationStatus})`).join(", ")}.`,
+    );
+  }
 }
 
 export async function createOpportunityAction(internship: InternshipDraft) {
@@ -108,6 +213,9 @@ export async function saveChallengeVersionAction(
   if (validatedSource === "approved" && validatedChallenge.status !== "approved") {
     throw new Error("An approved version must have approved status.");
   }
+  if (validatedChallenge.status === "approved") {
+    assertChallengeSubstance(validatedChallenge);
+  }
 
   const { companyId, userId, canPublish } = await getCompanyIdForCurrentUser();
   if (validatedSource === "approved" && !canPublish) throw new Error("Ask a Workspace Admin to grant Hiring Access before approving a challenge.");
@@ -149,9 +257,15 @@ export async function saveChallengeVersionAction(
       deliverables: validatedChallenge.deliverables,
       files: validatedChallenge.files,
       rubric: validatedChallenge.rubric,
+      submissionRequirements: validatedChallenge.submissionRequirements,
       createdByUserId: userId,
     })
     .returning();
+
+  await persistChallengeResources(version.id, validatedChallenge.files);
+  if (validatedChallenge.status === "approved") {
+    await assertChallengeResourcesReady(version.id);
+  }
 
   await db
     .update(schema.challenges)
@@ -177,26 +291,52 @@ export async function publishOpportunityAction(opportunityId: string) {
   await assertOwnsOpportunity(validatedOpportunityId, companyId);
   const db = getDb();
 
-  // A challenge is optional, not a publish gate — an internship can go live
-  // with no challenge and have one added later from its Challenge tab. If
-  // one exists, though, it must actually be approved first; publishing a
-  // still-ai_generated challenge would put unreviewed AI content in front
-  // of real applicants.
+  // Every internIn internship has a real challenge — there is no "no
+  // challenge" path. An opportunity cannot publish without one approved
+  // (real scenario, tasks, a required submission requirement, a rubric,
+  // and every resource actually ready) — re-verified here even though
+  // saveChallengeVersionAction already checked at approval time, since
+  // this is the last real gate before applicants can see the listing.
   const [challengeRow] = await db
     .select()
     .from(schema.challenges)
     .where(eq(schema.challenges.opportunityId, validatedOpportunityId))
     .limit(1);
-  if (challengeRow && challengeRow.status !== "approved") {
+  if (!challengeRow) {
+    throw new Error("Add and approve a work challenge before publishing — every internIn internship needs one.");
+  }
+  if (challengeRow.status !== "approved") {
     throw new Error("Approve the current challenge version before publishing.");
   }
-
-  if (challengeRow) {
-    await db
-      .update(schema.challenges)
-      .set({ status: "published", updatedAt: new Date() })
-      .where(eq(schema.challenges.id, challengeRow.id));
+  if (!challengeRow.currentVersionId) {
+    throw new Error("This challenge has no current version to publish.");
   }
+  const [currentVersion] = await db
+    .select()
+    .from(schema.challengeVersions)
+    .where(eq(schema.challengeVersions.id, challengeRow.currentVersionId))
+    .limit(1);
+  if (!currentVersion) {
+    throw new Error("This challenge's current version could not be found.");
+  }
+  assertChallengeSubstance({
+    title: currentVersion.title,
+    scenario: currentVersion.scenario,
+    estimatedMinutes: currentVersion.estimatedMinutes,
+    skills: currentVersion.skills,
+    tasks: currentVersion.tasks,
+    deliverables: currentVersion.deliverables,
+    files: currentVersion.files,
+    rubric: currentVersion.rubric,
+    submissionRequirements: currentVersion.submissionRequirements,
+    status: "approved",
+  });
+  await assertChallengeResourcesReady(challengeRow.currentVersionId);
+
+  await db
+    .update(schema.challenges)
+    .set({ status: "published", updatedAt: new Date() })
+    .where(eq(schema.challenges.id, challengeRow.id));
   await db
     .update(schema.opportunities)
     .set({ status: "published", updatedAt: new Date() })

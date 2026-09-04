@@ -47,6 +47,7 @@ function detail(): CandidateDetail {
       submittedAt: new Date("2026-08-30"),
       notes,
       artifacts: [],
+      submissionArtifacts: [],
       aiUsageMode: "open",
     },
   };

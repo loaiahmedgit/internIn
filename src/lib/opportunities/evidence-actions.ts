@@ -52,11 +52,21 @@ export async function generateCandidateEvidenceAction(submissionId: string) {
   const { submission, application, challengeVersion, opportunityCompanyId } = await loadOwnedSubmission(validatedId);
   const evidenceSummary = await evaluateCandidateEvidence(application.id, opportunityCompanyId, submission.id);
   const timeSpentMinutes = application.challengeStartedAt ? Math.max(0, Math.round((submission.submittedAt.getTime() - application.challengeStartedAt.getTime()) / 60000)) : 0;
-  const tasksCompleted = "Not verified";
+
+  // Derived from the real adaptive evaluation when one ran (real submission
+  // evidence existed); otherwise an honest, non-invented fallback — never a
+  // hardcoded "looks great" placeholder pretending to be a real finding.
+  const tasksCompleted = evidenceSummary.metrics?.length
+    ? `${evidenceSummary.metrics.filter((m) => m.level === "strong" || m.level === "solid").length}/${evidenceSummary.metrics.length} rubric criteria show real evidence`
+    : "Not verified";
   const result = {
-    aiSummary: evidenceSummary.highlights.length ? "Source-linked evidence is available on the candidate profile." : "Submission materials are available, but no reliable evidence highlights have been evaluated yet.",
-    strength: "Review the source-linked evidence highlights.",
-    weakness: "Task completion and deliverable quality require human review.",
+    aiSummary: evidenceSummary.metrics?.length
+      ? [...(evidenceSummary.strengths ?? []), ...(evidenceSummary.gaps ?? [])].slice(0, 3).join(" ") || "Structured evidence is available below."
+      : evidenceSummary.highlights.length
+        ? "Source-linked evidence is available on the candidate profile."
+        : "Submission materials are available, but no reliable evidence highlights have been evaluated yet.",
+    strength: evidenceSummary.strengths?.[0] ?? "Review the source-linked evidence highlights.",
+    weakness: evidenceSummary.gaps?.[0] ?? "Task completion and deliverable quality require human review.",
   };
 
   const db = getDb();

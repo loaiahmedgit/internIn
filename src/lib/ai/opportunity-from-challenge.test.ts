@@ -26,6 +26,7 @@ const draft: ChallengeDraft = {
   estimatedDurationLabel: "60-90 minutes",
   deliverables: ["Source code"],
   rubric: [{ id: "rubric-1", criterion: "Implementation quality", weight: 100, description: "The feature works." }],
+  submissionRequirements: [{ id: "req-1", label: "Source code", inputMode: "url", artifactKind: "code_repository", required: true, providers: ["github.com", "gitlab.com"] }],
   assumptions: [],
   safetyNotes: [],
 };

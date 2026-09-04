@@ -145,6 +145,7 @@ async function main() {
           deliverables: version.deliverables,
           files: version.files,
           rubric: version.rubric,
+          submissionRequirements: version.submissionRequirements,
           status: "published",
         };
         try {

@@ -41,8 +41,8 @@ export function ExploreOpportunityCard({
   return (
     <article
       className={cn(
-        "relative rounded-xl border bg-white p-3.5 transition-colors duration-150",
-        selected ? "border-teal/45 bg-teal/[0.028]" : "border-navy/10 hover:border-navy/20",
+        "relative rounded-xl border bg-white p-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] transition-shadow duration-150",
+        selected ? "border-teal/45 bg-teal/[0.028]" : "border-black/[0.04] hover:shadow-[0_2px_4px_rgba(16,24,40,0.05),0_14px_32px_-6px_rgba(16,24,40,0.14)]",
       )}
     >
       <div className="flex items-start gap-2.5">

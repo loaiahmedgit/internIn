@@ -34,7 +34,21 @@ export interface CandidateDetail {
     id: string;
     submittedAt: Date;
     notes: string;
+    /** Legacy — only populated on submissions made before the P0 rewrite. Nothing writes to this anymore; see submissionArtifacts. */
     artifacts: { name: string; url: string }[];
+    /** Real per-artifact rows for every submission made after the P0 rewrite. */
+    submissionArtifacts: {
+      id: string;
+      requirementId: string | null;
+      inputMode: string;
+      artifactKind: string;
+      label: string;
+      originalFilename: string | null;
+      mimeType: string | null;
+      storagePath: string | null;
+      externalUrl: string | null;
+      textContent: string | null;
+    }[];
     aiUsageMode: "open" | "ai_allowed" | "restricted_ai" | "controlled";
   } | null;
   challenge: {
@@ -43,7 +57,7 @@ export interface CandidateDetail {
     skills: string[];
     tasks: { id: string; title: string; description: string }[];
     deliverables: string[];
-    rubric: { criterion: string; description: string }[];
+    rubric: { criterion: string; description: string; weight: number }[];
   } | null;
   evidence: {
     tasksCompleted: string;
@@ -107,6 +121,16 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
     .where(and(eq(schema.submissions.applicationId, applicationId), submissionId ? eq(schema.submissions.id, submissionId) : undefined))
     .orderBy(desc(schema.submissions.submittedAt))
     .limit(1);
+
+  // Real per-artifact rows — what every submission made after the P0
+  // rewrite actually writes to. The legacy `submissions.artifacts` jsonb
+  // (kept below for pre-rewrite rows) is never written to anymore.
+  const submissionArtifactRows = submission
+    ? await db
+        .select()
+        .from(schema.submissionArtifacts)
+        .where(eq(schema.submissionArtifacts.submissionId, submission.id))
+    : [];
 
   let challenge: CandidateDetail["challenge"] = null;
   let evidence: CandidateDetail["evidence"] = null;
@@ -195,6 +219,7 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
           submittedAt: submission.submittedAt,
           notes: submission.notes,
           artifacts: submission.artifacts,
+          submissionArtifacts: submissionArtifactRows,
           aiUsageMode: submission.aiUsageMode,
         }
       : null,

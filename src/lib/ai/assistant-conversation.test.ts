@@ -26,6 +26,7 @@ function minimalDraft(title: string): ChallengeDraft {
     tasks: [{ id: "t1", title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" }],
     durationMinutes: 60,
     rubric: [{ id: "r1", criterion: "SQL correctness", weight: 100, description: "Queries are correct." }],
+    submissionRequirements: [{ id: "req1", label: "SQL scripts", inputMode: "file", artifactKind: "code", required: true }],
     assumptions: [],
     safetyNotes: [],
   };

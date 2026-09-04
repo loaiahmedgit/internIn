@@ -1,4 +1,5 @@
 import type { AIProvider } from "./provider";
+import type { EvidenceSource } from "@/lib/company/evidence-summary";
 import type {
   CandidateComparisonRow,
   CandidateEvidence,
@@ -9,6 +10,7 @@ import type {
   InternshipProgram,
   ResumeExtraction,
   RubricCriterion,
+  RubricEvaluation,
   Scenario,
 } from "./schemas";
 
@@ -184,10 +186,10 @@ export class MockAIProvider implements AIProvider {
   async generateRubric(challenge: Challenge): Promise<RubricCriterion[]> {
     await wait(400);
     return [
-      { criterion: "Technical accuracy", description: `Correct use of ${challenge.skills.join(", ")}.` },
-      { criterion: "Business reasoning", description: "Conclusions are grounded in the provided data, not guesswork." },
-      { criterion: "Clarity", description: "Findings are explained so a non-technical reader could follow them." },
-      { criterion: "Completeness", description: "All requested deliverables are present." },
+      { criterion: "Technical accuracy", weight: 35, description: `Correct use of ${challenge.skills.join(", ")}.` },
+      { criterion: "Business reasoning", weight: 25, description: "Conclusions are grounded in the provided data, not guesswork." },
+      { criterion: "Clarity", weight: 20, description: "Findings are explained so a non-technical reader could follow them." },
+      { criterion: "Completeness", weight: 20, description: "All requested deliverables are present." },
     ];
   }
 
@@ -211,10 +213,40 @@ export class MockAIProvider implements AIProvider {
       })),
       deliverables: t.deliverables,
       files: [
-        { name: "brief.pdf", description: "One-page scenario brief" },
-        { name: "dataset.csv", description: `Synthetic dataset: ${scenario.dataDescription}` },
+        {
+          name: "brief.pdf",
+          description: "One-page scenario brief",
+          resourceType: "file",
+          artifactKind: "pdf",
+          contentSpec: {
+            kind: "document",
+            title: `${t.role} — Scenario Brief`,
+            sections: [{ heading: "Background", paragraphs: [scenario.premise, `Available data: ${scenario.dataDescription}`] }],
+          },
+        },
+        {
+          name: "dataset.csv",
+          description: `Synthetic dataset: ${scenario.dataDescription}`,
+          resourceType: "file",
+          artifactKind: "dataset",
+          contentSpec: {
+            kind: "spreadsheet",
+            columns: [
+              { name: "id", dataType: "number" },
+              { name: "category", dataType: "text" },
+              { name: "value", dataType: "number" },
+              { name: "date", dataType: "date" },
+            ],
+            rowCount: 25,
+            rowGenerationHint: scenario.dataDescription,
+          },
+        },
       ],
       rubric: [],
+      submissionRequirements: [
+        { id: crypto.randomUUID(), label: t.deliverables[0] ?? "Written analysis", inputMode: "text", artifactKind: "text_response", required: true },
+        { id: crypto.randomUUID(), label: "Supporting file", inputMode: "file", artifactKind: "document", required: false, acceptedFormats: [".pdf", ".docx", ".xlsx", ".csv"] },
+      ],
       status: "ai_generated",
     };
     draft.rubric = await this.generateRubric(draft);
@@ -278,6 +310,29 @@ export class MockAIProvider implements AIProvider {
       strength: `Strong ${input.challenge.skills[0] ?? "technical"} execution`,
       weakness: notes ? "Recommendations lack quantified business impact" : "No written rationale accompanied the submission",
     };
+  }
+
+  async evaluateAgainstRubric(input: { rubric: RubricCriterion[]; sources: EvidenceSource[] }): Promise<RubricEvaluation> {
+    await wait(500);
+    const nonProfile = input.sources.filter((s) => s.kind !== "profile");
+    const first = nonProfile[0];
+    const quote = first ? first.text.trim().slice(0, 120) || undefined : undefined;
+    return {
+      metrics: input.rubric.map((r) => ({
+        criterion: r.criterion,
+        level: nonProfile.length > 0 ? "solid" : "not_demonstrated",
+        rationale: nonProfile.length > 0 ? `Reviewed against: ${r.description}` : "No submission evidence was available to evaluate this criterion.",
+        evidenceQuote: quote,
+        sourceId: quote ? first?.id : undefined,
+      })),
+      strengths: nonProfile.length > 0 ? ["Submission materials are available for review."] : [],
+      gaps: nonProfile.length === 0 ? ["No submission evidence was available."] : [],
+      confidence: nonProfile.length > 0 ? "medium" : "low",
+    };
+  }
+
+  supportsVision(): boolean {
+    return false;
   }
 
   async compareCandidates(candidates: CandidateEvidence[]): Promise<CandidateComparisonRow[]> {

@@ -268,7 +268,26 @@ export function ChallengeBuilder({
                 </li>
               ))}
             </ul>
+            {challenge.files.length > 0 && (
+              <p className="mt-2 text-xs text-navy/40">
+                Real files are generated on save — Approve will fail with the exact reason if any file isn&apos;t ready yet.
+              </p>
+            )}
           </div>
+        </div>
+
+        <div className="mt-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">Submission requirements</p>
+          <ul className="mt-2 space-y-1.5 text-sm text-navy/70">
+            {challenge.submissionRequirements.map((r) => (
+              <li key={r.id} className="flex items-center gap-2">
+                <span className={r.required ? "font-medium text-navy" : "text-navy/60"}>{r.label}</span>
+                <Badge variant="secondary" className={cn("h-5 px-1.5 text-[10px]", r.required ? "bg-teal/10 text-teal" : "bg-gray-light text-navy/50")}>
+                  {r.required ? "Required" : "Optional"}
+                </Badge>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="mt-6">

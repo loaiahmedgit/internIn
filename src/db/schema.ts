@@ -12,6 +12,14 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import type { EvidenceSummary } from "@/lib/company/evidence-summary";
+import type {
+  ChallengeResourceType,
+  ResourceContentSpec,
+  ResourceGenerationStatus,
+  SubmissionArtifactKind,
+  SubmissionInputMode,
+  SubmissionRequirement,
+} from "@/lib/challenges/submission-model";
 
 /**
  * Cross-cutting conventions (see docs/ and the approved Phase 1 plan):
@@ -356,9 +364,23 @@ export const challengeVersions = pgTable(
     estimatedDurationLabel: text("estimated_duration_label"),
     skills: jsonb("skills").$type<string[]>().notNull().default([]),
     tasks: jsonb("tasks").$type<{ id: string; title: string; description: string }[]>().notNull().default([]),
+    /** Human-readable summary, kept for backward-compat display on historical rows and the company builder. New versions also populate submissionRequirements below, which is what validation actually reads. */
     deliverables: jsonb("deliverables").$type<string[]>().notNull().default([]),
-    files: jsonb("files").$type<{ name: string; description: string }[]>().notNull().default([]),
-    rubric: jsonb("rubric").$type<{ criterion: string; description: string }[]>().notNull().default([]),
+    /** What the AI/company said a resource should be — the *intent*, not the file itself. saveChallengeVersionAction reads this to actually generate/store real bytes into the challengeResources table below; historical rows only have {name, description}. */
+    files: jsonb("files").$type<
+      {
+        name: string;
+        description: string;
+        resourceType?: ChallengeResourceType;
+        artifactKind?: SubmissionArtifactKind;
+        externalUrl?: string | null;
+        contentSpec?: ResourceContentSpec | null;
+      }[]
+    >().notNull().default([]),
+    /** `weight` is a first-class field (0-100, siblings sum to 100 — see normalizeRubricWeights) — not smuggled into `criterion` as "(30%)" text. */
+    rubric: jsonb("rubric").$type<{ criterion: string; description: string; weight: number }[]>().notNull().default([]),
+    /** What the student must actually submit — drives real submission validation (see submitChallengeAction). Empty only on historical rows saved before this column existed. */
+    submissionRequirements: jsonb("submission_requirements").$type<SubmissionRequirement[]>().notNull().default([]),
     /** The company's stated AI-usage policy for this challenge — same vocabulary as submissions.aiUsageMode, since it's the same real concept (open/ai_allowed/restricted_ai/controlled), just set by the company instead of declared by the student. */
     aiUsagePolicy: aiUsageModeEnum("ai_usage_policy").notNull().default("ai_allowed"),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
@@ -368,6 +390,41 @@ export const challengeVersions = pgTable(
     index("challenge_versions_challenge_idx").on(t.challengeId),
     uniqueIndex("challenge_versions_challenge_version_uidx").on(t.challengeId, t.versionNumber),
   ],
+);
+
+/**
+ * One row per REAL resource behind a challenge version — the whole fix for
+ * "the AI mentions Current_State_Workflow.pdf but no such file exists".
+ * `storagePath` is a private-bucket path only; no signed/public URL is ever
+ * persisted here — one is minted per-request after an authorization check
+ * (see getChallengeResourceDownloadUrlAction). A resource whose format the
+ * generation pipeline can't yet synthesize (image/video/CAD/...) still gets
+ * a row, with generationStatus "requires_upload" — never silently dropped.
+ */
+export const challengeResources = pgTable(
+  "challenge_resources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    challengeVersionId: uuid("challenge_version_id")
+      .notNull()
+      .references(() => challengeVersions.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    resourceType: text("resource_type").$type<ChallengeResourceType>().notNull(),
+    artifactKind: text("artifact_kind").$type<SubmissionArtifactKind>().notNull(),
+    mimeType: text("mime_type"),
+    fileExtension: text("file_extension"),
+    /** Private bucket path — set only when resourceType is "file" and generation/upload succeeded. */
+    storagePath: text("storage_path"),
+    /** A real external URL — set only when resourceType is "link". */
+    externalUrl: text("external_url"),
+    sizeBytes: integer("size_bytes"),
+    description: text("description"),
+    /** The AI-authored content design used to generate this file's real bytes — kept for audit/regeneration. */
+    contentSpec: jsonb("content_spec").$type<ResourceContentSpec | null>(),
+    generationStatus: text("generation_status").$type<ResourceGenerationStatus>().notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("challenge_resources_version_idx").on(t.challengeVersionId)],
 );
 
 // ---------------------------------------------------------------------------
@@ -416,6 +473,39 @@ export const submissions = pgTable(
     ...timestamps,
   },
   (t) => [index("submissions_application_idx").on(t.applicationId)],
+);
+
+/**
+ * One row per real submitted artifact — replaces new writes to the legacy
+ * `submissions.artifacts` jsonb above (kept, read-only, for historical
+ * rows). `storagePath`/`externalUrl` are never a persisted signed URL —
+ * resolved on demand via getSubmissionArtifactDownloadUrlAction after an
+ * authorization check, same pattern as challengeResources.
+ */
+export const submissionArtifacts = pgTable(
+  "submission_artifacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => submissions.id, { onDelete: "cascade" }),
+    /** Matches an id inside the challenge version's submissionRequirements — no FK, that array lives in jsonb. */
+    requirementId: text("requirement_id"),
+    inputMode: text("input_mode").$type<SubmissionInputMode>().notNull(),
+    artifactKind: text("artifact_kind").$type<SubmissionArtifactKind>().notNull(),
+    label: text("label").notNull(),
+    originalFilename: text("original_filename"),
+    mimeType: text("mime_type"),
+    sizeBytes: integer("size_bytes"),
+    /** Private bucket path — set only for a real, verified uploaded file. */
+    storagePath: text("storage_path"),
+    /** A real external URL the student provided (their GitHub repo, a Figma file, ...) — validated server-side before being written, never fabricated. */
+    externalUrl: text("external_url"),
+    textContent: text("text_content"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("submission_artifacts_submission_idx").on(t.submissionId)],
 );
 
 /**
@@ -627,8 +717,13 @@ export const challengesRelations = relations(challenges, ({ one, many }) => ({
   }),
 }));
 
-export const challengeVersionsRelations = relations(challengeVersions, ({ one }) => ({
+export const challengeVersionsRelations = relations(challengeVersions, ({ one, many }) => ({
   challenge: one(challenges, { fields: [challengeVersions.challengeId], references: [challenges.id] }),
+  resources: many(challengeResources),
+}));
+
+export const challengeResourcesRelations = relations(challengeResources, ({ one }) => ({
+  challengeVersion: one(challengeVersions, { fields: [challengeResources.challengeVersionId], references: [challengeVersions.id] }),
 }));
 
 export const applicationsRelations = relations(applications, ({ one, many }) => ({
@@ -641,7 +736,7 @@ export const applicationsRelations = relations(applications, ({ one, many }) => 
   }),
 }));
 
-export const submissionsRelations = relations(submissions, ({ one }) => ({
+export const submissionsRelations = relations(submissions, ({ one, many }) => ({
   application: one(applications, { fields: [submissions.applicationId], references: [applications.id] }),
   challengeVersion: one(challengeVersions, {
     fields: [submissions.challengeVersionId],
@@ -651,6 +746,12 @@ export const submissionsRelations = relations(submissions, ({ one }) => ({
     fields: [submissions.id],
     references: [candidateEvidence.submissionId],
   }),
+  /** Real per-artifact rows — distinct from the legacy `submissions.artifacts` jsonb column, which nothing writes to anymore. */
+  artifactRows: many(submissionArtifacts),
+}));
+
+export const submissionArtifactsRelations = relations(submissionArtifacts, ({ one }) => ({
+  submission: one(submissions, { fields: [submissionArtifacts.submissionId], references: [submissions.id] }),
 }));
 
 export const internshipOffersRelations = relations(internshipOffers, ({ one }) => ({

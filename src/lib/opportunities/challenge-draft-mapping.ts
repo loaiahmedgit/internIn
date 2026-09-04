@@ -51,10 +51,28 @@ export function mapChallengeDraftToChallenge(draft: ChallengeDraft): Challenge {
     // back to task titles for a draft generated before that field
     // existed (an older saved draft, or a manual edit that cleared it).
     deliverables: draft.deliverables.length ? draft.deliverables : tasks.map((t) => t.title),
-    files: draft.materials.map((m) => ({ name: m.name, description: m.description ?? m.type })),
+    files: draft.materials.map((m) => ({
+      name: m.name,
+      description: m.description ?? m.type,
+      resourceType: m.resourceType,
+      artifactKind: m.artifactKind,
+      externalUrl: m.externalUrl ?? null,
+      contentSpec: m.contentSpec ?? null,
+    })),
     rubric: draft.rubric.map((r) => ({
-      criterion: `${r.criterion} (${r.weight}%)`,
+      criterion: r.criterion,
+      weight: r.weight,
       description: r.description ?? "",
+    })),
+    submissionRequirements: draft.submissionRequirements.map((r) => ({
+      id: r.id,
+      label: r.label,
+      inputMode: r.inputMode,
+      artifactKind: r.artifactKind,
+      required: r.required,
+      acceptedFormats: r.acceptedFormats,
+      providers: r.providers,
+      instructions: r.instructions ?? undefined,
     })),
     status: "ai_generated",
   };

@@ -67,6 +67,44 @@ export function AiEvidenceSummary({
         </p>
       ) : (
         <div className="mt-4 space-y-4 text-xs leading-relaxed text-navy/70">
+          {evaluated?.metrics && evaluated.metrics.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-navy">Structured evidence</h3>
+                {evaluated.confidence && (
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-navy/50">
+                    {evaluated.confidence} confidence
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-navy/55">Adapted to this challenge&apos;s own rubric — not a universal scorecard.</p>
+              <ul className="mt-2 space-y-2">
+                {evaluated.metrics.map((metric, i) => (
+                  <li key={`${metric.criterion}-${i}`} className="rounded-lg border border-navy/10 bg-white p-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-navy">{metric.criterion}</span>
+                      <span className="shrink-0 rounded-full bg-gray-light px-2 py-0.5 text-[10px] font-medium capitalize text-navy/60">
+                        {metric.level.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-navy/65">{metric.rationale}</p>
+                    {metric.evidenceQuote && <p className="mt-1 italic text-navy/50">&quot;{metric.evidenceQuote}&quot;</p>}
+                  </li>
+                ))}
+              </ul>
+              {(evaluated.strengths?.length ?? 0) > 0 && (
+                <p className="mt-2">
+                  <span className="font-medium text-navy">Strengths:</span> {evaluated.strengths!.join(" ")}
+                </p>
+              )}
+              {(evaluated.gaps?.length ?? 0) > 0 && (
+                <p className="mt-1">
+                  <span className="font-medium text-navy">Gaps:</span> {evaluated.gaps!.join(" ")}
+                </p>
+              )}
+              <p className="mt-2 text-navy/50">AI analyzes evidence and produces signals for review — it does not make or imply a hiring decision.</p>
+            </div>
+          )}
           <div>
             <h3 className="font-semibold text-navy">CV / Background</h3>
             {quotes("background")?.length ? (

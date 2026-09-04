@@ -2,7 +2,9 @@ import { notFound } from "next/navigation";
 import { eq, and, desc, asc, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
-import { SubmitChallengeForm } from "@/components/opportunities/submit-challenge-form";
+import { ChallengeSubmissionForm } from "@/components/opportunities/challenge-submission-form";
+import { ChallengeResourcesList } from "@/components/opportunities/challenge-resources-list";
+import { SubmissionSummary } from "@/components/opportunities/submission-summary";
 import { OfferResponseButtons } from "@/components/opportunities/offer-response-buttons";
 import { StartChallengeButton } from "@/components/opportunities/start-challenge-button";
 
@@ -109,17 +111,19 @@ export default async function ApplicationWorkspacePage({
     .orderBy(desc(schema.submissions.submittedAt))
     .limit(1);
 
-  const hasEvidence = latestSubmission
-    ? Boolean(
-        (
-          await db
-            .select({ id: schema.candidateEvidence.id })
-            .from(schema.candidateEvidence)
-            .where(eq(schema.candidateEvidence.submissionId, latestSubmission.id))
-            .limit(1)
-        )[0],
-      )
-    : false;
+  const challengeResources = currentVersion
+    ? await db
+        .select()
+        .from(schema.challengeResources)
+        .where(eq(schema.challengeResources.challengeVersionId, currentVersion.id))
+    : [];
+
+  const submissionArtifactRows = latestSubmission
+    ? await db
+        .select()
+        .from(schema.submissionArtifacts)
+        .where(eq(schema.submissionArtifacts.submissionId, latestSubmission.id))
+    : [];
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
@@ -240,6 +244,21 @@ export default async function ApplicationWorkspacePage({
             ~{currentVersion.estimatedMinutes} minutes
           </p>
 
+          {challengeResources.length > 0 && (
+            <div className="mt-6">
+              <h2 className="text-lg font-semibold text-navy">Resources provided</h2>
+              <ChallengeResourcesList
+                resources={challengeResources.map((r) => ({
+                  id: r.id,
+                  name: r.name,
+                  artifactKind: r.artifactKind,
+                  resourceType: r.resourceType as "file" | "link",
+                  generationStatus: r.generationStatus as "pending" | "generating" | "ready" | "failed" | "requires_upload",
+                }))}
+              />
+            </div>
+          )}
+
           {!application.challengeStartedAt && !latestSubmission ? (
             <div className="mt-6 border border-navy/12 bg-white p-5">
               <p className="whitespace-pre-wrap text-navy/80">{currentVersion.scenario}</p>
@@ -263,28 +282,23 @@ export default async function ApplicationWorkspacePage({
                   </li>
                 ))}
               </ul>
-
-              <h2 className="mt-8 text-lg font-semibold text-navy">Deliverables</h2>
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-navy/80">
-                {currentVersion.deliverables.map((d) => (
-                  <li key={d}>{d}</li>
-                ))}
-              </ul>
             </>
           )}
 
           {latestSubmission ? (
-            <div className="mt-8 border border-teal/30 bg-teal/5 p-5">
-              <p className="font-medium text-navy">{hasEvidence ? "Reviewed" : "Submitted"}</p>
-              <p className="mt-1 text-sm text-navy/68">
-                {hasEvidence ? "The company has reviewed your submission." : "Awaiting review — not a hiring decision yet."}
-              </p>
-              {latestSubmission.notes && (
-                <p className="mt-3 whitespace-pre-wrap text-sm text-navy/80">{latestSubmission.notes}</p>
-              )}
-            </div>
+            <>
+              <h2 className="mt-8 text-lg font-semibold text-navy">Submission</h2>
+              <SubmissionSummary
+                submission={{ status: latestSubmission.status, submittedAt: latestSubmission.submittedAt }}
+                offer={offer ? { status: offer.status } : null}
+                artifacts={submissionArtifactRows}
+              />
+            </>
           ) : application.challengeStartedAt ? (
-            <SubmitChallengeForm applicationId={application.id} />
+            <>
+              <h2 className="mt-8 text-lg font-semibold text-navy">Submission requirements</h2>
+              <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} />
+            </>
           ) : null}
         </>
       )}

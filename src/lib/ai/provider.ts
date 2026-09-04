@@ -8,6 +8,7 @@ import type {
   InternshipProgram,
   ResumeExtraction,
   RubricCriterion,
+  RubricEvaluation,
   Scenario,
 } from "./schemas";
 import type { EvidenceSource, EvidenceQuotesSchema } from "@/lib/company/evidence-summary";
@@ -51,6 +52,21 @@ export interface AIProvider {
 
   /** Compare several candidates' evidence side by side. */
   compareCandidates(candidates: CandidateEvidence[]): Promise<CandidateComparisonRow[]>;
+
+  /**
+   * Adaptive, per-challenge structured evaluation — one metric per rubric
+   * criterion (the rubric is already role/challenge-specific), plus
+   * cross-cutting strengths/gaps/confidence. Must never output a hiring
+   * verdict, ranking, or recommendation — enforced by prompt + the output
+   * schema itself having no such field.
+   */
+  evaluateAgainstRubric(input: {
+    rubric: RubricCriterion[];
+    sources: EvidenceSource[];
+  }): Promise<RubricEvaluation>;
+
+  /** Whether this provider's configured model can accept image input for evaluation — false unless explicitly known to support vision, never assumed. */
+  supportsVision(): boolean;
 
   /** Manager's description of the accepted intern's plan -> a week-by-week program. */
   generateInternshipProgram(input: {

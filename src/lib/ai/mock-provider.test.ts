@@ -20,7 +20,8 @@ function makeChallenge(overrides: Partial<Challenge> = {}): Challenge {
       { name: "brief.pdf", description: "One-page brief" },
       { name: "dataset.csv", description: "Synthetic dataset" },
     ],
-    rubric: [{ criterion: "Technical accuracy", description: "..." }],
+    rubric: [{ criterion: "Technical accuracy", weight: 100, description: "..." }],
+    submissionRequirements: [{ id: "req1", label: "Written analysis", inputMode: "text", artifactKind: "text_response", required: true }],
     status: "ai_generated",
     ...overrides,
   };

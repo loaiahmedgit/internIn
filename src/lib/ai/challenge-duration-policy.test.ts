@@ -35,6 +35,7 @@ function draft(overrides: Partial<ChallengeDraftGenerated> = {}): ChallengeDraft
     estimatedDurationLabel: "3-4 hours",
     deliverables: ["Cleaned dataset", "SQL queries", "Findings summary", "Recommendations"],
     rubric: [{ criterion: "Accuracy", weight: 100 }],
+    submissionRequirements: [{ label: "Findings summary", inputMode: "text", artifactKind: "text_response", required: true }],
     aiUsagePolicyMode: "allowed_with_disclosure",
     aiUsagePolicyCustomText: null,
     assumptions: [],

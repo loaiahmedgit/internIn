@@ -6,6 +6,8 @@ import { inngest } from "@/lib/inngest/client";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { classifyApplicationSource } from "@/lib/opportunities/application-source";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { SUBMISSION_ARTIFACT_KINDS, SUBMISSION_INPUT_MODES } from "@/lib/challenges/submission-model";
 
 async function getCompanyContext(opportunityId: string) {
   const db = getDb();
@@ -210,14 +212,100 @@ export async function startChallengeAction(applicationId: string) {
   }
 }
 
-export async function submitChallengeAction(input: {
+const SubmissionArtifactInputSchema = z
+  .object({
+    requirementId: z.string().trim().min(1).max(100).optional(),
+    inputMode: z.enum(SUBMISSION_INPUT_MODES),
+    artifactKind: z.enum(SUBMISSION_ARTIFACT_KINDS),
+    label: z.string().trim().max(160).optional(),
+    // file / multiple_files — a real object already uploaded to this application's own storage prefix.
+    storagePath: z.string().trim().min(1).max(500).optional(),
+    originalFilename: z.string().trim().max(255).optional(),
+    // url
+    externalUrl: z.string().trim().url().max(2000).optional(),
+    // text
+    textContent: z.string().trim().max(20_000).optional(),
+  })
+  .strict();
+type SubmissionArtifactInput = z.infer<typeof SubmissionArtifactInputSchema>;
+
+const SubmitChallengeInputSchema = z.object({
+  applicationId: z.string().uuid(),
+  artifacts: z.array(SubmissionArtifactInputSchema).max(30),
+  notes: z.string().trim().max(5000).optional(),
+});
+
+/** A non-empty string is never proof a file requirement is satisfied — this
+ * confirms the object actually exists in the student's own storage prefix,
+ * has a real non-zero size, and matches the requirement's accepted
+ * formats/size limit, using Storage's own listing (not the client's claim). */
+async function verifySubmittedFileArtifact(params: {
   applicationId: string;
-  notes: string;
-  artifactUrl?: string;
-}) {
+  storagePath: string;
+  acceptedFormats?: string[];
+  maxFileSizeBytes?: number;
+  storageIndex: Map<string, { size: number; mimetype: string | null }>;
+}): Promise<{ size: number; mimetype: string | null }> {
+  const { applicationId, storagePath, acceptedFormats, maxFileSizeBytes, storageIndex } = params;
+  if (!storagePath.startsWith(`${applicationId}/`) || storagePath.includes("..")) {
+    throw new Error("This file doesn't belong to your submission.");
+  }
+  const stat = storageIndex.get(storagePath);
+  if (!stat) throw new Error("This file couldn't be found — it may not have finished uploading. Try re-uploading it.");
+  if (stat.size <= 0) throw new Error("This file is empty.");
+  if (maxFileSizeBytes && stat.size > maxFileSizeBytes) {
+    throw new Error(`This file is larger than the ${Math.round(maxFileSizeBytes / (1024 * 1024))} MB limit.`);
+  }
+  if (acceptedFormats && acceptedFormats.length > 0) {
+    const extension = (storagePath.match(/\.[a-zA-Z0-9]+$/)?.[0] ?? "").toLowerCase();
+    if (!acceptedFormats.some((format) => format.toLowerCase() === extension)) {
+      throw new Error(`This file type isn't accepted here — expected ${acceptedFormats.join(", ")}.`);
+    }
+  }
+  return stat;
+}
+
+/** Same principle for URL requirements — parsed and validated server-side,
+ * never trusted as a bare non-empty string. A provider-restricted
+ * requirement (a code repository, a Figma link) rejects any other host. */
+function verifySubmittedUrlArtifact(url: string, providers?: string[]) {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("That doesn't look like a valid URL.");
+  }
+  if (parsed.protocol !== "https:") throw new Error("Links must use https://.");
+  if (providers && providers.length > 0) {
+    const host = parsed.hostname.toLowerCase();
+    const allowed = providers.some((provider) => host === provider.toLowerCase() || host.endsWith(`.${provider.toLowerCase()}`));
+    if (!allowed) throw new Error(`This link must be from: ${providers.join(", ")}.`);
+  }
+}
+
+/**
+ * Rewritten from the ground up: a student can no longer submit with an
+ * empty/missing required deliverable, a fake storage path, a file of the
+ * wrong type/size, or a URL from a disallowed provider. Every required
+ * submissionRequirement on the challenge's current version is checked
+ * against real, verified artifacts before anything is written.
+ */
+export async function submitChallengeAction(input: z.infer<typeof SubmitChallengeInputSchema>) {
+  const validated = SubmitChallengeInputSchema.parse(input);
   const { user } = await requireCurrentStudent();
   const db = getDb();
-  const application = await assertOwnsApplication(input.applicationId, user.id);
+  const application = await assertOwnsApplication(validated.applicationId, user.id);
+
+  if (!application.challengeStartedAt) {
+    throw new Error("Start the challenge before submitting.");
+  }
+
+  const [existingSubmission] = await db
+    .select({ id: schema.submissions.id })
+    .from(schema.submissions)
+    .where(eq(schema.submissions.applicationId, application.id))
+    .limit(1);
+  if (existingSubmission) throw new Error("You've already submitted this challenge.");
 
   const [challengeRow] = await db
     .select()
@@ -227,21 +315,117 @@ export async function submitChallengeAction(input: {
   if (!challengeRow || challengeRow.status !== "published" || !challengeRow.currentVersionId) {
     throw new Error("This challenge isn't published yet.");
   }
+  const [version] = await db
+    .select()
+    .from(schema.challengeVersions)
+    .where(eq(schema.challengeVersions.id, challengeRow.currentVersionId))
+    .limit(1);
+  if (!version) throw new Error("This challenge's current version could not be found.");
 
-  const artifacts = input.artifactUrl
-    ? [{ name: "Submission link", url: input.artifactUrl }]
-    : [];
+  // One real listing of everything this application has actually uploaded —
+  // every file-artifact check below is verified against THIS, not the
+  // client's claimed path/size.
+  const admin = createAdminClient();
+  const { data: listing } = await admin.storage.from("submission-artifacts").list(application.id, { limit: 100 });
+  const storageIndex = new Map(
+    (listing ?? []).map((item) => [
+      `${application.id}/${item.name}`,
+      { size: Number(item.metadata?.size ?? 0), mimetype: (item.metadata?.mimetype as string | undefined) ?? null },
+    ]),
+  );
+
+  const artifactsByRequirement = new Map<string, SubmissionArtifactInput[]>();
+  for (const artifact of validated.artifacts) {
+    const key = artifact.requirementId ?? "";
+    artifactsByRequirement.set(key, [...(artifactsByRequirement.get(key) ?? []), artifact]);
+  }
+
+  const verifiedRows: (typeof schema.submissionArtifacts.$inferInsert)[] = [];
+
+  for (const requirement of version.submissionRequirements) {
+    const candidates = artifactsByRequirement.get(requirement.id) ?? [];
+    let validCount = 0;
+
+    for (const artifact of candidates) {
+      try {
+        if (requirement.inputMode === "file" || requirement.inputMode === "multiple_files") {
+          if (!artifact.storagePath) continue;
+          const stat = await verifySubmittedFileArtifact({
+            applicationId: application.id,
+            storagePath: artifact.storagePath,
+            acceptedFormats: requirement.acceptedFormats,
+            maxFileSizeBytes: requirement.maxFileSizeBytes,
+            storageIndex,
+          });
+          verifiedRows.push({
+            submissionId: "", // filled in once the submission row exists, below
+            requirementId: requirement.id,
+            inputMode: requirement.inputMode,
+            artifactKind: requirement.artifactKind,
+            label: artifact.label || requirement.label,
+            originalFilename: artifact.originalFilename ?? null,
+            mimeType: stat.mimetype,
+            sizeBytes: stat.size,
+            storagePath: artifact.storagePath,
+          });
+          validCount++;
+        } else if (requirement.inputMode === "url") {
+          if (!artifact.externalUrl) continue;
+          verifySubmittedUrlArtifact(artifact.externalUrl, requirement.providers);
+          verifiedRows.push({
+            submissionId: "",
+            requirementId: requirement.id,
+            inputMode: "url",
+            artifactKind: requirement.artifactKind,
+            label: artifact.label || requirement.label,
+            externalUrl: artifact.externalUrl,
+          });
+          validCount++;
+        } else if (requirement.inputMode === "text") {
+          const text = artifact.textContent?.trim();
+          if (!text) continue;
+          verifiedRows.push({
+            submissionId: "",
+            requirementId: requirement.id,
+            inputMode: "text",
+            artifactKind: requirement.artifactKind,
+            label: artifact.label || requirement.label,
+            textContent: text,
+          });
+          validCount++;
+        }
+      } catch (error) {
+        // A required requirement's bad artifact is a real submit-time
+        // failure the student must see and fix. An optional one just
+        // doesn't count — it's not fatal to the whole submission.
+        if (requirement.required) throw error;
+      }
+    }
+
+    if (requirement.required) {
+      const minCount = requirement.inputMode === "multiple_files" ? (requirement.minFiles ?? 1) : 1;
+      if (validCount < minCount) {
+        throw new Error(`Missing required submission: "${requirement.label}".`);
+      }
+    }
+    if (requirement.inputMode === "multiple_files" && requirement.maxFiles && validCount > requirement.maxFiles) {
+      throw new Error(`"${requirement.label}" allows at most ${requirement.maxFiles} files.`);
+    }
+  }
 
   const [submission] = await db
     .insert(schema.submissions)
     .values({
       applicationId: application.id,
       challengeVersionId: challengeRow.currentVersionId,
-      artifacts,
-      notes: input.notes,
+      notes: validated.notes ?? "",
       status: "submitted",
     })
     .returning();
+
+  if (verifiedRows.length > 0) {
+    await db.insert(schema.submissionArtifacts).values(verifiedRows.map((row) => ({ ...row, submissionId: submission.id })));
+  }
 
   await db.insert(schema.eventLog).values({
     entityType: "submission",

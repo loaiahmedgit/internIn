@@ -25,6 +25,10 @@ function draft(overrides: Partial<ChallengeDraft> = {}): ChallengeDraft {
       { id: "r1", criterion: "SQL correctness", weight: 60, description: "Queries return correct results." },
       { id: "r2", criterion: "Communication", weight: 40, description: "Findings are clearly written." },
     ],
+    submissionRequirements: [
+      { id: "req1", label: "SQL scripts", inputMode: "file", artifactKind: "code", required: true },
+      { id: "req2", label: "One-page summary", inputMode: "text", artifactKind: "text_response", required: true },
+    ],
     assumptions: ["Candidates have basic PostgreSQL familiarity."],
     safetyNotes: [],
     ...overrides,
@@ -49,9 +53,10 @@ describe("mapChallengeDraftToChallenge", () => {
     expect(mapped.status).toBe("ai_generated");
   });
 
-  it("folds rubric weight into the criterion label without losing the description", () => {
+  it("keeps rubric weight as a first-class field, never smuggled into the criterion label", () => {
     const mapped = mapChallengeDraftToChallenge(draft());
-    expect(mapped.rubric[0].criterion).toBe("SQL correctness (60%)");
+    expect(mapped.rubric[0].criterion).toBe("SQL correctness");
+    expect(mapped.rubric[0].weight).toBe(60);
     expect(mapped.rubric[0].description).toBe("Queries return correct results.");
   });
 

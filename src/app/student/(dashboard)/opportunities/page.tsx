@@ -29,6 +29,7 @@ export default async function StudentOpportunitiesPage({
   const location = valueOf(params.location);
   const duration = valueOf(params.duration);
   const workMode = valueOf(params.workMode);
+  const hoursBucket = valueOf(params.hours);
   const sort = valueOf(params.sort) || "relevant";
   const selectedId = valueOf(params.opportunity);
   const savedOnly = params.saved === "1";
@@ -74,17 +75,28 @@ export default async function StudentOpportunitiesPage({
     if (location && o.location !== location) return false;
     if (duration && o.duration !== duration) return false;
     if (workMode && o.workMode !== workMode) return false;
+    if (hoursBucket === "under10" && o.hoursPerWeek >= 10) return false;
+    if (hoursBucket === "10to20" && (o.hoursPerWeek < 10 || o.hoursPerWeek > 20)) return false;
+    if (hoursBucket === "over20" && o.hoursPerWeek <= 20) return false;
     if (savedOnly && !savedIds.has(o.id)) return false;
     return true;
   });
 
   if (sort === "newest") filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   if (sort === "title") filtered.sort((a, b) => a.role.localeCompare(b.role));
+  if (sort === "deadline") {
+    filtered.sort((a, b) => {
+      if (!a.applicationDeadline && !b.applicationDeadline) return 0;
+      if (!a.applicationDeadline) return 1;
+      if (!b.applicationDeadline) return -1;
+      return a.applicationDeadline.getTime() - b.applicationDeadline.getTime();
+    });
+  }
 
   // Closed by default: only a real match for the `?opportunity=` param
   // opens the sheet — never fall back to the first result in the list.
   const selectedOpportunity = filtered.find((o) => o.id === selectedId);
-  const hasActiveFilters = Boolean(q || location || duration || workMode || savedOnly);
+  const hasActiveFilters = Boolean(q || location || duration || workMode || hoursBucket || savedOnly);
 
   function cardHref(opportunityId: string) {
     const next = new URLSearchParams();
@@ -92,6 +104,7 @@ export default async function StudentOpportunitiesPage({
     if (location) next.set("location", location);
     if (duration) next.set("duration", duration);
     if (workMode) next.set("workMode", workMode);
+    if (hoursBucket) next.set("hours", hoursBucket);
     if (savedOnly) next.set("saved", "1");
     if (sort !== "relevant") next.set("sort", sort);
     next.set("opportunity", opportunityId);
@@ -104,6 +117,7 @@ export default async function StudentOpportunitiesPage({
     if (location) next.set("location", location);
     if (duration) next.set("duration", duration);
     if (workMode) next.set("workMode", workMode);
+    if (hoursBucket) next.set("hours", hoursBucket);
     if (savedOnly) next.set("saved", "1");
     if (sort !== "relevant") next.set("sort", sort);
     const qs = next.toString();
@@ -118,6 +132,40 @@ export default async function StudentOpportunitiesPage({
     const challengeState = application
       ? getChallengeState({ challengePublished: Boolean(challenge), application, submission })
       : undefined;
+
+    // Real resources/deliverables for the Work challenge section — only
+    // fetched for the one opportunity actually open in the Sheet. Resource
+    // download links are only ever shown once the student has applied
+    // (see OpportunityDetailSheet) — before that, only name/kind, never a
+    // link, so nobody can pull every company's material without applying.
+    let resources: OpportunityDetail["resources"] = [];
+    let deliverables: string[] = [];
+    if (challenge) {
+      const [challengeRow] = await db
+        .select({ currentVersionId: schema.challenges.currentVersionId })
+        .from(schema.challenges)
+        .where(eq(schema.challenges.opportunityId, selectedOpportunity.id))
+        .limit(1);
+      if (challengeRow?.currentVersionId) {
+        const [version] = await db
+          .select({ submissionRequirements: schema.challengeVersions.submissionRequirements })
+          .from(schema.challengeVersions)
+          .where(eq(schema.challengeVersions.id, challengeRow.currentVersionId))
+          .limit(1);
+        deliverables = version?.submissionRequirements.map((r) => r.label) ?? [];
+        resources = await db
+          .select({
+            id: schema.challengeResources.id,
+            name: schema.challengeResources.name,
+            artifactKind: schema.challengeResources.artifactKind,
+            resourceType: schema.challengeResources.resourceType,
+            generationStatus: schema.challengeResources.generationStatus,
+          })
+          .from(schema.challengeResources)
+          .where(eq(schema.challengeResources.challengeVersionId, challengeRow.currentVersionId));
+      }
+    }
+
     detail = {
       id: selectedOpportunity.id,
       role: selectedOpportunity.role,
@@ -134,6 +182,9 @@ export default async function StudentOpportunitiesPage({
       whatYouWillLearn: selectedOpportunity.whatYouWillLearn,
       saved: savedIds.has(selectedOpportunity.id),
       challenge,
+      resources,
+      deliverables,
+      hasApplied: Boolean(application),
       application: application
         ? {
             id: application.id,
@@ -177,10 +228,17 @@ export default async function StudentOpportunitiesPage({
             <option value="">Any work mode</option>
             <option value="onsite">On-site</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option>
           </select>
+          <label htmlFor="opportunity-hours" className="sr-only">Hours per week</label>
+          <select id="opportunity-hours" name="hours" defaultValue={hoursBucket} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+            <option value="">Any hours/week</option>
+            <option value="under10">Under 10h/week</option>
+            <option value="10to20">10–20h/week</option>
+            <option value="over20">Over 20h/week</option>
+          </select>
           <label className="flex h-9 items-center gap-1.5 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy/68"><input type="checkbox" name="saved" value="1" defaultChecked={savedOnly} className="size-3.5 rounded border-navy/30 accent-teal" />Saved only</label>
           <label htmlFor="opportunity-sort" className="sr-only">Sort opportunities</label>
           <select id="opportunity-sort" name="sort" defaultValue={sort} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 sm:ml-auto">
-            <option value="relevant">Most relevant</option><option value="newest">Newest first</option><option value="title">Role title</option>
+            <option value="relevant">Most relevant</option><option value="newest">Newest first</option><option value="deadline">Deadline soon</option><option value="title">Role title</option>
           </select>
           <Button type="submit" variant="outline" className="h-9 border-teal/20 bg-white px-3 text-teal-ink hover:bg-teal/5">Apply</Button>
           {hasActiveFilters ? <Link href="/student/opportunities" className="rounded-md px-1 text-sm font-medium text-navy/50 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">Clear</Link> : null}

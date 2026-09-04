@@ -3,6 +3,9 @@ import { getModel } from "./gemma-provider";
 import { ChallengeDraftGeneratedSchema, EmployerContextSchema, type ChallengeDraft, type ChallengeDraftGenerated, type EmployerContext } from "./challenge-clarification-schemas";
 import type { QuestionnaireAnswer } from "./assistant-messages";
 import { workActivitySignals, type WorkNeedProfile } from "./role-intelligence-schemas";
+import { normalizeRubricWeights } from "./rubric-weights";
+
+export { normalizeRubricWeights };
 
 // Split ChallengeDraftGeneratedSchema into two independently-generated
 // halves — a real, isolated finding, not a guess: a small flat schema
@@ -30,7 +33,12 @@ const ChallengeDraftCoreSchema = ChallengeDraftGeneratedSchema.pick({
   assumptions: true,
   safetyNotes: true,
 });
-const ChallengeDraftDetailsSchema = ChallengeDraftGeneratedSchema.pick({ tasks: true, materials: true, rubric: true });
+const ChallengeDraftDetailsSchema = ChallengeDraftGeneratedSchema.pick({
+  tasks: true,
+  materials: true,
+  rubric: true,
+  submissionRequirements: true,
+});
 
 /**
  * Runs `run` up to `attempts.length` times, returning the first success.
@@ -236,7 +244,7 @@ export async function generateChallengeDraftObject(params: {
       const { object } = await generateObject({
         model: getModel(),
         schema: ChallengeDraftDetailsSchema,
-        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the tasks, materials, and evaluation rubric — not the title/scenario/skills, those come from a separate step. Keep every field concise — a sentence or two at most.\n\nEach task's "title" is ONE short, concrete, action-first sentence — this exact sentence is what the employer sees in the compact summary view (e.g. "Design a reporting schema for the provided OLTP data."), never a short label. "instructions" can add extra step-by-step detail beyond that sentence, for later editing — repeat the title there if nothing more is needed.\n\nAlways include at least 2 supporting materials (synthetic datasets, templates, or reference documents the candidate would actually receive) — a challenge with zero materials is incomplete. Each material's "name" must be a real, candidate-facing filename with a plausible extension (e.g. "customers.csv", "onboarding_checklist.pdf"), never an internal-sounding label like "Base_Model_ID". Put what it actually is in "description", not in the name.`,
+        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the tasks, materials, evaluation rubric, and submission requirements — not the title/scenario/skills, those come from a separate step. Keep every field concise — a sentence or two at most.\n\nEach task's "title" is ONE short, concrete, action-first sentence — this exact sentence is what the employer sees in the compact summary view (e.g. "Design a reporting schema for the provided OLTP data."), never a short label. "instructions" can add extra step-by-step detail beyond that sentence, for later editing — repeat the title there if nothing more is needed.\n\nAlways include at least 2 supporting materials (synthetic datasets, templates, or reference documents the candidate would actually receive) — a challenge with zero materials is incomplete. Each material's "name" must be a real, candidate-facing filename with a plausible extension (e.g. "customers.csv", "onboarding_checklist.pdf"), never an internal-sounding label like "Base_Model_ID". Put what it actually is in "description", not in the name. For each material, also design its real content in "contentSpec" so the platform can generate an actual file: for a spreadsheet/CSV give sheetName/columns (name+dataType)/rowCount/rowGenerationHint; for a PDF/document give a title and sections (heading+paragraphs) with real fictional content the candidate would actually read; for other structured data give a schemaDescription and a few sampleRecords. If a material is genuinely better as a real external reference than a generated file (a public template, a well-known dataset), set resourceType to "link" and give a real, working externalUrl — never a fabricated one. If a material should be an image, video, audio, or diagram that you cannot design real content for, still name and describe it honestly — the platform will flag it for the employer to upload rather than pretending it exists.\n\nsubmissionRequirements: 1-4 items describing exactly what the candidate must hand in. inputMode is "file" for one uploaded document/spreadsheet, "multiple_files" when more than one file of the same kind is expected, "text" for a written response, or "url" for a link the candidate provides (their own GitHub/GitLab repo, a Figma file, a hosted video/audio recording, a portfolio link). Set artifactKind to what it actually is. required:true for anything genuinely necessary to evaluate the work; use required:false sparingly. For a "url" requirement tied to a specific platform, set providers to that platform's real domain(s), e.g. ["github.com","gitlab.com"] for a code repository or ["figma.com"] for a design link.`,
         prompt: basePrompt + attempt.extraInstruction,
         temperature: attempt.temperature,
         maxOutputTokens: 3000,
@@ -258,6 +266,7 @@ export async function generateChallengeDraftObject(params: {
       rubric: normalizeRubricWeights(details.rubric),
       tasks: details.tasks,
       materials: details.materials,
+      submissionRequirements: details.submissionRequirements,
     },
     context,
   );
@@ -344,27 +353,6 @@ export function enforceChallengeDurationPolicy(
   };
 }
 
-/**
- * Rescales rubric weights to sum to exactly 100 when the model's arithmetic
- * comes out slightly off — a deterministic repair, not a reason to throw
- * away an otherwise-good challenge (Part 7: "do not rely purely on the
- * model to get arithmetic perfect... normalize or validate
- * deterministically"). Any leftover rounding remainder goes to the
- * heaviest criterion, so the total is exact without a fractional weight
- * anywhere.
- */
-export function normalizeRubricWeights<T extends { weight: number }>(rubric: T[]): T[] {
-  const total = rubric.reduce((sum, r) => sum + r.weight, 0);
-  if (rubric.length === 0 || total === 100 || total === 0) return rubric;
-
-  const scaled = rubric.map((r) => ({ ...r, weight: Math.round((r.weight / total) * 100) }));
-  const remainder = 100 - scaled.reduce((sum, r) => sum + r.weight, 0);
-  if (remainder !== 0) {
-    const heaviestIndex = scaled.reduce((best, r, i) => (r.weight > scaled[best].weight ? i : best), 0);
-    scaled[heaviestIndex] = { ...scaled[heaviestIndex], weight: scaled[heaviestIndex].weight + remainder };
-  }
-  return scaled;
-}
 
 /** Attaches the control fields the model never touches. Reuses the
  * existing draft's `id` on a revision (so a chat edit updates the SAME
@@ -381,5 +369,6 @@ export function attachDraftIdentity(generated: ChallengeDraftGenerated, existing
     tasks: generated.tasks.map((task) => ({ ...task, id: crypto.randomUUID() })),
     materials: generated.materials.map((material) => ({ ...material, id: crypto.randomUUID() })),
     rubric: generated.rubric.map((criterion) => ({ ...criterion, id: crypto.randomUUID() })),
+    submissionRequirements: generated.submissionRequirements.map((requirement) => ({ ...requirement, id: crypto.randomUUID() })),
   };
 }

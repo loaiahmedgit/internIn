@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { CHALLENGE_RESOURCE_TYPES, SUBMISSION_ARTIFACT_KINDS, SUBMISSION_INPUT_MODES } from "@/lib/challenges/submission-model";
+import { ResourceContentSpecSchema } from "./schemas";
 
 /**
  * Structured output for Ask internIn's "clarify before drafting" step.
@@ -156,12 +158,32 @@ const GeneratedMaterialSchema = z.object({
   name: z.string().trim().min(1).max(160),
   type: z.string().trim().min(1).max(60),
   description: optionalText(400),
+  /** "file" (a real generated/uploaded file) or "link" (a real external URL). Optional, same reasoning as ChallengeAssetFileSchema in schemas.ts. */
+  resourceType: z.enum(CHALLENGE_RESOURCE_TYPES).optional(),
+  /** Informational — generation dispatches primarily on the file extension in `name`. */
+  artifactKind: z.enum(SUBMISSION_ARTIFACT_KINDS).optional(),
+  externalUrl: z.string().trim().url().max(2000).nullable().optional(),
+  contentSpec: ResourceContentSpecSchema.nullable().optional(),
 });
 
 const GeneratedRubricCriterionSchema = z.object({
   criterion: z.string().trim().min(1).max(160),
   weight: z.number().int().min(0).max(100),
   description: optionalText(400),
+});
+
+/** What the candidate must actually submit — separate from per-task
+ * deliverableType (which is task-level prose framing): a challenge may ask
+ * for fewer distinct submission requirements than it has tasks, e.g. three
+ * analysis tasks feeding into one spreadsheet + one memo requirement. */
+const GeneratedSubmissionRequirementSchema = z.object({
+  label: z.string().trim().min(1).max(160),
+  inputMode: z.enum(SUBMISSION_INPUT_MODES),
+  artifactKind: z.enum(SUBMISSION_ARTIFACT_KINDS),
+  required: z.boolean(),
+  acceptedFormats: z.array(z.string().trim().min(1).max(20)).max(10).optional(),
+  providers: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
+  instructions: optionalText(300),
 });
 
 export const ChallengeAiUsagePolicyModeSchema = z.enum([
@@ -214,6 +236,9 @@ export const ChallengeDraftGeneratedSchema = z.object({
   // distinct from each task's own instructions. Rendered as one summary
   // line, never a bulleted restatement of the tasks.
   deliverables: z.array(z.string().trim().min(1).max(160)).max(6).default([]),
+  // internIn's core rule: every internship has a real challenge with real
+  // submission requirements — not an optional afterthought.
+  submissionRequirements: z.array(GeneratedSubmissionRequirementSchema).min(1).max(10),
   rubric: z.array(GeneratedRubricCriterionSchema).min(1).max(8),
   aiUsagePolicyMode: ChallengeAiUsagePolicyModeSchema.nullable().optional(),
   aiUsagePolicyCustomText: optionalText(300),
@@ -233,13 +258,21 @@ export type ChallengeDraftMaterial = z.infer<typeof ChallengeDraftMaterialSchema
 export const ChallengeDraftRubricCriterionSchema = GeneratedRubricCriterionSchema.extend({ id: idField() });
 export type ChallengeDraftRubricCriterion = z.infer<typeof ChallengeDraftRubricCriterionSchema>;
 
+export const ChallengeDraftRequirementSchema = GeneratedSubmissionRequirementSchema.extend({ id: idField() });
+export type ChallengeDraftRequirement = z.infer<typeof ChallengeDraftRequirementSchema>;
+
 /** The full, app-facing draft — `id` is the stable identity a revision
  * targets (see attachDraftIdentity in challenge-generation.ts); `status`
  * is local, cosmetic state ("Draft" vs "Used" badge), never fed back
  * through the model. This is the schema validated at the save-action
  * boundary (challenge-draft-actions.ts) — a client-supplied draft is
  * never trusted without it, same as every other server action here. */
-export const ChallengeDraftSchema = ChallengeDraftGeneratedSchema.omit({ tasks: true, materials: true, rubric: true }).extend({
+export const ChallengeDraftSchema = ChallengeDraftGeneratedSchema.omit({
+  tasks: true,
+  materials: true,
+  rubric: true,
+  submissionRequirements: true,
+}).extend({
   id: idField(),
   status: z.enum(["draft", "approved"]),
   // The stable identity is `id` — `version` is a plain incrementing
@@ -251,5 +284,6 @@ export const ChallengeDraftSchema = ChallengeDraftGeneratedSchema.omit({ tasks: 
   tasks: z.array(ChallengeDraftTaskSchema).min(1).max(10),
   materials: z.array(ChallengeDraftMaterialSchema).max(10),
   rubric: z.array(ChallengeDraftRubricCriterionSchema).min(1).max(8),
+  submissionRequirements: z.array(ChallengeDraftRequirementSchema).min(1).max(10),
 });
 export type ChallengeDraft = z.infer<typeof ChallengeDraftSchema>;

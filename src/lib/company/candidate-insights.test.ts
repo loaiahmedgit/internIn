@@ -36,6 +36,7 @@ function candidate(overrides: Partial<CandidateDetail> = {}): CandidateDetail {
         { name: "analysis.pdf", url: "https://example.com/analysis.pdf" },
         { name: "data.csv", url: "https://example.com/data.csv" },
       ],
+      submissionArtifacts: [],
       aiUsageMode: "ai_allowed",
     },
     challenge: {
@@ -87,6 +88,7 @@ describe("candidateInsights", () => {
         submittedAt: new Date("2026-08-30T10:30:00.000Z"),
         notes: "Written response only",
         artifacts: [],
+        submissionArtifacts: [],
         aiUsageMode: "controlled",
       },
       evidence: {
@@ -109,6 +111,7 @@ describe("candidateInsights", () => {
         submittedAt: new Date("2026-08-30T10:00:30.000Z"),
         notes: "Written response",
         artifacts: [],
+        submissionArtifacts: [],
         aiUsageMode: "open",
       },
     });

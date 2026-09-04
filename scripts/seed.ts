@@ -43,10 +43,13 @@ async function main() {
           { id: crypto.randomUUID(), title: "Write a short recommendation", description: "Summarize your finding and propose one concrete fix the operations manager could act on." },
         ],
         deliverables: ["A short written analysis (1 page)", "Any supporting chart or table you used"],
-        files: [{ name: "shipment_log.csv", description: "Synthetic shipment records for the past month" }],
+        files: [{ name: "shipment_log.csv", description: "Synthetic shipment records for the past month", resourceType: "file" as const, artifactKind: "dataset" as const }],
         rubric: [
-          { criterion: "Root cause accuracy", description: "Correctly narrows the delay to a specific stage using the data" },
-          { criterion: "Clarity of recommendation", description: "Recommendation is concrete and actionable, not generic" },
+          { criterion: "Root cause accuracy", weight: 55, description: "Correctly narrows the delay to a specific stage using the data" },
+          { criterion: "Clarity of recommendation", weight: 45, description: "Recommendation is concrete and actionable, not generic" },
+        ],
+        submissionRequirements: [
+          { id: crypto.randomUUID(), label: "Written analysis", inputMode: "text" as const, artifactKind: "text_response" as const, required: true },
         ],
       },
     },
@@ -71,8 +74,11 @@ async function main() {
         deliverables: ["A one-page campaign brief", "3 draft post concepts"],
         files: [],
         rubric: [
-          { criterion: "Audience clarity", description: "Target audience is specific, not generic" },
-          { criterion: "Concept quality", description: "Post concepts are concrete and on-brand" },
+          { criterion: "Audience clarity", weight: 50, description: "Target audience is specific, not generic" },
+          { criterion: "Concept quality", weight: 50, description: "Post concepts are concrete and on-brand" },
+        ],
+        submissionRequirements: [
+          { id: crypto.randomUUID(), label: "Campaign brief", inputMode: "text" as const, artifactKind: "text_response" as const, required: true },
         ],
       },
     },
@@ -115,6 +121,7 @@ async function main() {
         deliverables: item.challenge.deliverables,
         files: item.challenge.files,
         rubric: item.challenge.rubric,
+        submissionRequirements: item.challenge.submissionRequirements,
       })
       .returning();
 

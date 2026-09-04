@@ -34,7 +34,8 @@ const ROLE_CONFIG: Record<
       skills: string[];
       tasks: { title: string; description: string }[];
       deliverables: string[];
-      rubric: { criterion: string; description: string }[];
+      rubric: { criterion: string; weight: number; description: string }[];
+      submissionRequirements: { id: string; label: string; inputMode: "text"; artifactKind: "text_response"; required: boolean }[];
     };
   }
 > = {
@@ -56,9 +57,12 @@ const ROLE_CONFIG: Record<
         { title: "Recommend an action", description: "Propose one concrete response supported by the analysis." },
       ],
       deliverables: ["Root cause analysis", "Operations recommendation memo"],
+submissionRequirements: [
+        { id: crypto.randomUUID(), label: "Root cause analysis", inputMode: "text" as const, artifactKind: "text_response" as const, required: true },
+      ],
       rubric: [
-        { criterion: "Analysis", description: "Uses the data accurately and explains the main pattern." },
-        { criterion: "Recommendation", description: "Proposes a concrete action tied to the evidence." },
+        { criterion: "Analysis", weight: 50, description: "Uses the data accurately and explains the main pattern." },
+        { criterion: "Recommendation", weight: 50, description: "Proposes a concrete action tied to the evidence." },
       ],
     },
   },
@@ -80,9 +84,12 @@ const ROLE_CONFIG: Record<
         { title: "Choose a success metric", description: "Select a measurable campaign outcome and explain why it matters." },
       ],
       deliverables: ["Campaign brief", "Three content concepts"],
+submissionRequirements: [
+        { id: crypto.randomUUID(), label: "Campaign brief", inputMode: "text" as const, artifactKind: "text_response" as const, required: true },
+      ],
       rubric: [
-        { criterion: "Audience clarity", description: "Defines a specific and relevant audience." },
-        { criterion: "Concept quality", description: "Presents concrete, usable campaign ideas." },
+        { criterion: "Audience clarity", weight: 50, description: "Defines a specific and relevant audience." },
+        { criterion: "Concept quality", weight: 50, description: "Presents concrete, usable campaign ideas." },
       ],
     },
   },
@@ -104,9 +111,12 @@ const ROLE_CONFIG: Record<
         { title: "Draft an improvement", description: "Propose a practical update to the onboarding flow." },
       ],
       deliverables: ["Feedback analysis", "Onboarding improvement proposal"],
+submissionRequirements: [
+        { id: crypto.randomUUID(), label: "Feedback analysis", inputMode: "text" as const, artifactKind: "text_response" as const, required: true },
+      ],
       rubric: [
-        { criterion: "Customer reasoning", description: "Connects the recommendation to actual customer feedback." },
-        { criterion: "Practicality", description: "Suggests an improvement the team can implement." },
+        { criterion: "Customer reasoning", weight: 50, description: "Connects the recommendation to actual customer feedback." },
+        { criterion: "Practicality", weight: 50, description: "Suggests an improvement the team can implement." },
       ],
     },
   },
@@ -128,9 +138,12 @@ const ROLE_CONFIG: Record<
         { title: "Design an improvement", description: "Recommend a lightweight workflow the team can adopt." },
       ],
       deliverables: ["Workflow map", "Process improvement memo"],
+submissionRequirements: [
+        { id: crypto.randomUUID(), label: "Workflow map", inputMode: "text" as const, artifactKind: "text_response" as const, required: true },
+      ],
       rubric: [
-        { criterion: "Process analysis", description: "Identifies the real workflow constraint." },
-        { criterion: "Operational clarity", description: "Creates a usable process with clear ownership." },
+        { criterion: "Process analysis", weight: 50, description: "Identifies the real workflow constraint." },
+        { criterion: "Operational clarity", weight: 50, description: "Creates a usable process with clear ownership." },
       ],
     },
   },
@@ -152,9 +165,12 @@ const ROLE_CONFIG: Record<
         { title: "Recommend a follow-up", description: "Propose one practical action for the finance manager." },
       ],
       deliverables: ["Variance analysis", "Finance recommendation memo"],
+submissionRequirements: [
+        { id: crypto.randomUUID(), label: "Variance analysis", inputMode: "text" as const, artifactKind: "text_response" as const, required: true },
+      ],
       rubric: [
-        { criterion: "Accuracy", description: "Calculates and interprets the variances correctly." },
-        { criterion: "Business judgment", description: "Recommends a proportionate follow-up action." },
+        { criterion: "Accuracy", weight: 50, description: "Calculates and interprets the variances correctly." },
+        { criterion: "Business judgment", weight: 50, description: "Recommends a proportionate follow-up action." },
       ],
     },
   },
@@ -341,6 +357,7 @@ async function main() {
             deliverables: config.challenge.deliverables,
             files: [],
             rubric: config.challenge.rubric,
+            submissionRequirements: config.challenge.submissionRequirements,
           })
           .returning({ id: schema.challengeVersions.id });
         versionId = version.id;

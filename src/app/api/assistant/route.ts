@@ -645,14 +645,6 @@ async function runEditExistingChallenge(
 type StoredChallengeVersion = typeof schema.challengeVersions.$inferSelect;
 
 function challengeDraftFromStoredVersion(role: string, challengeId: string, version: StoredChallengeVersion): ChallengeDraft {
-  const parsedWeights = version.rubric.map((criterion) => {
-    const match = criterion.criterion.match(/\((\d+)%\)\s*$/);
-    return match ? Number(match[1]) : null;
-  });
-  const knownWeightTotal = parsedWeights.reduce<number>((sum, weight) => sum + (weight ?? 0), 0);
-  const missingWeightCount = parsedWeights.filter((weight) => weight === null).length;
-  const fallbackWeight = missingWeightCount > 0 ? Math.max(0, Math.floor((100 - knownWeightTotal) / missingWeightCount)) : 0;
-
   const aiUsagePolicyMode: ChallengeDraft["aiUsagePolicyMode"] =
     version.aiUsagePolicy === "open"
       ? "fully_allowed"
@@ -679,18 +671,34 @@ function challengeDraftFromStoredVersion(role: string, challengeId: string, vers
     materials: version.files.map((file) => ({
       id: crypto.randomUUID(),
       name: file.name,
-      type: "file",
+      type: file.artifactKind ?? "document",
       description: file.description,
+      resourceType: file.resourceType ?? "file",
+      artifactKind: file.artifactKind ?? "document",
+      externalUrl: file.externalUrl ?? null,
+      contentSpec: file.contentSpec ?? null,
     })),
     durationMinutes: version.estimatedMinutes,
     estimatedDurationLabel: version.estimatedDurationLabel,
     deliverables: version.deliverables,
-    rubric: version.rubric.map((criterion, index) => ({
+    rubric: version.rubric.map((criterion) => ({
       id: crypto.randomUUID(),
-      criterion: criterion.criterion.replace(/\s*\(\d+%\)\s*$/, ""),
-      weight: parsedWeights[index] ?? fallbackWeight,
+      criterion: criterion.criterion,
+      weight: criterion.weight,
       description: criterion.description || undefined,
     })),
+    submissionRequirements: version.submissionRequirements.length
+      ? version.submissionRequirements.map((r) => ({
+          id: r.id,
+          label: r.label,
+          inputMode: r.inputMode,
+          artifactKind: r.artifactKind,
+          required: r.required,
+          acceptedFormats: r.acceptedFormats,
+          providers: r.providers,
+          instructions: r.instructions,
+        }))
+      : [{ id: crypto.randomUUID(), label: "Submission", inputMode: "text" as const, artifactKind: "text_response" as const, required: true }],
     aiUsagePolicyMode,
     aiUsagePolicyCustomText: version.aiUsagePolicy === "controlled" ? "Follow the existing controlled AI-use policy." : null,
     assumptions: [],

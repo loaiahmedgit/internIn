@@ -15,6 +15,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ApplyButton } from "@/components/opportunities/apply-button";
 import { SaveButton } from "@/components/opportunities/save-button";
+import { ChallengeResourcesList, type ChallengeResourceListItem } from "@/components/opportunities/challenge-resources-list";
 import { Button } from "@/components/ui/button";
 
 const WORK_MODE_LABEL: Record<"remote" | "onsite" | "hybrid", string> = {
@@ -39,6 +40,16 @@ export interface OpportunityDetail {
   whatYouWillLearn: string | null;
   saved: boolean;
   challenge?: { title: string; taskCount: number; estimatedMinutes: number };
+  /** Real resources for this challenge's current version — name/kind
+   * always shown; a download link only renders once `hasApplied` (see
+   * ChallengeResourcesList, which itself only ever links a `ready` row). */
+  resources: ChallengeResourceListItem[];
+  /** Real submission-requirement labels, shown as a plain deliverables list. */
+  deliverables: string[];
+  /** Before applying: resource names/kinds only, no download links — this
+   * is the whole point of fetching the sheet's data server-side per
+   * request rather than exposing every resource's link to any visitor. */
+  hasApplied: boolean;
   /** Present only when the student has already applied — drives the
    * primary CTA (continue/open) instead of "Apply now". */
   application?: { id: string; ctaLabel: string };
@@ -93,7 +104,10 @@ export function OpportunityDetailSheet({
                 <span className="flex items-center gap-1.5"><BriefcaseBusiness className="size-3.5" aria-hidden="true" />{opportunity.hoursPerWeek}h/week</span>
               </div>
 
-              <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-navy/68">{opportunity.shortDescription || opportunity.description}</p>
+              <section aria-labelledby="about-heading">
+                <h3 id="about-heading" className="sr-only">About the internship</h3>
+                <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-navy/68">{opportunity.shortDescription || opportunity.description}</p>
+              </section>
 
               {opportunity.skills.length > 0 && (
                 <section className="mt-5" aria-labelledby="key-skills-heading">
@@ -128,11 +142,50 @@ export function OpportunityDetailSheet({
               )}
 
               {opportunity.challenge && (
-                <div className="mt-5 rounded-lg border border-teal/16 bg-teal/[0.05] p-3">
-                  <div className="flex items-center gap-1.5 text-sm font-semibold text-teal-ink"><Sparkles className="size-3.5" aria-hidden="true" />Work challenge</div>
+                <section className="mt-5 border-t border-navy/8 pt-5" aria-labelledby="work-challenge-heading">
+                  <div id="work-challenge-heading" className="flex items-center gap-1.5 text-sm font-semibold text-teal-ink">
+                    <Sparkles className="size-3.5" aria-hidden="true" />
+                    Work challenge
+                  </div>
                   <p className="mt-1.5 text-sm font-medium text-navy">{opportunity.challenge.title}</p>
-                  <p className="mt-0.5 text-xs text-navy/52">{opportunity.challenge.taskCount} {opportunity.challenge.taskCount === 1 ? "task" : "tasks"}, about {opportunity.challenge.estimatedMinutes} minutes</p>
-                </div>
+                  <p className="mt-0.5 text-xs text-navy/52">
+                    {opportunity.challenge.taskCount} {opportunity.challenge.taskCount === 1 ? "task" : "tasks"}, about {opportunity.challenge.estimatedMinutes} minutes
+                  </p>
+
+                  {opportunity.resources.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-navy/45">Resources provided</h4>
+                      {opportunity.hasApplied ? (
+                        <ChallengeResourcesList resources={opportunity.resources} />
+                      ) : (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {opportunity.resources.map((resource) => (
+                            <span key={resource.id} className="rounded-full border border-navy/10 bg-[#f7f9fa] px-2.5 py-1 text-xs text-navy/62">
+                              {resource.name} · {resource.artifactKind.replace(/_/g, " ")}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {!opportunity.hasApplied && (
+                        <p className="mt-1.5 text-xs text-navy/45">Apply to download these materials.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {opportunity.deliverables.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-navy/45">Deliverables</h4>
+                      <ul className="mt-2 space-y-1">
+                        {opportunity.deliverables.map((deliverable) => (
+                          <li key={deliverable} className="flex items-start gap-2 text-sm leading-6 text-navy/64">
+                            <CheckCircle2 className="mt-1 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
+                            <span>{deliverable}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </section>
               )}
             </div>
 

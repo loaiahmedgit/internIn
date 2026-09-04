@@ -45,6 +45,7 @@ export default async function EditAttachedChallengePage({ params }: { params: Pr
     deliverables: version.deliverables,
     files: version.files,
     rubric: version.rubric,
+    submissionRequirements: version.submissionRequirements,
     status: challengeRow.status,
   };
 

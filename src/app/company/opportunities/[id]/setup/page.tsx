@@ -67,6 +67,7 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
         deliverables: version.deliverables,
         files: version.files,
         rubric: version.rubric,
+        submissionRequirements: version.submissionRequirements,
         status: challengeRow.status,
       };
     }

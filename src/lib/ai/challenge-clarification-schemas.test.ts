@@ -48,6 +48,7 @@ function generatedDraft() {
     tasks: [{ title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" }],
     materials: [],
     rubric: [{ criterion: "SQL correctness", weight: 100, description: "Queries return correct results." }],
+    submissionRequirements: [{ label: "SQL scripts", inputMode: "file" as const, artifactKind: "code" as const, required: true }],
     assumptions: [],
     safetyNotes: [],
   };
@@ -113,6 +114,7 @@ describe("ChallengeDraftSchema — the full, id-carrying app-facing shape", () =
       tasks: [{ id: "t1", title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" as const }],
       materials: [],
       rubric: [{ id: "r1", criterion: "SQL correctness", weight: 100, description: "Queries return correct results." }],
+      submissionRequirements: [{ id: "req1", label: "SQL scripts", inputMode: "file" as const, artifactKind: "code" as const, required: true }],
     };
   }
 
