@@ -2,7 +2,7 @@
 
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
-import { inngest } from "@/lib/inngest/client";
+import { sendNotificationEvent } from "@/lib/inngest/client";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { classifyApplicationSource } from "@/lib/opportunities/application-source";
@@ -436,7 +436,7 @@ export async function submitChallengeAction(input: z.infer<typeof SubmitChalleng
 
   const { role, companyEmails } = await getCompanyContext(application.opportunityId);
   if (companyEmails.length > 0) {
-    await inngest.send({
+    await sendNotificationEvent({
       name: "submission/received",
       data: { companyEmails, studentName: user.fullName, role, submissionId: submission.id },
     });
@@ -479,7 +479,7 @@ export async function respondToOfferAction(applicationId: string, decision: "acc
 
   const { role, companyEmails } = await getCompanyContext(application.opportunityId);
   if (companyEmails.length > 0) {
-    await inngest.send({
+    await sendNotificationEvent({
       name: "internship_offer/responded",
       data: {
         companyEmails,

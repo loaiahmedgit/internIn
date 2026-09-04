@@ -177,13 +177,18 @@ export async function signIn(formData: FormData): Promise<{ error: string } | vo
   const { email, password, redirectTo } = parsed.data;
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: error.message };
 
-  const safeRedirect = redirectTo.startsWith("/") && !redirectTo.startsWith("//")
-    ? redirectTo
-    : "/company/dashboard";
-  redirect(safeRedirect);
+  if (redirectTo.startsWith("/") && !redirectTo.startsWith("//")) redirect(redirectTo);
+
+  // No explicit redirect target — land on the dashboard for this user's
+  // actual role, never a hardcoded default that sends students into the
+  // company workspace (real bug: every email/password sign-in landed on
+  // /company/dashboard regardless of role).
+  const db = getDb();
+  const [user] = await db.select({ role: schema.users.role }).from(schema.users).where(eq(schema.users.authUserId, data.user.id)).limit(1);
+  redirect(user?.role === "company" ? "/company/dashboard" : "/student/dashboard");
 }
 
 export async function signOut() {

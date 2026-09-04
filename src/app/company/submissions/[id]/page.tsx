@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { AiEvidenceSummary } from "@/components/company/ai-evidence-summary";
+import { SubmissionArtifactCard } from "@/components/company/submission-artifact-card";
 import { getCandidateDetail } from "@/lib/company/candidate-detail-data";
 import {
   submissionDurationMinutes,
@@ -138,21 +139,29 @@ export default async function CandidateEvidencePage({
           {submission.notes}
         </p>
       )}
-      {submission.artifacts.length > 0 && (
-        <ul className="mt-3 space-y-1">
-          {submission.artifacts.map((a) => (
-            <li key={a.url}>
-              <a
-                href={a.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-medium text-teal-ink underline underline-offset-2"
-              >
-                View original work — {a.name}
-              </a>
-            </li>
+      {candidate.submission && candidate.submission.submissionArtifacts.length > 0 ? (
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {candidate.submission.submissionArtifacts.map((a) => (
+            <SubmissionArtifactCard key={a.id} artifact={a} />
           ))}
-        </ul>
+        </div>
+      ) : (
+        submission.artifacts.length > 0 && (
+          <ul className="mt-3 space-y-1">
+            {submission.artifacts.map((a) => (
+              <li key={a.url}>
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-teal-ink underline underline-offset-2"
+                >
+                  View original work — {a.name}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )
       )}
 
       <div className="mt-8">

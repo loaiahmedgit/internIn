@@ -10,6 +10,7 @@ import { CandidateActionsPanel } from "@/components/company/candidate-actions-pa
 import { CandidateNotesPanel } from "@/components/company/candidate-notes-panel";
 import { DownloadFilesMenu } from "@/components/company/download-files-menu";
 import { FileCard } from "@/components/company/file-card";
+import { SubmissionArtifactCard } from "@/components/company/submission-artifact-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,9 +83,12 @@ export default async function CandidateProfilePage({
 
   const stage = stageKeyOf({ status: candidate.status, hasSubmission: !!candidate.submission });
   const insights = candidateInsights(candidate);
+  // Legacy artifacts only ever populate pre-P0 historical submissions —
+  // once real submissionArtifacts rows exist, those are the source of truth
+  // and the legacy jsonb is never mixed in (it would just duplicate them).
   const files = [
     ...(candidate.profile?.cvUrl ? [{ name: "CV", url: candidate.profile.cvUrl }] : []),
-    ...(candidate.submission?.artifacts ?? []),
+    ...(candidate.submission && candidate.submission.submissionArtifacts.length === 0 ? candidate.submission.artifacts : []),
   ];
   const education = [candidate.profile?.major, candidate.profile?.university].filter(Boolean).join(" · ");
   const educationWithYear = `${education || "Not provided"}${candidate.profile?.graduationYear ? ` (${candidate.profile.graduationYear})` : ""}`;
@@ -125,7 +129,7 @@ export default async function CandidateProfilePage({
               Open CV
             </Button>
           )}
-          <DownloadFilesMenu files={files} />
+          <DownloadFilesMenu files={files} artifacts={candidate.submission?.submissionArtifacts ?? []} />
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="More actions" />}>
               <MoreHorizontal className="size-4" aria-hidden="true" />
@@ -217,7 +221,14 @@ export default async function CandidateProfilePage({
                     </Link>
                   )}
                 </div>
-                {files.length > 0 ? (
+                {candidate.submission && candidate.submission.submissionArtifacts.length > 0 ? (
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {candidate.profile?.cvUrl && <FileCard name="CV" url={candidate.profile.cvUrl} />}
+                    {candidate.submission.submissionArtifacts.map((a) => (
+                      <SubmissionArtifactCard key={a.id} artifact={a} />
+                    ))}
+                  </div>
+                ) : files.length > 0 ? (
                   <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     {files.map((f) => (
                       <FileCard key={f.url} name={f.name} url={f.url} />
@@ -336,7 +347,13 @@ export default async function CandidateProfilePage({
                   )}
                   <div className="mt-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">Submitted files</p>
-                    {candidate.submission && candidate.submission.artifacts.length > 0 ? (
+                    {candidate.submission && candidate.submission.submissionArtifacts.length > 0 ? (
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {candidate.submission.submissionArtifacts.map((a) => (
+                          <SubmissionArtifactCard key={a.id} artifact={a} />
+                        ))}
+                      </div>
+                    ) : candidate.submission && candidate.submission.artifacts.length > 0 ? (
                       <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {candidate.submission.artifacts.map((a) => (
                           <FileCard key={a.url} name={a.name} url={a.url} />

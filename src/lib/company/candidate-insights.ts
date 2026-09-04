@@ -47,7 +47,11 @@ export function candidateInsights(detail: CandidateDetail): CandidateInsight[] {
     insights.push({
       label: `${detail.profile.availability.trim()} availability`,
     });
-  const count = detail.submission?.artifacts.length ?? 0;
+  // Real per-artifact rows (every submission made after the P0 rewrite)
+  // take priority — the legacy jsonb only ever has data for pre-rewrite rows.
+  const count = detail.submission
+    ? detail.submission.submissionArtifacts.length || detail.submission.artifacts.length
+    : 0;
   if (count)
     insights.push({
       label: `${count} submitted ${count === 1 ? "file" : "files"}`,
@@ -55,7 +59,7 @@ export function candidateInsights(detail: CandidateDetail): CandidateInsight[] {
   return insights;
 }
 export function candidateSummaryUnavailableMessage(detail: CandidateDetail) {
-  if (detail.submission?.artifacts.length)
+  if (detail.submission?.submissionArtifacts.length || detail.submission?.artifacts.length)
     return "Submission files are available, but there is not enough evaluated evidence yet to generate a reliable summary.";
   if (detail.submission?.notes.trim())
     return "A written submission is available, but there is not enough evaluated evidence yet to generate a reliable summary.";

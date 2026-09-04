@@ -218,16 +218,25 @@ export async function evaluateCandidateEvidence(
       }),
     });
   const evaluable = sources.filter((s) => s.kind !== "profile");
-  const result = evaluable.length
-    ? await aiProvider.organizeEvidence({
+  // A failure here (e.g. the configured provider can't produce grounded
+  // quote highlights) must never abort the whole evaluation — the
+  // separately-real, rubric-driven metrics below are still worth returning.
+  let result: { highlights: EvidenceSummary["highlights"] } = { highlights: [] };
+  if (evaluable.length) {
+    try {
+      result = await aiProvider.organizeEvidence({
         sources,
         requirements: JSON.stringify({
           role: detail.role,
           requirements: detail.requirements,
           challenge: detail.challenge,
         }),
-      })
-    : { highlights: [] };
+      });
+    } catch (error) {
+      console.error("[evaluateCandidateEvidence] organizeEvidence failed — continuing without quote highlights:", error);
+      unavailable.push("Source-linked quote highlights could not be generated.");
+    }
+  }
 
   // Adaptive rubric evaluation — one metric per this challenge's own
   // rubric criteria, only when there's real submission evidence to
@@ -238,7 +247,7 @@ export async function evaluateCandidateEvidence(
   let confidence: EvidenceSummary["confidence"];
   const submissionSources = sources.filter((s) => s.kind === "submission");
   if (detail.challenge && detail.challenge.rubric.length > 0 && submissionSources.length > 0) {
-    const evaluation = await aiProvider.evaluateAgainstRubric({ rubric: detail.challenge.rubric, sources });
+    const evaluation = await aiProvider.evaluateAgainstRubric({ rubric: detail.challenge.rubric, sources, unavailable });
     metrics = groundedMetrics(evaluation.metrics, sources);
     strengths = evaluation.strengths;
     gaps = evaluation.gaps;

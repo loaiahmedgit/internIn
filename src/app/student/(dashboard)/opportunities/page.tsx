@@ -27,6 +27,7 @@ export default async function StudentOpportunitiesPage({
   const qRaw = valueOf(params.q).trim();
   const q = qRaw.toLowerCase();
   const location = valueOf(params.location);
+  const category = valueOf(params.category);
   const duration = valueOf(params.duration);
   const workMode = valueOf(params.workMode);
   const hoursBucket = valueOf(params.hours);
@@ -69,21 +70,31 @@ export default async function StudentOpportunitiesPage({
   ]);
 
   const locations = Array.from(new Set(opportunities.map((o) => o.location))).sort();
-  const durations = Array.from(new Set(opportunities.map((o) => o.duration))).sort();
+  // Case-insensitive dedupe (keeps the first-seen casing) so "3 months" and
+  // "3 Months" don't show up as two separate, confusing filter options.
+  const durations = Array.from(
+    opportunities.reduce((byKey, o) => {
+      const key = o.duration.trim().toLowerCase();
+      if (!byKey.has(key)) byKey.set(key, o.duration);
+      return byKey;
+    }, new Map<string, string>()).values(),
+  ).sort();
+  const categories = Array.from(new Set(opportunities.map((o) => o.department).filter((d): d is string => Boolean(d)))).sort();
   const filtered = opportunities.filter((o) => {
     if (q && !`${o.role} ${o.companyName} ${o.skills.join(" ")}`.toLowerCase().includes(q)) return false;
     if (location && o.location !== location) return false;
+    if (category && o.department !== category) return false;
     if (duration && o.duration !== duration) return false;
     if (workMode && o.workMode !== workMode) return false;
     if (hoursBucket === "under10" && o.hoursPerWeek >= 10) return false;
-    if (hoursBucket === "10to20" && (o.hoursPerWeek < 10 || o.hoursPerWeek > 20)) return false;
-    if (hoursBucket === "over20" && o.hoursPerWeek <= 20) return false;
+    if (hoursBucket === "11to20" && (o.hoursPerWeek < 11 || o.hoursPerWeek > 20)) return false;
+    if (hoursBucket === "21to30" && (o.hoursPerWeek < 21 || o.hoursPerWeek > 30)) return false;
+    if (hoursBucket === "over30" && o.hoursPerWeek <= 30) return false;
     if (savedOnly && !savedIds.has(o.id)) return false;
     return true;
   });
 
   if (sort === "newest") filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  if (sort === "title") filtered.sort((a, b) => a.role.localeCompare(b.role));
   if (sort === "deadline") {
     filtered.sort((a, b) => {
       if (!a.applicationDeadline && !b.applicationDeadline) return 0;
@@ -96,31 +107,29 @@ export default async function StudentOpportunitiesPage({
   // Closed by default: only a real match for the `?opportunity=` param
   // opens the sheet — never fall back to the first result in the list.
   const selectedOpportunity = filtered.find((o) => o.id === selectedId);
-  const hasActiveFilters = Boolean(q || location || duration || workMode || hoursBucket || savedOnly);
+  const hasActiveFilters = Boolean(q || location || category || duration || workMode || hoursBucket || savedOnly);
 
-  function cardHref(opportunityId: string) {
+  function buildParams() {
     const next = new URLSearchParams();
     if (qRaw) next.set("q", qRaw);
     if (location) next.set("location", location);
+    if (category) next.set("category", category);
     if (duration) next.set("duration", duration);
     if (workMode) next.set("workMode", workMode);
     if (hoursBucket) next.set("hours", hoursBucket);
     if (savedOnly) next.set("saved", "1");
     if (sort !== "relevant") next.set("sort", sort);
+    return next;
+  }
+
+  function cardHref(opportunityId: string) {
+    const next = buildParams();
     next.set("opportunity", opportunityId);
     return `/student/opportunities?${next.toString()}`;
   }
 
   function closeHref() {
-    const next = new URLSearchParams();
-    if (qRaw) next.set("q", qRaw);
-    if (location) next.set("location", location);
-    if (duration) next.set("duration", duration);
-    if (workMode) next.set("workMode", workMode);
-    if (hoursBucket) next.set("hours", hoursBucket);
-    if (savedOnly) next.set("saved", "1");
-    if (sort !== "relevant") next.set("sort", sort);
-    const qs = next.toString();
+    const qs = buildParams().toString();
     return qs ? `/student/opportunities?${qs}` : "/student/opportunities";
   }
 
@@ -160,6 +169,7 @@ export default async function StudentOpportunitiesPage({
             artifactKind: schema.challengeResources.artifactKind,
             resourceType: schema.challengeResources.resourceType,
             generationStatus: schema.challengeResources.generationStatus,
+            sizeBytes: schema.challengeResources.sizeBytes,
           })
           .from(schema.challengeResources)
           .where(eq(schema.challengeResources.challengeVersionId, challengeRow.currentVersionId));
@@ -175,6 +185,7 @@ export default async function StudentOpportunitiesPage({
       workMode: selectedOpportunity.workMode,
       duration: selectedOpportunity.duration,
       hoursPerWeek: selectedOpportunity.hoursPerWeek,
+      applicationDeadline: selectedOpportunity.applicationDeadline,
       description: selectedOpportunity.description,
       shortDescription: selectedOpportunity.shortDescription,
       skills: selectedOpportunity.skills,
@@ -218,6 +229,15 @@ export default async function StudentOpportunitiesPage({
             <option value="">All locations</option>
             {locations.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
+          {categories.length > 0 && (
+            <>
+              <label htmlFor="opportunity-category" className="sr-only">Field</label>
+              <select id="opportunity-category" name="category" defaultValue={category} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+                <option value="">Any field</option>
+                {categories.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </>
+          )}
           <label htmlFor="opportunity-duration" className="sr-only">Duration</label>
           <select id="opportunity-duration" name="duration" defaultValue={duration} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
             <option value="">Any duration</option>
@@ -231,14 +251,15 @@ export default async function StudentOpportunitiesPage({
           <label htmlFor="opportunity-hours" className="sr-only">Hours per week</label>
           <select id="opportunity-hours" name="hours" defaultValue={hoursBucket} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
             <option value="">Any hours/week</option>
-            <option value="under10">Under 10h/week</option>
-            <option value="10to20">10–20h/week</option>
-            <option value="over20">Over 20h/week</option>
+            <option value="under10">Up to 10h/week</option>
+            <option value="11to20">11–20h/week</option>
+            <option value="21to30">21–30h/week</option>
+            <option value="over30">30h/week+</option>
           </select>
           <label className="flex h-9 items-center gap-1.5 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy/68"><input type="checkbox" name="saved" value="1" defaultChecked={savedOnly} className="size-3.5 rounded border-navy/30 accent-teal" />Saved only</label>
           <label htmlFor="opportunity-sort" className="sr-only">Sort opportunities</label>
           <select id="opportunity-sort" name="sort" defaultValue={sort} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 sm:ml-auto">
-            <option value="relevant">Most relevant</option><option value="newest">Newest first</option><option value="deadline">Deadline soon</option><option value="title">Role title</option>
+            <option value="relevant">Most relevant</option><option value="newest">Newest first</option><option value="deadline">Deadline soon</option>
           </select>
           <Button type="submit" variant="outline" className="h-9 border-teal/20 bg-white px-3 text-teal-ink hover:bg-teal/5">Apply</Button>
           {hasActiveFilters ? <Link href="/student/opportunities" className="rounded-md px-1 text-sm font-medium text-navy/50 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">Clear</Link> : null}

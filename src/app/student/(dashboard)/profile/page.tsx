@@ -40,11 +40,33 @@ export default async function StudentProfilePage() {
   const { user } = await requireCurrentStudent();
   const db = getDb();
 
-  const [profile] = await db
-    .select()
-    .from(schema.studentProfiles)
-    .where(eq(schema.studentProfiles.userId, user.id))
-    .limit(1);
+  // These three only depend on user.id, not on each other — fetch together
+  // instead of one-after-another.
+  const [[profile], verifiedPrograms, applicationRows] = await Promise.all([
+    db.select().from(schema.studentProfiles).where(eq(schema.studentProfiles.userId, user.id)).limit(1),
+    db
+      .select({
+        id: schema.verifiedExperience.id,
+        skillsDemonstrated: schema.verifiedExperience.skillsDemonstrated,
+        verifiedAt: schema.verifiedExperience.verifiedAt,
+        role: schema.opportunities.role,
+        companyName: schema.companies.name,
+      })
+      .from(schema.verifiedExperience)
+      .innerJoin(schema.internshipPrograms, eq(schema.verifiedExperience.programId, schema.internshipPrograms.id))
+      .innerJoin(schema.internshipOffers, eq(schema.internshipPrograms.offerId, schema.internshipOffers.id))
+      .innerJoin(schema.applications, eq(schema.internshipOffers.applicationId, schema.applications.id))
+      .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
+      .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
+      .where(eq(schema.applications.studentId, user.id))
+      .orderBy(desc(schema.verifiedExperience.verifiedAt)),
+    db
+      .select({ id: schema.applications.id, role: schema.opportunities.role, companyName: schema.companies.name })
+      .from(schema.applications)
+      .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
+      .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
+      .where(eq(schema.applications.studentId, user.id)),
+  ]);
 
   const stageLabel = STAGE_OPTIONS.find((o) => o.value === profile?.educationStage)?.label;
   const focus = profile?.interests?.[0] ?? profile?.major;
@@ -59,33 +81,8 @@ export default async function StudentProfilePage() {
     cvFileKey: profile?.cvFileKey ?? null,
   });
 
-  // Verified work: completed internship programs a supervisor has signed
-  // off on — real evidence, never shown until supervisorVerified is true.
-  const verifiedPrograms = await db
-    .select({
-      id: schema.verifiedExperience.id,
-      skillsDemonstrated: schema.verifiedExperience.skillsDemonstrated,
-      verifiedAt: schema.verifiedExperience.verifiedAt,
-      role: schema.opportunities.role,
-      companyName: schema.companies.name,
-    })
-    .from(schema.verifiedExperience)
-    .innerJoin(schema.internshipPrograms, eq(schema.verifiedExperience.programId, schema.internshipPrograms.id))
-    .innerJoin(schema.internshipOffers, eq(schema.internshipPrograms.offerId, schema.internshipOffers.id))
-    .innerJoin(schema.applications, eq(schema.internshipOffers.applicationId, schema.applications.id))
-    .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
-    .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
-    .where(eq(schema.applications.studentId, user.id))
-    .orderBy(desc(schema.verifiedExperience.verifiedAt));
-
   // Completed challenges: submissions a company has actually evaluated
   // (candidate_evidence exists) — not just "submitted", genuinely reviewed.
-  const applicationRows = await db
-    .select({ id: schema.applications.id, role: schema.opportunities.role, companyName: schema.companies.name })
-    .from(schema.applications)
-    .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
-    .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
-    .where(eq(schema.applications.studentId, user.id));
   const applicationIds = applicationRows.map((a) => a.id);
   const submissionRows = applicationIds.length
     ? await db
@@ -99,20 +96,23 @@ export default async function StudentProfilePage() {
         .where(inArray(schema.submissions.applicationId, applicationIds))
     : [];
   const submissionIds = submissionRows.map((s) => s.id);
-  const evidenceRows = submissionIds.length
-    ? await db
-        .select({ submissionId: schema.candidateEvidence.submissionId })
-        .from(schema.candidateEvidence)
-        .where(inArray(schema.candidateEvidence.submissionId, submissionIds))
-    : [];
-  const evidencedSubmissionIds = new Set(evidenceRows.map((e) => e.submissionId));
   const versionIds = submissionRows.map((s) => s.challengeVersionId);
-  const versionRows = versionIds.length
-    ? await db
-        .select({ id: schema.challengeVersions.id, title: schema.challengeVersions.title, skills: schema.challengeVersions.skills })
-        .from(schema.challengeVersions)
-        .where(inArray(schema.challengeVersions.id, versionIds))
-    : [];
+  // Both only depend on submissionRows, not on each other.
+  const [evidenceRows, versionRows] = await Promise.all([
+    submissionIds.length
+      ? db
+          .select({ submissionId: schema.candidateEvidence.submissionId })
+          .from(schema.candidateEvidence)
+          .where(inArray(schema.candidateEvidence.submissionId, submissionIds))
+      : Promise.resolve([]),
+    versionIds.length
+      ? db
+          .select({ id: schema.challengeVersions.id, title: schema.challengeVersions.title, skills: schema.challengeVersions.skills })
+          .from(schema.challengeVersions)
+          .where(inArray(schema.challengeVersions.id, versionIds))
+      : Promise.resolve([]),
+  ]);
+  const evidencedSubmissionIds = new Set(evidenceRows.map((e) => e.submissionId));
   const versionById = new Map(versionRows.map((v) => [v.id, v]));
   const applicationById = new Map(applicationRows.map((a) => [a.id, a]));
 

@@ -166,7 +166,8 @@ export class MockAIProvider implements AIProvider {
       role: t.role,
       duration: extractWeeks(input.description),
       hoursPerWeek: extractHours(input.description),
-      location: "Doha / Hybrid",
+      location: "Doha, Qatar",
+      workMode: "hybrid",
       slots: 1,
       skills: t.skills,
       description: input.description.trim(),
@@ -312,19 +313,36 @@ export class MockAIProvider implements AIProvider {
     };
   }
 
-  async evaluateAgainstRubric(input: { rubric: RubricCriterion[]; sources: EvidenceSource[] }): Promise<RubricEvaluation> {
+  async evaluateAgainstRubric(input: { rubric: RubricCriterion[]; sources: EvidenceSource[]; unavailable: string[] }): Promise<RubricEvaluation> {
     await wait(500);
     const nonProfile = input.sources.filter((s) => s.kind !== "profile");
-    const first = nonProfile[0];
-    const quote = first ? first.text.trim().slice(0, 120) || undefined : undefined;
+    // Honest limits of a mock: assign at most one criterion per distinct
+    // readable source (no source's text reused as "evidence" for two
+    // different criteria), and never claim more real analysis than a
+    // deterministic stub can actually perform. Every criterion beyond the
+    // number of distinct sources — and every criterion once sources run
+    // out — gets an honest "insufficient", not a fabricated "solid".
     return {
-      metrics: input.rubric.map((r) => ({
-        criterion: r.criterion,
-        level: nonProfile.length > 0 ? "solid" : "not_demonstrated",
-        rationale: nonProfile.length > 0 ? `Reviewed against: ${r.description}` : "No submission evidence was available to evaluate this criterion.",
-        evidenceQuote: quote,
-        sourceId: quote ? first?.id : undefined,
-      })),
+      metrics: input.rubric.map((r, i) => {
+        const source = nonProfile[i];
+        if (!source) {
+          return {
+            criterion: r.criterion,
+            level: "insufficient" as const,
+            rationale: input.unavailable.length > 0
+              ? `No distinct readable source was available for this criterion (see: ${input.unavailable[0]}).`
+              : "No distinct submission source was available to evaluate this criterion.",
+          };
+        }
+        const quote = source.text.trim().slice(0, 120) || undefined;
+        return {
+          criterion: r.criterion,
+          level: "solid" as const,
+          rationale: `Reviewed against: ${r.description}`,
+          evidenceQuote: quote,
+          sourceId: quote ? source.id : undefined,
+        };
+      }),
       strengths: nonProfile.length > 0 ? ["Submission materials are available for review."] : [],
       gaps: nonProfile.length === 0 ? ["No submission evidence was available."] : [],
       confidence: nonProfile.length > 0 ? "medium" : "low",

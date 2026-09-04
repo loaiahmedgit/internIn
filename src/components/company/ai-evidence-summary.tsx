@@ -79,18 +79,23 @@ export function AiEvidenceSummary({
               </div>
               <p className="mt-1 text-navy/55">Adapted to this challenge&apos;s own rubric — not a universal scorecard.</p>
               <ul className="mt-2 space-y-2">
-                {evaluated.metrics.map((metric, i) => (
-                  <li key={`${metric.criterion}-${i}`} className="rounded-lg border border-navy/10 bg-white p-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-navy">{metric.criterion}</span>
-                      <span className="shrink-0 rounded-full bg-gray-light px-2 py-0.5 text-[10px] font-medium capitalize text-navy/60">
-                        {metric.level.replace(/_/g, " ")}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-navy/65">{metric.rationale}</p>
-                    {metric.evidenceQuote && <p className="mt-1 italic text-navy/50">&quot;{metric.evidenceQuote}&quot;</p>}
-                  </li>
-                ))}
+                {evaluated.metrics.map((metric, i) => {
+                  const needsHumanReview = metric.level === "insufficient" || metric.level === "not_demonstrated";
+                  const levelLabel = metric.level === "insufficient" ? "Insufficient evidence" : metric.level.replace(/_/g, " ");
+                  return (
+                    <li key={`${metric.criterion}-${i}`} className="rounded-lg border border-navy/10 bg-white p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-navy">{metric.criterion}</span>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${needsHumanReview ? "bg-amber-50 text-amber-700" : "bg-gray-light text-navy/60"}`}>
+                          {levelLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-navy/65">{metric.rationale}</p>
+                      {metric.evidenceQuote && <p className="mt-1 italic text-navy/50">&quot;{metric.evidenceQuote}&quot;</p>}
+                      {needsHumanReview && !metric.evidenceQuote && <p className="mt-1 text-[11px] text-amber-700">Requires human review.</p>}
+                    </li>
+                  );
+                })}
               </ul>
               {(evaluated.strengths?.length ?? 0) > 0 && (
                 <p className="mt-2">
@@ -156,7 +161,7 @@ export function AiEvidenceSummary({
             <h3 className="font-semibold text-navy">Challenge evidence</h3>
             <p className="mt-1">
               {c.submission
-                ? `${c.submission.artifacts.length} submitted files${c.submission.notes.trim() ? " and written notes" : ""}.`
+                ? `${c.submission.submissionArtifacts.length || c.submission.artifacts.length} submitted files${c.submission.notes.trim() ? " and written notes" : ""}.`
                 : "No challenge submission recorded."}{" "}
               {c.challenge?.tasks.length ?? 0} task requirements and{" "}
               {c.challenge?.deliverables.length ?? 0} required deliverables.

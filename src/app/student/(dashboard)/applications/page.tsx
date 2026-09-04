@@ -78,8 +78,10 @@ export default async function StudentApplicationsPage({ searchParams }: { search
   }
 
   const applicationIds = applications.map((a) => a.id);
-  const submissions = await db.select({ applicationId: schema.submissions.applicationId }).from(schema.submissions).where(inArray(schema.submissions.applicationId, applicationIds));
-  const offers = await db.select({ applicationId: schema.internshipOffers.applicationId, status: schema.internshipOffers.status }).from(schema.internshipOffers).where(inArray(schema.internshipOffers.applicationId, applicationIds));
+  const [submissions, offers] = await Promise.all([
+    db.select({ applicationId: schema.submissions.applicationId }).from(schema.submissions).where(inArray(schema.submissions.applicationId, applicationIds)),
+    db.select({ applicationId: schema.internshipOffers.applicationId, status: schema.internshipOffers.status }).from(schema.internshipOffers).where(inArray(schema.internshipOffers.applicationId, applicationIds)),
+  ]);
   const submittedIds = new Set(submissions.map((s) => s.applicationId));
   const offerByApplicationId = new Map(offers.map((o) => [o.applicationId, o]));
 

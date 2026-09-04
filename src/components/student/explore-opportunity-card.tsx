@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BadgeCheck, BriefcaseBusiness, Clock3, MapPin, Monitor, Sparkles } from "lucide-react";
 import { SaveButton } from "@/components/opportunities/save-button";
+import { saveScrollPosition } from "@/lib/scroll-preservation";
 import { cn } from "@/lib/utils";
 
 const WORK_MODE_LABEL: Record<"remote" | "onsite" | "hybrid", string> = {
@@ -41,7 +42,7 @@ export function ExploreOpportunityCard({
   return (
     <article
       className={cn(
-        "relative rounded-xl border bg-white p-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] transition-shadow duration-150",
+        "relative rounded-2xl border bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] transition-shadow duration-200",
         selected ? "border-teal/45 bg-teal/[0.028]" : "border-black/[0.04] hover:shadow-[0_2px_4px_rgba(16,24,40,0.05),0_14px_32px_-6px_rgba(16,24,40,0.14)]",
       )}
     >
@@ -59,6 +60,8 @@ export function ExploreOpportunityCard({
           </div>
           <Link
             href={href}
+            scroll={false}
+            onClick={saveScrollPosition}
             aria-current={selected ? "true" : undefined}
             className="block truncate text-base font-semibold tracking-[-0.015em] text-navy hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
           >
@@ -90,7 +93,7 @@ export function ExploreOpportunityCard({
           <Sparkles className="size-3.5" aria-hidden="true" />
           {typeof estimatedMinutes === "number" ? `Challenge, ~${estimatedMinutes} min` : "Opportunity details"}
         </span>
-        <Link href={href} className="shrink-0 rounded-md text-xs font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+        <Link href={href} scroll={false} onClick={saveScrollPosition} className="shrink-0 rounded-md text-xs font-medium text-teal-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
           View details
         </Link>
       </div>

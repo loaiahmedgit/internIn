@@ -39,49 +39,55 @@ export default async function StudentDashboardPage() {
   const { user } = await requireCurrentStudent();
   const db = getDb();
 
-  const [profile] = await db
-    .select({
-      educationStage: schema.studentProfiles.educationStage,
-      university: schema.studentProfiles.university,
-      major: schema.studentProfiles.major,
-      graduationYear: schema.studentProfiles.graduationYear,
-      location: schema.studentProfiles.location,
-      skills: schema.studentProfiles.skills,
-      interests: schema.studentProfiles.interests,
-      cvFileKey: schema.studentProfiles.cvFileKey,
-      cvUrl: schema.studentProfiles.cvUrl,
-    })
-    .from(schema.studentProfiles)
-    .where(eq(schema.studentProfiles.userId, user.id))
-    .limit(1);
+  // Everything here only depends on user.id, not on each other — run in
+  // one round trip instead of a five-step waterfall (profile -> applications
+  // -> offers/submissions -> evidence -> opportunities used to run fully
+  // sequentially even though most of these branches are independent).
+  const [[profile], applications, [{ opportunities, hasMatchData }, publishedChallengeInfo, savedIds]] = await Promise.all([
+    db
+      .select({
+        educationStage: schema.studentProfiles.educationStage,
+        university: schema.studentProfiles.university,
+        major: schema.studentProfiles.major,
+        graduationYear: schema.studentProfiles.graduationYear,
+        location: schema.studentProfiles.location,
+        skills: schema.studentProfiles.skills,
+        interests: schema.studentProfiles.interests,
+        cvFileKey: schema.studentProfiles.cvFileKey,
+        cvUrl: schema.studentProfiles.cvUrl,
+      })
+      .from(schema.studentProfiles)
+      .where(eq(schema.studentProfiles.userId, user.id))
+      .limit(1),
+    db
+      .select({
+        id: schema.applications.id,
+        opportunityId: schema.applications.opportunityId,
+        role: schema.opportunities.role,
+        companyName: schema.companies.name,
+        challengeStartedAt: schema.applications.challengeStartedAt,
+      })
+      .from(schema.applications)
+      .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
+      .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
+      .where(eq(schema.applications.studentId, user.id)),
+    Promise.all([getOpportunitiesWithMatch(user.id), getPublishedChallengeInfo(), getSavedOpportunityIds(user.id)]),
+  ]);
   if (!profile?.educationStage) redirect("/student/onboarding");
 
-  const applications = await db
-    .select({
-      id: schema.applications.id,
-      opportunityId: schema.applications.opportunityId,
-      role: schema.opportunities.role,
-      companyName: schema.companies.name,
-      challengeStartedAt: schema.applications.challengeStartedAt,
-    })
-    .from(schema.applications)
-    .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
-    .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
-    .where(eq(schema.applications.studentId, user.id));
-
   const applicationIds = applications.map((a) => a.id);
-  const offers = applicationIds.length
-    ? await db
-        .select({ id: schema.internshipOffers.id, applicationId: schema.internshipOffers.applicationId, status: schema.internshipOffers.status })
-        .from(schema.internshipOffers)
-        .where(inArray(schema.internshipOffers.applicationId, applicationIds))
-    : [];
-  const submissions = applicationIds.length
-    ? await db
-        .select({ id: schema.submissions.id, applicationId: schema.submissions.applicationId })
-        .from(schema.submissions)
-        .where(inArray(schema.submissions.applicationId, applicationIds))
-    : [];
+  const [offers, submissions] = applicationIds.length
+    ? await Promise.all([
+        db
+          .select({ id: schema.internshipOffers.id, applicationId: schema.internshipOffers.applicationId, status: schema.internshipOffers.status })
+          .from(schema.internshipOffers)
+          .where(inArray(schema.internshipOffers.applicationId, applicationIds)),
+        db
+          .select({ id: schema.submissions.id, applicationId: schema.submissions.applicationId })
+          .from(schema.submissions)
+          .where(inArray(schema.submissions.applicationId, applicationIds)),
+      ])
+    : [[], []];
   const submissionIds = submissions.map((s) => s.id);
   const evidenceRows = submissionIds.length
     ? await db
@@ -93,12 +99,6 @@ export default async function StudentDashboardPage() {
   const submissionByApplicationId = new Map(
     submissions.map((s) => [s.applicationId, { hasEvidence: evidencedSubmissionIds.has(s.id) }]),
   );
-
-  const [{ opportunities, hasMatchData }, publishedChallengeInfo, savedIds] = await Promise.all([
-    getOpportunitiesWithMatch(user.id),
-    getPublishedChallengeInfo(),
-    getSavedOpportunityIds(user.id),
-  ]);
 
   const profileCompletion = getProfileCompletion(profile);
   const profileSteps = [

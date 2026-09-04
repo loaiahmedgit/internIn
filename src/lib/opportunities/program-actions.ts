@@ -2,7 +2,7 @@
 
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
-import { inngest } from "@/lib/inngest/client";
+import { sendNotificationEvent } from "@/lib/inngest/client";
 import { eq, and, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -145,7 +145,7 @@ export async function addSupervisorFeedbackAction(programId: string, feedback: s
     actorUserId: user.id,
   });
 
-  await inngest.send({
+  await sendNotificationEvent({
     name: "supervisor_feedback/added",
     data: { studentEmail, studentName, companyName, feedback: validatedFeedback, applicationId },
   });

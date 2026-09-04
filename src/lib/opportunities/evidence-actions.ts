@@ -134,12 +134,18 @@ export async function compareCandidateSubmissionsAction(submissionIds: string[])
     if (!evidence) {
       throw new Error(`Generate an AI summary for ${studentName} before comparing.`);
     }
+    // Real per-artifact rows take priority — the legacy jsonb only ever has
+    // data for submissions made before the P0 rewrite.
+    const artifactRows = await db
+      .select({ id: schema.submissionArtifacts.id })
+      .from(schema.submissionArtifacts)
+      .where(eq(schema.submissionArtifacts.submissionId, submission.id));
+    const artifactCount = artifactRows.length || submission.artifacts.length;
     candidates.push({
       candidateName: studentName,
       tasksCompleted: evidence.tasksCompleted,
       timeSpentMinutes: evidence.timeSpentMinutes,
-      submissionSummary:
-        submission.artifacts.length > 0 ? `${submission.artifacts.length} artifact(s) + written notes` : "Written notes only",
+      submissionSummary: artifactCount > 0 ? `${artifactCount} artifact(s) + written notes` : "Written notes only",
       aiSummary: evidence.aiSummary,
       strength: evidence.strength,
       weakness: evidence.weakness,

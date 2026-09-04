@@ -63,6 +63,11 @@ export interface AIProvider {
   evaluateAgainstRubric(input: {
     rubric: RubricCriterion[];
     sources: EvidenceSource[];
+    /** Real reasons specific artifacts couldn't be read (e.g. "Figma design
+     * file: requires human review — design tool not accessible"). Passed so
+     * a criterion that depends on one of these is never confidently scored
+     * from unrelated text instead. */
+    unavailable: string[];
   }): Promise<RubricEvaluation>;
 
   /** Whether this provider's configured model can accept image input for evaluation — false unless explicitly known to support vision, never assumed. */

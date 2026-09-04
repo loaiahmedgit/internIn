@@ -14,6 +14,7 @@ export async function getOpportunitiesWithMatch(studentUserId?: string) {
     .select({
       id: schema.opportunities.id,
       role: schema.opportunities.role,
+      department: schema.opportunities.department,
       description: schema.opportunities.description,
       shortDescription: schema.opportunities.shortDescription,
       whatYouWillLearn: schema.opportunities.whatYouWillLearn,

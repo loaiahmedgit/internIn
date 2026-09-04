@@ -3,7 +3,7 @@
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { canManagePublication, type WorkspacePermission } from "@/lib/company/permissions";
-import { inngest } from "@/lib/inngest/client";
+import { sendNotificationEvent } from "@/lib/inngest/client";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -11,6 +11,8 @@ import {
   InternshipDraftSchema,
   InternshipProgramSchema,
   InternshipCopyAssistSchema,
+  NOT_A_WORK_MODE_LOCATION_MESSAGE,
+  isWorkModeLabel,
   aiProvider,
   type InternshipDraft,
   type InternshipProgram,
@@ -440,7 +442,7 @@ const InternshipFormSchema = z.object({
   niceToHave: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
   duration: z.string().trim().min(1).max(80),
   hoursPerWeek: z.number().int().min(1).max(60),
-  location: z.string().trim().min(1).max(120),
+  location: z.string().trim().min(1).max(120).refine((v) => !isWorkModeLabel(v), NOT_A_WORK_MODE_LOCATION_MESSAGE),
   workMode: z.enum(["remote", "onsite", "hybrid"]).nullable().optional(),
   applicationDeadline: z.coerce.date().nullable().optional(),
   startDate: z.coerce.date().nullable().optional(),
@@ -669,7 +671,7 @@ export async function inviteToInternshipAction(applicationId: string) {
       : { placementFeeStatus: offer.placementFeeStatus, placementFeeQar: 499 },
   });
 
-  await inngest.send({
+  await sendNotificationEvent({
     name: "internship/offer.created",
     data: {
       studentEmail: application.studentEmail,

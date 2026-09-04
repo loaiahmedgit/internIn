@@ -1,22 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Circle, FileText, Link as LinkIcon, Loader2 } from "lucide-react";
+import { CheckCircle2, Download, Loader2, MessageSquare, ShieldCheck, UserCheck } from "lucide-react";
 import { getSubmissionArtifactDownloadUrlAction } from "@/lib/challenges/resource-actions";
+import { getArtifactVisual, formatBytes } from "@/lib/artifact-visual";
 
 export interface SubmissionSummaryArtifact {
   id: string;
   label: string;
   inputMode: string;
+  artifactKind: string;
   storagePath: string | null;
   externalUrl: string | null;
   textContent: string | null;
   originalFilename: string | null;
+  sizeBytes?: number | null;
 }
 
 function FileArtifactRow({ artifact }: { artifact: SubmissionSummaryArtifact }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { Icon, iconClassName, bgClassName } = getArtifactVisual(artifact.artifactKind);
 
   async function open() {
     setError(null);
@@ -32,19 +36,31 @@ function FileArtifactRow({ artifact }: { artifact: SubmissionSummaryArtifact }) 
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3">
-      <span className="flex min-w-0 items-center gap-2.5 text-sm text-navy">
-        <FileText className="size-4 shrink-0 text-navy/40" aria-hidden="true" />
-        <span className="min-w-0">
-          <span className="block truncate font-medium">{artifact.label}</span>
-          <span className="block truncate text-xs text-navy/50">{artifact.originalFilename ?? "Submitted"}</span>
-        </span>
+    <div className="flex items-center gap-2.5 px-4 py-3">
+      <div className={`flex size-8 shrink-0 items-center justify-center rounded-md ${bgClassName}`}>
+        <Icon className={`size-4 ${iconClassName}`} aria-hidden="true" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-navy">{artifact.originalFilename ?? artifact.label}</p>
+        <p className="truncate text-xs text-navy/45">{typeof artifact.sizeBytes === "number" ? formatBytes(artifact.sizeBytes) : artifact.label}</p>
+      </div>
+      <button type="button" onClick={open} disabled={pending} aria-label={`Download ${artifact.label}`} className="flex size-8 shrink-0 items-center justify-center rounded-md text-navy/45 transition-colors hover:bg-teal/8 hover:text-teal-ink disabled:opacity-60">
+        {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
+      </button>
+      {error && <p className="mt-0.5 text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+function TimelineStep({ label, sublabel, done }: { label: string; sublabel?: string; done: boolean }) {
+  return (
+    <div className="flex flex-1 flex-col items-center gap-2 text-center">
+      <span className={`flex size-9 shrink-0 items-center justify-center rounded-full ${done ? "bg-teal text-white" : "border-2 border-navy/15 bg-white text-navy/25"}`}>
+        {done ? <CheckCircle2 className="size-4.5" aria-hidden="true" /> : <span className="size-2 rounded-full bg-current" />}
       </span>
-      <div className="shrink-0 text-right">
-        <button type="button" onClick={open} disabled={pending} className="text-sm font-medium text-teal-ink hover:underline disabled:opacity-60">
-          {pending ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : "Open"}
-        </button>
-        {error && <p className="mt-0.5 text-xs text-destructive">{error}</p>}
+      <div>
+        <p className={`text-sm font-medium ${done ? "text-navy" : "text-navy/45"}`}>{label}</p>
+        {sublabel && <p className="text-xs text-navy/40">{sublabel}</p>}
       </div>
     </div>
   );
@@ -57,72 +73,113 @@ export function SubmissionSummary({
   submission,
   offer,
   artifacts,
+  deliverables = [],
 }: {
   submission: { status: "submitted" | "reviewed"; submittedAt: Date };
   offer: { status: "pending" | "accepted" | "declined" } | null;
   artifacts: SubmissionSummaryArtifact[];
+  deliverables?: string[];
 }) {
   const reviewed = submission.status === "reviewed";
   const hasOutcome = Boolean(offer);
+  const outcomeLabel = offer ? (offer.status === "pending" ? "Offer received" : offer.status === "accepted" ? "Offer accepted" : "Offer declined") : "Outcome";
 
   return (
-    <div className="mt-4 space-y-5">
-      <div className="rounded-xl border border-navy/10 bg-white p-4">
-        <p className="text-sm font-semibold text-navy">Status</p>
-        <ol className="mt-3 space-y-3">
-          <li className="flex items-center gap-2.5 text-sm">
-            <CheckCircle2 className="size-4 shrink-0 text-teal-ink" aria-hidden="true" />
-            <span className="text-navy">Submitted</span>
-            <span className="ml-auto text-xs text-navy/45">{submission.submittedAt.toLocaleDateString()}</span>
-          </li>
-          <li className="flex items-center gap-2.5 text-sm">
-            {reviewed ? (
-              <CheckCircle2 className="size-4 shrink-0 text-teal-ink" aria-hidden="true" />
-            ) : (
-              <Circle className="size-4 shrink-0 text-navy/25" aria-hidden="true" />
-            )}
-            <span className={reviewed ? "text-navy" : "text-navy/50"}>{reviewed ? "Reviewed" : "Under review"}</span>
-          </li>
-          <li className="flex items-center gap-2.5 text-sm">
-            {hasOutcome ? (
-              <CheckCircle2 className="size-4 shrink-0 text-teal-ink" aria-hidden="true" />
-            ) : (
-              <Circle className="size-4 shrink-0 text-navy/25" aria-hidden="true" />
-            )}
-            <span className={hasOutcome ? "text-navy" : "text-navy/50"}>
-              {offer ? (offer.status === "pending" ? "Offer received" : offer.status === "accepted" ? "Offer accepted" : "Offer declined") : "Outcome"}
+    <div className="mt-3 space-y-5">
+      <div className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-teal/10 text-teal-ink">
+              <CheckCircle2 className="size-6" aria-hidden="true" />
             </span>
-          </li>
-        </ol>
+            <div>
+              <p className="text-base font-semibold text-navy">Submission submitted!</p>
+              <p className="text-sm text-navy/56">Your work has been submitted successfully.</p>
+            </div>
+          </div>
+          <p className="shrink-0 text-xs text-navy/45">Submitted on {submission.submittedAt.toLocaleDateString()}</p>
+        </div>
+
+        <div className="mt-6 flex items-start">
+          <TimelineStep label="Submitted" sublabel={submission.submittedAt.toLocaleDateString()} done />
+          <div className={`mt-4.5 h-0.5 flex-1 ${reviewed || hasOutcome ? "bg-teal" : "bg-navy/10"}`} />
+          <TimelineStep label="Under review" done={reviewed || hasOutcome} />
+          <div className={`mt-4.5 h-0.5 flex-1 ${hasOutcome ? "bg-teal" : "bg-navy/10"}`} />
+          <TimelineStep label="Outcome" sublabel={hasOutcome ? outcomeLabel : undefined} done={hasOutcome} />
+        </div>
       </div>
 
-      {artifacts.length > 0 && (
-        <div>
-          <p className="text-sm font-semibold text-navy">Submission summary</p>
-          <div className="mt-3 divide-y divide-navy/8 overflow-hidden rounded-xl border border-navy/10 bg-white">
-            {artifacts.map((artifact) => {
-              if (artifact.storagePath) return <FileArtifactRow key={artifact.id} artifact={artifact} />;
-              if (artifact.externalUrl) {
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {artifacts.length > 0 && (
+          <div>
+            <p className="text-sm font-semibold text-navy">Your submission</p>
+            <div className="mt-2 divide-y divide-navy/8 overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+              {artifacts.map((artifact) => {
+                if (artifact.storagePath) return <FileArtifactRow key={artifact.id} artifact={artifact} />;
+                if (artifact.externalUrl) {
+                  const { Icon, iconClassName, bgClassName } = getArtifactVisual(artifact.artifactKind);
+                  return (
+                    <div key={artifact.id} className="flex items-center gap-2.5 px-4 py-3">
+                      <div className={`flex size-8 shrink-0 items-center justify-center rounded-md ${bgClassName}`}>
+                        <Icon className={`size-4 ${iconClassName}`} aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-navy">{artifact.label}</p>
+                        <a href={artifact.externalUrl} target="_blank" rel="noreferrer" className="block truncate text-xs text-teal-ink hover:underline">{artifact.externalUrl}</a>
+                      </div>
+                    </div>
+                  );
+                }
                 return (
-                  <div key={artifact.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                    <span className="flex min-w-0 items-center gap-2.5 text-sm text-navy">
-                      <LinkIcon className="size-4 shrink-0 text-navy/40" aria-hidden="true" />
-                      <span className="truncate font-medium">{artifact.label}</span>
-                    </span>
-                    <a href={artifact.externalUrl} target="_blank" rel="noreferrer" className="shrink-0 truncate text-sm font-medium text-teal-ink hover:underline">
-                      {artifact.externalUrl}
-                    </a>
+                  <div key={artifact.id} className="px-4 py-3">
+                    <p className="text-sm font-medium text-navy">{artifact.label}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-navy/70">{artifact.textContent}</p>
                   </div>
                 );
-              }
-              return (
-                <div key={artifact.id} className="px-4 py-3">
-                  <p className="text-sm font-medium text-navy">{artifact.label}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-navy/70">{artifact.textContent}</p>
-                </div>
-              );
-            })}
+              })}
+            </div>
           </div>
+        )}
+
+        <div>
+          <p className="text-sm font-semibold text-navy">What happens next?</p>
+          <div className="mt-2 space-y-3 rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+            <div className="flex items-start gap-2.5">
+              <UserCheck className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-medium text-navy">A person reviews your submission</p>
+                <p className="text-xs leading-5 text-navy/55">The employer looks at everything you submitted, not just a summary.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <MessageSquare className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-medium text-navy">You&apos;ll see updates here</p>
+                <p className="text-xs leading-5 text-navy/55">This page updates once it&apos;s reviewed, and again if you&apos;re invited forward.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-medium text-navy">This isn&apos;t a hiring decision yet</p>
+                <p className="text-xs leading-5 text-navy/55">A person at the company makes that call — not an automated score.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {deliverables.length > 0 && (
+        <div>
+          <p className="text-sm font-semibold text-navy">Challenge deliverables</p>
+          <ul className="mt-2 space-y-1.5 rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+            {deliverables.map((deliverable) => (
+              <li key={deliverable} className="flex items-start gap-2 text-sm leading-6 text-navy/70">
+                <CheckCircle2 className="mt-1 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
+                <span>{deliverable}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

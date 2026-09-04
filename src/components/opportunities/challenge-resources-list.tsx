@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Link as LinkIcon, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { getChallengeResourceDownloadUrlAction } from "@/lib/challenges/resource-actions";
+import { getArtifactVisual, formatBytes } from "@/lib/artifact-visual";
 
 export interface ChallengeResourceListItem {
   id: string;
@@ -10,6 +11,7 @@ export interface ChallengeResourceListItem {
   artifactKind: string;
   resourceType: "file" | "link";
   generationStatus: "pending" | "generating" | "ready" | "failed" | "requires_upload";
+  sizeBytes?: number | null;
 }
 
 /**
@@ -38,36 +40,39 @@ export function ChallengeResourcesList({ resources }: { resources: ChallengeReso
   if (resources.length === 0) return null;
 
   return (
-    <div className="mt-3 divide-y divide-navy/8 overflow-hidden rounded-xl border border-navy/10 bg-white">
+    <div className="mt-2 space-y-1.5">
       {resources.map((resource) => {
         const ready = resource.generationStatus === "ready";
+        const { Icon, iconClassName, bgClassName } = getArtifactVisual(resource.artifactKind);
         return (
-          <div key={resource.id} className="flex items-center justify-between gap-3 px-4 py-3">
-            <span className="flex min-w-0 items-center gap-2.5 text-sm text-navy">
-              {resource.resourceType === "link" ? (
-                <LinkIcon className="size-4 shrink-0 text-navy/40" aria-hidden="true" />
-              ) : (
-                <FileText className="size-4 shrink-0 text-navy/40" aria-hidden="true" />
-              )}
-              <span className="truncate">{resource.name}</span>
-              <span className="shrink-0 text-xs text-navy/45">· {resource.artifactKind.replace(/_/g, " ")}</span>
-            </span>
+          <div key={resource.id} className="flex items-center gap-2.5 rounded-lg border border-black/[0.04] bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+            <div className={`flex size-8 shrink-0 items-center justify-center rounded-md ${bgClassName}`}>
+              <Icon className={`size-4 ${iconClassName}`} aria-hidden="true" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-navy">{resource.name}</p>
+              <p className="truncate text-xs text-navy/45">
+                {resource.artifactKind.replace(/_/g, " ")}
+                {typeof resource.sizeBytes === "number" ? ` · ${formatBytes(resource.sizeBytes)}` : ""}
+              </p>
+            </div>
             {ready ? (
               <button
                 type="button"
                 onClick={() => open(resource.id)}
                 disabled={pendingId === resource.id}
-                className="shrink-0 text-sm font-medium text-teal-ink hover:underline disabled:opacity-60"
+                aria-label={`Download ${resource.name}`}
+                className="flex size-8 shrink-0 items-center justify-center rounded-md text-navy/45 transition-colors hover:bg-teal/8 hover:text-teal-ink disabled:opacity-60"
               >
-                {pendingId === resource.id ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : "Download"}
+                {pendingId === resource.id ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
               </button>
             ) : (
-              <span className="shrink-0 text-xs text-navy/40">Not available yet</span>
+              <span className="shrink-0 text-[11px] text-navy/40">Not available yet</span>
             )}
           </div>
         );
       })}
-      {error && <p className="px-4 py-2 text-xs text-destructive">{error}</p>}
+      {error && <p className="px-1 text-xs text-destructive">{error}</p>}
     </div>
   );
 }

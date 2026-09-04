@@ -6,11 +6,21 @@ import { CHALLENGE_RESOURCE_TYPES, SUBMISSION_ARTIFACT_KINDS, SUBMISSION_INPUT_M
  * Nothing in the app should ever save raw model text — only these validated shapes.
  */
 
+/** "Remote" is a work mode, not a place — reused wherever a `location`
+ * field is validated so it never gets set to the value that belongs in
+ * `workMode` instead (real bad data seen in production: location="Remote"
+ * duplicating workMode="remote"). */
+export const NOT_A_WORK_MODE_LOCATION_MESSAGE = "Location must be a real place (e.g. \"Doha, Qatar\") — set Remote/Hybrid/On-site using Work mode instead.";
+const WORK_MODE_LABELS = new Set(["remote", "onsite", "on-site", "hybrid"]);
+export function isWorkModeLabel(value: string): boolean {
+  return WORK_MODE_LABELS.has(value.trim().toLowerCase());
+}
+
 export const InternshipDraftSchema = z.object({
   role: z.string().trim().min(2).max(120),
   duration: z.string().trim().min(2).max(80),
   hoursPerWeek: z.number().int().min(1).max(60),
-  location: z.string().trim().min(2).max(120),
+  location: z.string().trim().min(2).max(120).refine((v) => !isWorkModeLabel(v), NOT_A_WORK_MODE_LOCATION_MESSAGE),
   workMode: z.enum(["remote", "onsite", "hybrid"]).nullable().optional(),
   applicationDeadline: z.coerce.date().nullable().optional(),
   slots: z.number().int().min(1).max(100),

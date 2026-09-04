@@ -38,22 +38,44 @@ export type EvidenceSummary = {
   gaps?: string[];
   confidence?: "low" | "medium" | "high";
 };
-/** Same grounding rule as groundedHighlights, applied to rubric metrics: a
- * metric's evidenceQuote/sourceId is kept only if it's a real, exact
- * substring of that source's text — otherwise the citation is stripped
- * (the metric itself, and its rationale, are kept; only the unverifiable
- * quote is dropped, never fabricated into a fake one). */
-export function groundedMetrics<T extends { evidenceQuote?: string | null; sourceId?: string | null }>(
-  metrics: T[],
-  sources: EvidenceSource[],
-): T[] {
+/** Same grounding rule as groundedHighlights, applied to rubric metrics —
+ * extended with two real-evidence guarantees the plain quote-verification
+ * check doesn't cover on its own:
+ *
+ * 1. A "strong" or "solid" level with no genuinely grounded quote behind it
+ *    is downgraded to "insufficient" rather than trusted. A criterion whose
+ *    real evidence (e.g. a Figma file) wasn't actually accessible to the
+ *    evaluator must never read as confidently assessed just because the
+ *    model wrote a plausible-sounding rationale.
+ * 2. The exact same quote cannot ground two different criteria. Reusing one
+ *    piece of text as "evidence" for several unrelated rubric criteria is
+ *    the generic-reasoning failure mode this exists to catch — each metric
+ *    needs evidence genuinely specific to that criterion, not one quote
+ *    doing duty for all of them.
+ *
+ * The metric and its rationale are always kept; only the level and the
+ * unverifiable/reused citation are adjusted — never a fabricated quote. */
+export function groundedMetrics(metrics: RubricMetric[], sources: EvidenceSource[]): RubricMetric[] {
+  const claimedQuotes = new Set<string>();
   return metrics.map((metric) => {
-    if (!metric.evidenceQuote || !metric.sourceId) return { ...metric, evidenceQuote: undefined, sourceId: undefined };
-    const source = sources.find((s) => s.id === metric.sourceId);
-    if (!source || !source.text.includes(metric.evidenceQuote)) {
-      return { ...metric, evidenceQuote: undefined, sourceId: undefined };
-    }
-    return metric;
+    const source = metric.sourceId ? sources.find((s) => s.id === metric.sourceId) : undefined;
+    const isVerbatim = Boolean(metric.evidenceQuote && source && source.text.includes(metric.evidenceQuote));
+    const isReused = Boolean(metric.evidenceQuote && claimedQuotes.has(metric.evidenceQuote));
+    const isGrounded = isVerbatim && !isReused;
+
+    if (isGrounded && metric.evidenceQuote) claimedQuotes.add(metric.evidenceQuote);
+    if (isGrounded) return metric;
+
+    const needsDowngrade = metric.level === "strong" || metric.level === "solid";
+    return {
+      ...metric,
+      evidenceQuote: undefined,
+      sourceId: undefined,
+      level: needsDowngrade ? "insufficient" : metric.level,
+      rationale: needsDowngrade
+        ? `${metric.rationale} (Downgraded: no verifiable, criterion-specific evidence was found — requires human review.)`
+        : metric.rationale,
+    };
   });
 }
 

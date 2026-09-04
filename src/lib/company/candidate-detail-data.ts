@@ -45,6 +45,7 @@ export interface CandidateDetail {
       label: string;
       originalFilename: string | null;
       mimeType: string | null;
+      sizeBytes: number | null;
       storagePath: string | null;
       externalUrl: string | null;
       textContent: string | null;
