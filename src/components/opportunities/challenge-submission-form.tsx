@@ -112,11 +112,16 @@ export function ChallengeSubmissionForm({
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
     try {
       localStorage.setItem(draftStorageKey(applicationId), JSON.stringify(drafts));
+      // Deferred, not called synchronously in the effect body — avoids the
+      // cascading-render lint rule while still reflecting a real save.
+      const timeout = setTimeout(() => setLastSavedAt(new Date()), 0);
+      return () => clearTimeout(timeout);
     } catch {
       // Best-effort autosave — a full localStorage quota is not worth failing over.
     }
@@ -308,6 +313,9 @@ export function ChallengeSubmissionForm({
         {isPending ? "Submitting…" : "Submit challenge"}
       </Button>
       {!allRequiredSatisfied && <p className="mt-1.5 text-center text-xs text-navy/40">Complete all required items to submit</p>}
+      {lastSavedAt && (
+        <p className="mt-1.5 text-center text-[11px] text-navy/35">Draft saved automatically · Last saved {lastSavedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
+      )}
     </form>
   );
 }

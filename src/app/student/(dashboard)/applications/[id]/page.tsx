@@ -10,6 +10,31 @@ import { SubmissionSummary } from "@/components/opportunities/submission-summary
 import { ExpandableText } from "@/components/opportunities/expandable-text";
 import { OfferResponseButtons } from "@/components/opportunities/offer-response-buttons";
 import { StartChallengeButton } from "@/components/opportunities/start-challenge-button";
+import { ChallengeNotes } from "@/components/opportunities/challenge-notes";
+
+const WORK_MODE_LABEL: Record<"remote" | "onsite" | "hybrid", string> = {
+  remote: "Remote",
+  onsite: "On-site",
+  hybrid: "Hybrid",
+};
+
+/** Generalized, role-agnostic guidance — deliberately not tech-stack-specific
+ * (no "Node.js 18+" boilerplate), since the challenge engine spans every
+ * field internIn supports, not just software roles. */
+const WORKSPACE_INSTRUCTIONS = [
+  {
+    title: "Working environment",
+    body: "Use whatever tools you'd normally reach for in this kind of role — your own software, templates, or references. There's no required setup; deliver in the format the submission requirements ask for.",
+  },
+  {
+    title: "Quality expectations",
+    body: "Treat this like real client work, not a school exercise. Show your reasoning, structure your output clearly, and address every task — partial or rough work is still evaluated honestly.",
+  },
+  {
+    title: "Before you submit",
+    body: "Re-read the scenario and tasks once more, check each submission requirement is actually satisfied, and make sure anything you link to (a file, repo, or doc) is accessible to someone outside your own account.",
+  },
+];
 
 export default async function ApplicationWorkspacePage({
   params,
@@ -26,6 +51,8 @@ export default async function ApplicationWorkspacePage({
       opportunityId: schema.applications.opportunityId,
       challengeStartedAt: schema.applications.challengeStartedAt,
       role: schema.opportunities.role,
+      location: schema.opportunities.location,
+      workMode: schema.opportunities.workMode,
       companyName: schema.companies.name,
     })
     .from(schema.applications)
@@ -146,6 +173,8 @@ export default async function ApplicationWorkspacePage({
     <div className="mx-auto max-w-5xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-navy/45">
         <Link href="/student/applications" className="hover:text-navy/70 hover:underline">Applications</Link>
+        <ChevronRight className="size-3.5" aria-hidden="true" />
+        <span className="text-navy/55">{application.companyName}</span>
         <ChevronRight className="size-3.5" aria-hidden="true" />
         <span className="truncate text-navy/60">{application.role}</span>
       </nav>
@@ -284,17 +313,38 @@ export default async function ApplicationWorkspacePage({
                 <h1 className="text-balance text-2xl font-semibold tracking-[-0.03em] text-navy sm:text-3xl">
                   {currentVersion.title}
                 </h1>
-                <p className="mt-0.5 text-sm text-navy/56">{application.companyName}</p>
+                <p className="mt-0.5 text-sm text-navy/56">
+                  {application.companyName}
+                  {application.location ? ` · ${application.location}` : ""}
+                  {application.workMode ? ` · ${WORK_MODE_LABEL[application.workMode]}` : ""}
+                </p>
               </div>
             </div>
-            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${CHALLENGE_STATUS_LABEL[challengeStatus].style}`}>
-              {CHALLENGE_STATUS_LABEL[challengeStatus].label}
-            </span>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-navy/50">
-            <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</span>
-            <span className="flex items-center gap-1.5"><ListChecks className="size-3.5" aria-hidden="true" />{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</span>
+          <div className="mt-4 flex divide-x divide-navy/8 overflow-hidden rounded-xl border border-black/[0.04] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+            <div className="flex flex-1 items-center gap-2 px-4 py-3">
+              <Clock3 className="size-4 shrink-0 text-navy/40" aria-hidden="true" />
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-navy/40">Estimated time</p>
+                <p className="text-sm font-medium text-navy">{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</p>
+              </div>
+            </div>
+            <div className="flex flex-1 items-center gap-2 px-4 py-3">
+              <ListChecks className="size-4 shrink-0 text-navy/40" aria-hidden="true" />
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-navy/40">Tasks</p>
+                <p className="text-sm font-medium text-navy">{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</p>
+              </div>
+            </div>
+            <div className="flex flex-1 items-center gap-2 px-4 py-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-navy/40">Status</p>
+                <span className={`mt-0.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${CHALLENGE_STATUS_LABEL[challengeStatus].style}`}>
+                  {CHALLENGE_STATUS_LABEL[challengeStatus].label}
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-5 lg:items-start">
@@ -323,6 +373,36 @@ export default async function ApplicationWorkspacePage({
                   ))}
                 </ol>
               </section>
+
+              <section>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Instructions</h2>
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {WORKSPACE_INSTRUCTIONS.map((card) => (
+                    <div key={card.title} className="rounded-xl border border-black/[0.04] bg-white p-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                      <p className="text-sm font-medium text-navy">{card.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-navy/56">{card.body}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {currentVersion.submissionRequirements.length > 0 && (
+                <section>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Acceptance criteria</h2>
+                  <ul className="mt-3 space-y-2 rounded-xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                    {currentVersion.submissionRequirements.filter((r) => r.required).map((req) => (
+                      <li key={req.id} className="flex items-start gap-2 text-sm text-navy/76">
+                        <ListChecks className="mt-0.5 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
+                        <span>{req.label} is submitted{req.instructions ? ` — ${req.instructions}` : ""}</span>
+                      </li>
+                    ))}
+                    <li className="flex items-start gap-2 text-sm text-navy/76">
+                      <ListChecks className="mt-0.5 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
+                      <span>Every task above has been addressed in your submission</span>
+                    </li>
+                  </ul>
+                </section>
+              )}
 
               {latestSubmission && (
                 <section>
@@ -357,6 +437,8 @@ export default async function ApplicationWorkspacePage({
               {!latestSubmission && (
                 <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} />
               )}
+
+              <ChallengeNotes applicationId={application.id} />
 
               {currentVersion.rubric.length > 0 && (
                 <section>

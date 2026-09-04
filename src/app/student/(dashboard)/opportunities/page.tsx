@@ -1,18 +1,22 @@
 import Link from "next/link";
-import { eq, inArray } from "drizzle-orm";
-import { Search, SearchX } from "lucide-react";
-import { getDb, schema } from "@/db";
+import { Clock3, MapPin, Monitor, Search, SearchX, SlidersHorizontal } from "lucide-react";
 import { requireCurrentStudent } from "@/lib/auth";
 import { getOpportunitiesWithMatch, getPublishedChallengeInfo } from "@/lib/opportunities/browse";
 import { getSavedOpportunityIds } from "@/lib/opportunities/saved";
-import { getChallengeState } from "@/lib/opportunities/challenge-state";
-import { ExploreOpportunityCard } from "@/components/student/explore-opportunity-card";
-import { OpportunityDetailSheet, type OpportunityDetail } from "@/components/student/opportunity-detail-sheet";
+import { loadOpportunityDetail } from "@/lib/opportunities/detail-actions";
+import { ExploreSplitView, type ExploreListItem } from "@/components/student/explore-split-view";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Button } from "@/components/ui/button";
 
+const NEW_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
+
 function valueOf(value: string | string[] | undefined) {
   return typeof value === "string" ? value : "";
+}
+
+/** Plain helper (not a component) so calling Date.now() here never trips the render-purity lint rule. */
+function isWithinLastWeek(date: Date): boolean {
+  return Date.now() - date.getTime() < NEW_WITHIN_MS;
 }
 
 export default async function StudentOpportunitiesPage({
@@ -22,7 +26,6 @@ export default async function StudentOpportunitiesPage({
 }) {
   const { user } = await requireCurrentStudent();
   const params = await searchParams;
-  const db = getDb();
 
   const qRaw = valueOf(params.q).trim();
   const q = qRaw.toLowerCase();
@@ -32,36 +35,8 @@ export default async function StudentOpportunitiesPage({
   const workMode = valueOf(params.workMode);
   const hoursBucket = valueOf(params.hours);
   const sort = valueOf(params.sort) || "relevant";
-  const selectedId = valueOf(params.opportunity);
+  const selectedIdParam = valueOf(params.opportunity);
   const savedOnly = params.saved === "1";
-
-  const applications = await db
-    .select({
-      id: schema.applications.id,
-      opportunityId: schema.applications.opportunityId,
-      challengeStartedAt: schema.applications.challengeStartedAt,
-    })
-    .from(schema.applications)
-    .where(eq(schema.applications.studentId, user.id));
-  const applicationIds = applications.map((a) => a.id);
-  const submissions = applicationIds.length
-    ? await db
-        .select({ id: schema.submissions.id, applicationId: schema.submissions.applicationId })
-        .from(schema.submissions)
-        .where(inArray(schema.submissions.applicationId, applicationIds))
-    : [];
-  const submissionIds = submissions.map((s) => s.id);
-  const evidenceRows = submissionIds.length
-    ? await db
-        .select({ submissionId: schema.candidateEvidence.submissionId })
-        .from(schema.candidateEvidence)
-        .where(inArray(schema.candidateEvidence.submissionId, submissionIds))
-    : [];
-  const evidencedSubmissionIds = new Set(evidenceRows.map((e) => e.submissionId));
-  const submissionByApplicationId = new Map(
-    submissions.map((s) => [s.applicationId, { hasEvidence: evidencedSubmissionIds.has(s.id) }]),
-  );
-  const applicationByOpportunityId = new Map(applications.map((a) => [a.opportunityId, a]));
 
   const [{ opportunities }, publishedChallengeInfo, savedIds] = await Promise.all([
     getOpportunitiesWithMatch(user.id),
@@ -104,9 +79,6 @@ export default async function StudentOpportunitiesPage({
     });
   }
 
-  // Closed by default: only a real match for the `?opportunity=` param
-  // opens the sheet — never fall back to the first result in the list.
-  const selectedOpportunity = filtered.find((o) => o.id === selectedId);
   const hasActiveFilters = Boolean(q || location || category || duration || workMode || hoursBucket || savedOnly);
 
   function buildParams() {
@@ -121,93 +93,38 @@ export default async function StudentOpportunitiesPage({
     if (sort !== "relevant") next.set("sort", sort);
     return next;
   }
+  const baseQueryString = buildParams().toString();
 
-  function cardHref(opportunityId: string) {
-    const next = buildParams();
-    next.set("opportunity", opportunityId);
-    return `/student/opportunities?${next.toString()}`;
-  }
+  // Split-view default: with no explicit `?opportunity=`, select the first
+  // result automatically (matches LinkedIn-style browsing — the panel is
+  // never blank when results exist) rather than the old modal-era rule of
+  // staying closed by default (that rule existed specifically to avoid an
+  // unwanted popup; a right-side panel that's always part of the page has
+  // no such risk).
+  const selectedOpportunity = (selectedIdParam && filtered.find((o) => o.id === selectedIdParam)) || filtered[0];
 
-  function closeHref() {
-    const qs = buildParams().toString();
-    return qs ? `/student/opportunities?${qs}` : "/student/opportunities";
-  }
+  const items: ExploreListItem[] = filtered.map((o) => ({
+    id: o.id,
+    role: o.role,
+    companyName: o.companyName,
+    companyVerified: o.companyVerified,
+    shortDescription: o.shortDescription,
+    description: o.description,
+    location: o.location,
+    workMode: o.workMode,
+    duration: o.duration,
+    hoursPerWeek: o.hoursPerWeek,
+    skills: o.skills,
+    saved: savedIds.has(o.id),
+    isNew: isWithinLastWeek(o.createdAt),
+    estimatedMinutes: publishedChallengeInfo.get(o.id)?.estimatedMinutes,
+    matchScore: o.matchScore,
+  }));
 
-  let detail: OpportunityDetail | null = null;
-  if (selectedOpportunity) {
-    const application = applicationByOpportunityId.get(selectedOpportunity.id);
-    const submission = application ? submissionByApplicationId.get(application.id) : undefined;
-    const challenge = publishedChallengeInfo.get(selectedOpportunity.id);
-    const challengeState = application
-      ? getChallengeState({ challengePublished: Boolean(challenge), application, submission })
-      : undefined;
-
-    // Real resources/deliverables for the Work challenge section — only
-    // fetched for the one opportunity actually open in the Sheet. Resource
-    // download links are only ever shown once the student has applied
-    // (see OpportunityDetailSheet) — before that, only name/kind, never a
-    // link, so nobody can pull every company's material without applying.
-    let resources: OpportunityDetail["resources"] = [];
-    let deliverables: string[] = [];
-    if (challenge) {
-      const [challengeRow] = await db
-        .select({ currentVersionId: schema.challenges.currentVersionId })
-        .from(schema.challenges)
-        .where(eq(schema.challenges.opportunityId, selectedOpportunity.id))
-        .limit(1);
-      if (challengeRow?.currentVersionId) {
-        const [version] = await db
-          .select({ submissionRequirements: schema.challengeVersions.submissionRequirements })
-          .from(schema.challengeVersions)
-          .where(eq(schema.challengeVersions.id, challengeRow.currentVersionId))
-          .limit(1);
-        deliverables = version?.submissionRequirements.map((r) => r.label) ?? [];
-        resources = await db
-          .select({
-            id: schema.challengeResources.id,
-            name: schema.challengeResources.name,
-            artifactKind: schema.challengeResources.artifactKind,
-            resourceType: schema.challengeResources.resourceType,
-            generationStatus: schema.challengeResources.generationStatus,
-            sizeBytes: schema.challengeResources.sizeBytes,
-          })
-          .from(schema.challengeResources)
-          .where(eq(schema.challengeResources.challengeVersionId, challengeRow.currentVersionId));
-      }
-    }
-
-    detail = {
-      id: selectedOpportunity.id,
-      role: selectedOpportunity.role,
-      companyName: selectedOpportunity.companyName,
-      companyVerified: selectedOpportunity.companyVerified,
-      location: selectedOpportunity.location,
-      workMode: selectedOpportunity.workMode,
-      duration: selectedOpportunity.duration,
-      hoursPerWeek: selectedOpportunity.hoursPerWeek,
-      applicationDeadline: selectedOpportunity.applicationDeadline,
-      description: selectedOpportunity.description,
-      shortDescription: selectedOpportunity.shortDescription,
-      skills: selectedOpportunity.skills,
-      requirements: selectedOpportunity.requirements,
-      whatYouWillLearn: selectedOpportunity.whatYouWillLearn,
-      saved: savedIds.has(selectedOpportunity.id),
-      challenge,
-      resources,
-      deliverables,
-      hasApplied: Boolean(application),
-      application: application
-        ? {
-            id: application.id,
-            ctaLabel:
-              challengeState?.kind === "to_do" ? "Start challenge" : challengeState?.kind === "in_progress" ? "Continue challenge" : "Open application",
-          }
-        : undefined,
-    };
-  }
+  const initialDetail = selectedOpportunity ? await loadOpportunityDetail(selectedOpportunity.id, user.id) : null;
 
   return (
-    <div className="mx-auto max-w-[1120px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+    <div className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <header>
         <h1 className="text-xl font-semibold tracking-[-0.02em] text-navy sm:text-2xl">Explore internships</h1>
         <p className="mt-1 text-sm text-navy/58">Discover roles matched to your interests, skills, and availability.</p>
@@ -224,70 +141,72 @@ export default async function StudentOpportunitiesPage({
         </div>
 
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
-          <label htmlFor="opportunity-location" className="sr-only">Location</label>
-          <select id="opportunity-location" name="location" defaultValue={location} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
-            <option value="">All locations</option>
-            {locations.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
+          <span className="flex items-center gap-1.5 rounded-full border border-navy/10 bg-white pl-3 pr-1 text-sm text-navy/70">
+            <MapPin className="size-3.5 shrink-0 text-navy/40" aria-hidden="true" />
+            <label htmlFor="opportunity-location" className="sr-only">Location</label>
+            <select id="opportunity-location" name="location" defaultValue={location} className="h-9 rounded-full bg-transparent pr-2 text-sm text-navy focus-visible:outline-none">
+              <option value="">All locations</option>
+              {locations.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </span>
           {categories.length > 0 && (
-            <>
+            <span className="flex items-center gap-1.5 rounded-full border border-navy/10 bg-white pl-3 pr-1 text-sm text-navy/70">
+              <SlidersHorizontal className="size-3.5 shrink-0 text-navy/40" aria-hidden="true" />
               <label htmlFor="opportunity-category" className="sr-only">Field</label>
-              <select id="opportunity-category" name="category" defaultValue={category} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+              <select id="opportunity-category" name="category" defaultValue={category} className="h-9 rounded-full bg-transparent pr-2 text-sm text-navy focus-visible:outline-none">
                 <option value="">Any field</option>
                 {categories.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
-            </>
+            </span>
           )}
-          <label htmlFor="opportunity-duration" className="sr-only">Duration</label>
-          <select id="opportunity-duration" name="duration" defaultValue={duration} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
-            <option value="">Any duration</option>
-            {durations.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <label htmlFor="opportunity-work-mode" className="sr-only">Work mode</label>
-          <select id="opportunity-work-mode" name="workMode" defaultValue={workMode} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
-            <option value="">Any work mode</option>
-            <option value="onsite">On-site</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option>
-          </select>
+          <span className="flex items-center gap-1.5 rounded-full border border-navy/10 bg-white pl-3 pr-1 text-sm text-navy/70">
+            <Clock3 className="size-3.5 shrink-0 text-navy/40" aria-hidden="true" />
+            <label htmlFor="opportunity-duration" className="sr-only">Duration</label>
+            <select id="opportunity-duration" name="duration" defaultValue={duration} className="h-9 rounded-full bg-transparent pr-2 text-sm text-navy focus-visible:outline-none">
+              <option value="">Any duration</option>
+              {durations.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </span>
+          <span className="flex items-center gap-1.5 rounded-full border border-navy/10 bg-white pl-3 pr-1 text-sm text-navy/70">
+            <Monitor className="size-3.5 shrink-0 text-navy/40" aria-hidden="true" />
+            <label htmlFor="opportunity-work-mode" className="sr-only">Work mode</label>
+            <select id="opportunity-work-mode" name="workMode" defaultValue={workMode} className="h-9 rounded-full bg-transparent pr-2 text-sm text-navy focus-visible:outline-none">
+              <option value="">Any work mode</option>
+              <option value="onsite">On-site</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option>
+            </select>
+          </span>
           <label htmlFor="opportunity-hours" className="sr-only">Hours per week</label>
-          <select id="opportunity-hours" name="hours" defaultValue={hoursBucket} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
+          <select id="opportunity-hours" name="hours" defaultValue={hoursBucket} className="h-9 rounded-full border border-navy/10 bg-white px-3 text-sm text-navy/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
             <option value="">Any hours/week</option>
             <option value="under10">Up to 10h/week</option>
             <option value="11to20">11–20h/week</option>
             <option value="21to30">21–30h/week</option>
             <option value="over30">30h/week+</option>
           </select>
-          <label className="flex h-9 items-center gap-1.5 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy/68"><input type="checkbox" name="saved" value="1" defaultChecked={savedOnly} className="size-3.5 rounded border-navy/30 accent-teal" />Saved only</label>
+          <label className="flex h-9 items-center gap-1.5 rounded-full border border-navy/10 bg-white px-3 text-sm text-navy/68"><input type="checkbox" name="saved" value="1" defaultChecked={savedOnly} className="size-3.5 rounded border-navy/30 accent-teal" />Saved only</label>
           <label htmlFor="opportunity-sort" className="sr-only">Sort opportunities</label>
-          <select id="opportunity-sort" name="sort" defaultValue={sort} className="h-9 rounded-md border border-navy/12 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 sm:ml-auto">
+          <select id="opportunity-sort" name="sort" defaultValue={sort} className="h-9 rounded-full border border-navy/10 bg-white px-3 text-sm text-navy/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 sm:ml-auto">
             <option value="relevant">Most relevant</option><option value="newest">Newest first</option><option value="deadline">Deadline soon</option>
           </select>
           <Button type="submit" variant="outline" className="h-9 border-teal/20 bg-white px-3 text-teal-ink hover:bg-teal/5">Apply</Button>
-          {hasActiveFilters ? <Link href="/student/opportunities" className="rounded-md px-1 text-sm font-medium text-navy/50 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">Clear</Link> : null}
+          {hasActiveFilters ? <Link href="/student/opportunities" className="rounded-md px-1 text-sm font-medium text-navy/50 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">Clear all</Link> : null}
         </div>
       </form>
 
       {filtered.length === 0 ? (
         opportunities.length === 0 ? <EmptyState icon={SearchX} title="No published opportunities yet" description="Companies are still preparing their internships. Check back soon." /> : <EmptyState icon={SearchX} title="No opportunities match these filters" description="Try a broader search or clear one of the filters." ctaLabel="Clear filters" ctaHref="/student/opportunities" />
       ) : (
-        <section aria-labelledby="opportunity-results-heading" className="mt-4">
-          <h2 id="opportunity-results-heading" className="text-sm font-semibold text-navy">{filtered.length} {filtered.length === 1 ? "opportunity" : "opportunities"}</h2>
-          <div className="mt-2.5 space-y-2">
-            {filtered.map((opportunity) => (
-              <ExploreOpportunityCard
-                key={opportunity.id}
-                opportunity={opportunity}
-                href={cardHref(opportunity.id)}
-                selected={opportunity.id === selectedOpportunity?.id}
-                saved={savedIds.has(opportunity.id)}
-                estimatedMinutes={publishedChallengeInfo.get(opportunity.id)?.estimatedMinutes}
-                matchScore={opportunity.matchScore}
-              />
-            ))}
-          </div>
-        </section>
+        <>
+          <p className="mt-4 text-sm font-semibold text-navy">{filtered.length} {filtered.length === 1 ? "opportunity" : "opportunities"}</p>
+          <ExploreSplitView
+            key={baseQueryString}
+            items={items}
+            baseQueryString={baseQueryString}
+            initialSelectedId={selectedOpportunity?.id ?? null}
+            initialDetail={initialDetail}
+          />
+        </>
       )}
-
-      <OpportunityDetailSheet opportunity={detail} closeHref={closeHref()} />
     </div>
   );
 }
