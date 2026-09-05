@@ -47,21 +47,24 @@ export async function loadOpportunityDetail(opportunityId: string, studentUserId
     .limit(1);
   if (!row) return null;
 
-  const [saved, application] = await Promise.all([
+  // Independent of each other (each depends only on opportunityId /
+  // studentUserId, already known) — fetched together instead of as three
+  // separate round trips.
+  const [saved, application, challengeRow] = await Promise.all([
     db.select({ id: schema.savedOpportunities.opportunityId }).from(schema.savedOpportunities).where(and(eq(schema.savedOpportunities.opportunityId, opportunityId), eq(schema.savedOpportunities.studentId, studentUserId))).limit(1),
     db
       .select({ id: schema.applications.id, challengeStartedAt: schema.applications.challengeStartedAt })
       .from(schema.applications)
       .where(and(eq(schema.applications.opportunityId, opportunityId), eq(schema.applications.studentId, studentUserId)))
       .limit(1),
+    db
+      .select({ status: schema.challenges.status, currentVersionId: schema.challenges.currentVersionId })
+      .from(schema.challenges)
+      .where(eq(schema.challenges.opportunityId, opportunityId))
+      .limit(1)
+      .then((rows) => rows[0]),
   ]);
   const hasApplied = application.length > 0;
-
-  const [challengeRow] = await db
-    .select({ status: schema.challenges.status, currentVersionId: schema.challenges.currentVersionId })
-    .from(schema.challenges)
-    .where(eq(schema.challenges.opportunityId, opportunityId))
-    .limit(1);
 
   let challenge: OpportunityDetail["challenge"];
   let resources: OpportunityDetail["resources"] = [];
@@ -69,20 +72,23 @@ export async function loadOpportunityDetail(opportunityId: string, studentUserId
   let submissionHasEvidence: boolean | undefined;
 
   if (challengeRow?.status === "published" && challengeRow.currentVersionId) {
-    const [version] = await db
-      .select({
-        title: schema.challengeVersions.title,
-        estimatedMinutes: schema.challengeVersions.estimatedMinutes,
-        tasks: schema.challengeVersions.tasks,
-        submissionRequirements: schema.challengeVersions.submissionRequirements,
-      })
-      .from(schema.challengeVersions)
-      .where(eq(schema.challengeVersions.id, challengeRow.currentVersionId))
-      .limit(1);
-    if (version) {
-      challenge = { title: version.title, taskCount: version.tasks.length, estimatedMinutes: version.estimatedMinutes };
-      deliverables = version.submissionRequirements.map((r) => r.label);
-      resources = await db
+    const currentVersionId = challengeRow.currentVersionId;
+    // `version`/`resources` both depend only on currentVersionId (not on
+    // each other); `submission` depends only on application[0].id — all
+    // three run together instead of three serial round trips.
+    const [[version], resourceRows, [submission]] = await Promise.all([
+      db
+        .select({
+          title: schema.challengeVersions.title,
+          estimatedMinutes: schema.challengeVersions.estimatedMinutes,
+          tasks: schema.challengeVersions.tasks,
+          submissionRequirements: schema.challengeVersions.submissionRequirements,
+          rubric: schema.challengeVersions.rubric,
+        })
+        .from(schema.challengeVersions)
+        .where(eq(schema.challengeVersions.id, currentVersionId))
+        .limit(1),
+      db
         .select({
           id: schema.challengeResources.id,
           name: schema.challengeResources.name,
@@ -92,15 +98,24 @@ export async function loadOpportunityDetail(opportunityId: string, studentUserId
           sizeBytes: schema.challengeResources.sizeBytes,
         })
         .from(schema.challengeResources)
-        .where(eq(schema.challengeResources.challengeVersionId, challengeRow.currentVersionId));
+        .where(eq(schema.challengeResources.challengeVersionId, currentVersionId)),
+      hasApplied
+        ? db.select({ id: schema.submissions.id }).from(schema.submissions).where(eq(schema.submissions.applicationId, application[0].id)).limit(1)
+        : Promise.resolve([]),
+    ]);
+    if (version) {
+      challenge = {
+        title: version.title,
+        taskCount: version.tasks.length,
+        estimatedMinutes: version.estimatedMinutes,
+        tasks: version.tasks.map((t) => ({ id: t.id, title: t.title, description: t.description })),
+        rubric: version.rubric,
+      };
+      deliverables = version.submissionRequirements.map((r) => r.label);
+      resources = resourceRows;
     }
 
     if (hasApplied) {
-      const [submission] = await db
-        .select({ id: schema.submissions.id })
-        .from(schema.submissions)
-        .where(eq(schema.submissions.applicationId, application[0].id))
-        .limit(1);
       if (submission) {
         const [evidence] = await db.select({ submissionId: schema.candidateEvidence.submissionId }).from(schema.candidateEvidence).where(eq(schema.candidateEvidence.submissionId, submission.id)).limit(1);
         submissionHasEvidence = Boolean(evidence);

@@ -91,7 +91,25 @@ async function persistChallengeResources(versionId: string, files: Challenge["fi
       continue;
     }
 
-    const generated = await generateResourceFile({ name: file.name, description: file.description, contentSpec: file.contentSpec });
+    let generated: Awaited<ReturnType<typeof generateResourceFile>>;
+    try {
+      generated = await generateResourceFile({ name: file.name, description: file.description, contentSpec: file.contentSpec });
+    } catch (err) {
+      // The renderer (e.g. Takumi for PDFs) threw instead of returning —
+      // never invent bytes or pretend the resource is ready; mark it
+      // honestly failed, same as an upload-error row below.
+      console.error(`[persistChallengeResources] generation threw for "${file.name}":`, err instanceof Error ? err.message : err);
+      rows.push({
+        challengeVersionId: versionId,
+        name: file.name,
+        resourceType: "file",
+        artifactKind,
+        description: file.description,
+        contentSpec: file.contentSpec ?? null,
+        generationStatus: "failed",
+      });
+      continue;
+    }
     if (!generated) {
       rows.push({
         challengeVersionId: versionId,

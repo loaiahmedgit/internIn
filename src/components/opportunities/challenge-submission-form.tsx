@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { getSubmissionUploadUrlAction, submitChallengeAction } from "@/lib/opportunities/student-actions";
-import type { SubmissionRequirement } from "@/lib/challenges/submission-model";
+import { describeSubmissionRequirement, type SubmissionRequirement } from "@/lib/challenges/submission-model";
 import { getArtifactVisual, formatBytes } from "@/lib/artifact-visual";
 
 interface ArtifactPayload {
@@ -59,28 +59,6 @@ function isSatisfied(requirement: SubmissionRequirement, draft: RequirementDraft
       return draft.url.trim().length > 0;
     case "text":
       return draft.text.trim().length > 0;
-  }
-}
-
-/** A short, real description derived from the requirement's own fields —
- * never invented copy, just plain-language phrasing of acceptedFormats,
- * providers, and file-count limits so a row is never left blank. */
-function describeRequirement(requirement: SubmissionRequirement): string {
-  if (requirement.instructions) return requirement.instructions;
-  const kindLabel = requirement.artifactKind.replace(/_/g, " ");
-  switch (requirement.inputMode) {
-    case "file":
-      return requirement.acceptedFormats?.length ? `Upload a ${kindLabel} file (${requirement.acceptedFormats.join(", ")})` : `Upload a ${kindLabel} file`;
-    case "multiple_files": {
-      const min = requirement.minFiles ?? 1;
-      const max = requirement.maxFiles;
-      const countLabel = max ? `${min}–${max} files` : `at least ${min} file${min > 1 ? "s" : ""}`;
-      return `Upload ${countLabel}${requirement.acceptedFormats?.length ? ` (${requirement.acceptedFormats.join(", ")})` : ""}`;
-    }
-    case "url":
-      return requirement.providers?.length ? `Paste a link from ${requirement.providers.join(" or ")}` : "Paste a link";
-    case "text":
-      return "Write a short written response";
   }
 }
 
@@ -235,7 +213,7 @@ export function ChallengeSubmissionForm({
                     {requirement.required ? "Required" : "Optional"}
                   </span>
                 </div>
-                <p className="mt-0.5 text-xs text-navy/50">{describeRequirement(requirement)}</p>
+                <p className="mt-0.5 text-xs text-navy/50">{describeSubmissionRequirement(requirement)}</p>
 
                 <div className="mt-2">
                   {(requirement.inputMode === "file" || requirement.inputMode === "multiple_files") && (

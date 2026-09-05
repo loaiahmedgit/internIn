@@ -95,3 +95,28 @@ export interface StructuredDataContentSpec {
 }
 
 export type ResourceContentSpec = SpreadsheetContentSpec | DocumentContentSpec | StructuredDataContentSpec;
+
+/**
+ * A short, real description derived from the requirement's own fields —
+ * never invented copy, just plain-language phrasing of acceptedFormats,
+ * providers, and file-count limits. Shared by the active submission form
+ * and the pre-start "submission preview" so the two never drift.
+ */
+export function describeSubmissionRequirement(requirement: SubmissionRequirement): string {
+  if (requirement.instructions) return requirement.instructions;
+  const kindLabel = requirement.artifactKind.replace(/_/g, " ");
+  switch (requirement.inputMode) {
+    case "file":
+      return requirement.acceptedFormats?.length ? `Upload a ${kindLabel} file (${requirement.acceptedFormats.join(", ")})` : `Upload a ${kindLabel} file`;
+    case "multiple_files": {
+      const min = requirement.minFiles ?? 1;
+      const max = requirement.maxFiles;
+      const countLabel = max ? `${min}–${max} files` : `at least ${min} file${min > 1 ? "s" : ""}`;
+      return `Upload ${countLabel}${requirement.acceptedFormats?.length ? ` (${requirement.acceptedFormats.join(", ")})` : ""}`;
+    }
+    case "url":
+      return requirement.providers?.length ? `Paste a link from ${requirement.providers.join(" or ")}` : "Paste a link";
+    case "text":
+      return "Write a short written response";
+  }
+}

@@ -204,6 +204,7 @@ export default async function StudentOpportunitiesPage({
             baseQueryString={baseQueryString}
             initialSelectedId={selectedOpportunity?.id ?? null}
             initialDetail={initialDetail}
+            hasExplicitSelection={Boolean(selectedIdParam)}
           />
         </>
       )}

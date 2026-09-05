@@ -1,6 +1,6 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import ExcelJS from "exceljs";
 import { Document, Packer, Paragraph, HeadingLevel, TextRun } from "docx";
+import { renderChallengeDocumentPdf } from "@/lib/pdf/documents/challenge-document-pdf";
 import type { ResourceContentSpec } from "./submission-model";
 
 /**
@@ -13,7 +13,7 @@ import type { ResourceContentSpec } from "./submission-model";
  * stays fast and doesn't depend on model reliability.
  *
  * Extensions this can actually back with real content: .csv .txt .md .json
- * (no library needed), .pdf (pdf-lib), .xlsx (exceljs), .docx (docx).
+ * (no library needed), .pdf (takumi-pdf, via src/lib/pdf/), .xlsx (exceljs), .docx (docx).
  * Anything else (image/video/audio/CAD/zip/repo) returns null — the caller
  * (saveChallengeVersionAction) marks that resource `generation_status:
  * "requires_upload"` rather than pretending a file exists.
@@ -95,65 +95,6 @@ function generateJsonContent(name: string, description: string, spec: ResourceCo
   return JSON.stringify({ name, description }, null, 2);
 }
 
-/** Naive word-wrap for pdf-lib, which draws single lines only. */
-function wrapText(text: string, maxCharsPerLine: number): string[] {
-  const lines: string[] = [];
-  for (const paragraph of text.split("\n")) {
-    let remaining = paragraph;
-    if (!remaining) {
-      lines.push("");
-      continue;
-    }
-    while (remaining.length > maxCharsPerLine) {
-      let breakAt = remaining.lastIndexOf(" ", maxCharsPerLine);
-      if (breakAt <= 0) breakAt = maxCharsPerLine;
-      lines.push(remaining.slice(0, breakAt));
-      remaining = remaining.slice(breakAt).trimStart();
-    }
-    lines.push(remaining);
-  }
-  return lines;
-}
-
-async function generatePdfBuffer(name: string, description: string, spec: ResourceContentSpec | null | undefined): Promise<Uint8Array> {
-  const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
-  const pageSize: [number, number] = [612, 792];
-  const margin = 56;
-  const lineHeight = 16;
-
-  const title = spec?.kind === "document" ? spec.title : name;
-  const bodyLines: { text: string; bold: boolean; size: number }[] = [];
-  if (spec?.kind === "document") {
-    for (const section of spec.sections) {
-      bodyLines.push({ text: section.heading, bold: true, size: 13 });
-      for (const paragraph of section.paragraphs) {
-        for (const line of wrapText(paragraph, 90)) bodyLines.push({ text: line, bold: false, size: 11 });
-      }
-      bodyLines.push({ text: "", bold: false, size: 11 });
-    }
-  } else {
-    for (const line of wrapText(description, 90)) bodyLines.push({ text: line, bold: false, size: 11 });
-  }
-
-  let page = doc.addPage(pageSize);
-  let y = pageSize[1] - margin;
-  page.drawText(title, { x: margin, y, size: 18, font: boldFont, color: rgb(0.13, 0.2, 0.28) });
-  y -= 28;
-
-  for (const line of bodyLines) {
-    if (y < margin) {
-      page = doc.addPage(pageSize);
-      y = pageSize[1] - margin;
-    }
-    page.drawText(line.text, { x: margin, y, size: line.size, font: line.bold ? boldFont : font, color: rgb(0.1, 0.1, 0.12) });
-    y -= lineHeight;
-  }
-
-  return doc.save();
-}
-
 async function generateXlsxBuffer(name: string, description: string, spec: ResourceContentSpec | null | undefined): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
   if (spec?.kind === "spreadsheet") {
@@ -215,8 +156,10 @@ export async function generateResourceFile(input: {
       return { buffer: new TextEncoder().encode(generateTextContent(input.description, input.contentSpec)), mimeType };
     case ".json":
       return { buffer: new TextEncoder().encode(generateJsonContent(input.name, input.description, input.contentSpec)), mimeType };
-    case ".pdf":
-      return { buffer: await generatePdfBuffer(input.name, input.description, input.contentSpec), mimeType };
+    case ".pdf": {
+      const spec = input.contentSpec?.kind === "document" ? input.contentSpec : null;
+      return { buffer: await renderChallengeDocumentPdf({ name: input.name, description: input.description, spec }), mimeType };
+    }
     case ".xlsx":
       return { buffer: await generateXlsxBuffer(input.name, input.description, input.contentSpec), mimeType };
     case ".docx":

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ArrowLeft } from "lucide-react";
 import { ExploreOpportunityCard } from "./explore-opportunity-card";
 import { ExploreDetailPanel, type OpportunityDetail } from "./explore-detail-panel";
 import { getOpportunityDetailAction } from "@/lib/opportunities/detail-actions";
@@ -42,15 +43,22 @@ export function ExploreSplitView({
   baseQueryString,
   initialSelectedId,
   initialDetail,
+  hasExplicitSelection,
 }: {
   items: ExploreListItem[];
   /** Current filter/sort query string, without `opportunity` — e.g. "location=Doha&sort=newest". */
   baseQueryString: string;
   initialSelectedId: string | null;
   initialDetail: OpportunityDetail | null;
+  /** True only when `?opportunity=` was explicitly present in the URL — as
+   * opposed to the server defaulting `initialSelectedId` to the first
+   * result. Drives the mobile list-vs-detail view (a default auto-selection
+   * should never hide the results list on a phone the moment the page loads). */
+  hasExplicitSelection: boolean;
 }) {
   const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [detail, setDetail] = useState(initialDetail);
+  const [showMobileDetail, setShowMobileDetail] = useState(hasExplicitSelection);
   const [isPending, startTransition] = useTransition();
 
   function hrefFor(id: string) {
@@ -60,6 +68,7 @@ export function ExploreSplitView({
   }
 
   function selectOpportunity(id: string) {
+    setShowMobileDetail(true);
     if (id === selectedId) return;
     setSelectedId(id);
     startTransition(async () => {
@@ -75,7 +84,7 @@ export function ExploreSplitView({
 
   return (
     <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-[400px_1fr] lg:items-start">
-      <div className="space-y-2">
+      <div className={`space-y-2 ${showMobileDetail ? "hidden lg:block" : ""}`}>
         {items.map((item) => (
           <ExploreOpportunityCard
             key={item.id}
@@ -90,7 +99,15 @@ export function ExploreSplitView({
           />
         ))}
       </div>
-      <div className="lg:sticky lg:top-6 lg:h-[calc(100dvh-7rem)]">
+      <div className={`${showMobileDetail ? "block" : "hidden lg:block"} lg:sticky lg:top-6 lg:max-h-[calc(100dvh-7rem)]`}>
+        <button
+          type="button"
+          onClick={() => setShowMobileDetail(false)}
+          className="mb-2 flex items-center gap-1.5 text-sm font-medium text-navy/60 hover:text-navy lg:hidden"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to results
+        </button>
         <ExploreDetailPanel detail={detail} loading={isPending} />
       </div>
     </div>
