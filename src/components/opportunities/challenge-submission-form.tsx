@@ -70,22 +70,37 @@ export function ChallengeSubmissionForm({
   requirements: SubmissionRequirement[];
 }) {
   const router = useRouter();
-  // Lazy initializer, not an effect: reading localStorage here (guarded by
-  // the SSR check) restores a saved draft on the client's first render
-  // without ever calling setState inside an effect body. Never a raw File
-  // object — those can't survive localStorage, so only already-uploaded
-  // file paths, text, and URLs are restored (see handleFileChange).
-  const [drafts, setDrafts] = useState<Record<string, RequirementDraft>>(() => {
-    const initial = Object.fromEntries(requirements.map((r) => [r.id, emptyDraft()]));
-    if (typeof window === "undefined") return initial;
-    try {
-      const raw = localStorage.getItem(draftStorageKey(applicationId));
-      if (raw) return { ...initial, ...JSON.parse(raw) };
-    } catch {
-      // A corrupt/unreadable draft just means starting fresh — never fatal.
-    }
-    return initial;
-  });
+  // Real bug fixed here: a lazy initializer that branches on
+  // `typeof window` renders DIFFERENT initial HTML on the server (always
+  // empty) than on the client's first render (restored from localStorage)
+  // — a genuine React hydration mismatch (error #418), reproduced in
+  // production. The fix is the standard one: render the same empty state
+  // on both, then restore the saved draft in an effect after mount.
+  const [drafts, setDrafts] = useState<Record<string, RequirementDraft>>(() =>
+    Object.fromEntries(requirements.map((r) => [r.id, emptyDraft()])),
+  );
+  // Guards the autosave-write effect below — without it, that effect would
+  // fire on this same mount with the still-empty initial state and
+  // overwrite the saved draft before the restore below ever gets read.
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  useEffect(() => {
+    // Deferred to a microtask, not called synchronously in the effect body
+    // — avoids the cascading-render lint rule while still restoring the
+    // draft before the user can interact with the form.
+    const timeout = setTimeout(() => {
+      try {
+        const raw = localStorage.getItem(draftStorageKey(applicationId));
+        if (raw) setDrafts((prev) => ({ ...prev, ...JSON.parse(raw) }));
+      } catch {
+        // A corrupt/unreadable draft just means starting fresh — never fatal.
+      } finally {
+        setDraftHydrated(true);
+      }
+    }, 0);
+    return () => clearTimeout(timeout);
+    // Runs once, right after mount — see the comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [notes, setNotes] = useState("");
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -94,6 +109,10 @@ export function ChallengeSubmissionForm({
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
+    // Skip until the restore effect above has run — otherwise this fires
+    // on the same mount with the still-empty initial drafts and clobbers
+    // whatever was actually saved before it's ever read.
+    if (!draftHydrated) return;
     try {
       localStorage.setItem(draftStorageKey(applicationId), JSON.stringify(drafts));
       // Deferred, not called synchronously in the effect body — avoids the
@@ -103,16 +122,41 @@ export function ChallengeSubmissionForm({
     } catch {
       // Best-effort autosave — a full localStorage quota is not worth failing over.
     }
-  }, [applicationId, drafts]);
+  }, [applicationId, drafts, draftHydrated]);
 
   function updateDraft(requirementId: string, patch: Partial<RequirementDraft>) {
     setDrafts((prev) => ({ ...prev, [requirementId]: { ...prev[requirementId], ...patch } }));
+  }
+
+  /** Same rules submitChallengeAction verifies server-side (real, not
+   * decorative) — checked here too so a wrong file type or an oversized
+   * file is rejected immediately, not silently uploaded and only
+   * discovered at final submit. */
+  function validateFile(file: File, requirement: SubmissionRequirement): string | null {
+    if (requirement.acceptedFormats?.length) {
+      const extension = (file.name.match(/\.[a-zA-Z0-9]+$/)?.[0] ?? "").toLowerCase();
+      if (!requirement.acceptedFormats.some((format) => format.toLowerCase() === extension)) {
+        return `"${file.name}" isn't an accepted file type — expected ${requirement.acceptedFormats.join(", ")}.`;
+      }
+    }
+    if (requirement.maxFileSizeBytes && file.size > requirement.maxFileSizeBytes) {
+      return `"${file.name}" is too large — max ${formatBytes(requirement.maxFileSizeBytes)}.`;
+    }
+    if (file.size === 0) return `"${file.name}" is empty.`;
+    return null;
   }
 
   async function handleFileChange(requirement: SubmissionRequirement, fileList: FileList | null) {
     const files = Array.from(fileList ?? []);
     if (files.length === 0) return;
     setError(null);
+    for (const file of files) {
+      const validationError = validateFile(file, requirement);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
     setUploadingId(requirement.id);
     try {
       const uploaded: UploadedFile[] = [];
