@@ -2,10 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { startChallengeAction } from "@/lib/opportunities/student-actions";
 
-export function StartChallengeButton({ applicationId }: { applicationId: string }) {
+export function StartChallengeButton({ applicationId, className }: { applicationId: string; className?: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -24,10 +26,11 @@ export function StartChallengeButton({ applicationId }: { applicationId: string 
 
   return (
     <div>
-      <Button onClick={handleStart} disabled={isPending} className="bg-teal text-white hover:bg-teal/90">
+      <Button onClick={handleStart} disabled={isPending} className={cn("gap-2 bg-teal text-white hover:bg-teal-ink", className)}>
         {isPending ? "Starting…" : "Start challenge"}
+        {!isPending && <ArrowRight className="size-4" aria-hidden="true" />}
       </Button>
-      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+      {error && <p className="mt-2 text-center text-sm text-destructive">{error}</p>}
     </div>
   );
 }

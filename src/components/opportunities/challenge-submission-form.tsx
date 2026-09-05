@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Trash2, Upload } from "lucide-react";
+import { ArrowRight, BarChart3, Loader2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import { getSubmissionUploadUrlAction, submitChallengeAction } from "@/lib/opportunities/student-actions";
 import { describeSubmissionRequirement, type SubmissionRequirement } from "@/lib/challenges/submission-model";
-import { getArtifactVisual, formatBytes } from "@/lib/artifact-visual";
+import { formatBytes } from "@/lib/artifact-visual";
+import { RubricList, type RubricCriterion } from "./rubric-list";
 
 interface ArtifactPayload {
   requirementId: string;
@@ -62,12 +63,21 @@ function isSatisfied(requirement: SubmissionRequirement, draft: RequirementDraft
   }
 }
 
+/**
+ * Renders as two sibling sections — Submission (requirement inputs) and
+ * Evaluation (real rubric + the Submit action) — so the page can lay them
+ * out as two separate cards while sharing one draft/validation state,
+ * matching the approved Active Challenge reference (Submit lives at the
+ * bottom of the Evaluation card, not the Submission card).
+ */
 export function ChallengeSubmissionForm({
   applicationId,
   requirements,
+  rubric,
 }: {
   applicationId: string;
   requirements: SubmissionRequirement[];
+  rubric: RubricCriterion[];
 }) {
   const router = useRouter();
   // Lazy initializer, not an effect: reading localStorage here (guarded by
@@ -139,8 +149,6 @@ export function ChallengeSubmissionForm({
   }
 
   const allRequiredSatisfied = requirements.every((r) => !r.required || isSatisfied(r, drafts[r.id] ?? emptyDraft()));
-  const completedCount = requirements.filter((r) => isSatisfied(r, drafts[r.id] ?? emptyDraft())).length;
-  const progressPct = requirements.length ? Math.round((completedCount / requirements.length) * 100) : 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -183,30 +191,20 @@ export function ChallengeSubmissionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-navy">Submission requirements</h3>
-        <span className="shrink-0 text-xs text-navy/45">{completedCount} of {requirements.length} completed</span>
-      </div>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-navy/8">
-        <div className="h-full rounded-full bg-teal transition-all duration-300" style={{ width: `${progressPct}%` }} />
-      </div>
+    <form onSubmit={handleSubmit} className="contents">
+      <section className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+        <div className="flex items-center gap-2">
+          <Upload className="size-4 text-teal-ink" aria-hidden="true" />
+          <h2 className="text-sm font-semibold text-navy">Submission</h2>
+        </div>
+        <p className="mt-0.5 text-xs text-navy/50">Submit the following deliverables when you&apos;re ready.</p>
 
-      <div className="mt-4 space-y-2.5">
-        {requirements.map((requirement) => {
-          const draft = drafts[requirement.id] ?? emptyDraft();
-          const satisfied = isSatisfied(requirement, draft);
-          const { Icon, iconClassName, bgClassName } = getArtifactVisual(requirement.artifactKind);
-          const uploading = uploadingId === requirement.id;
-          return (
-            <div key={requirement.id} className="flex items-start gap-2.5 rounded-xl border border-navy/8 p-3">
-              <span className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full ${satisfied ? "bg-teal text-white" : "border-2 border-navy/15"}`}>
-                {satisfied && <Check className="size-3" aria-hidden="true" />}
-              </span>
-              <div className={`flex size-8 shrink-0 items-center justify-center rounded-md ${bgClassName}`}>
-                <Icon className={`size-4 ${iconClassName}`} aria-hidden="true" />
-              </div>
-              <div className="min-w-0 flex-1">
+        <div className="mt-3 divide-y divide-navy/8">
+          {requirements.map((requirement) => {
+            const draft = drafts[requirement.id] ?? emptyDraft();
+            const uploading = uploadingId === requirement.id;
+            return (
+              <div key={requirement.id} className="py-3 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <p className="text-sm font-medium text-navy">{requirement.label}</p>
                   <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${requirement.required ? "bg-navy/8 text-navy/55" : "bg-navy/5 text-navy/40"}`}>
@@ -268,31 +266,45 @@ export function ChallengeSubmissionForm({
                       value={draft.text}
                       onChange={(e) => updateDraft(requirement.id, { text: e.target.value })}
                       rows={3}
-                      placeholder="Add your notes here…"
+                      placeholder="Write your response…"
                       className="bg-[#f6f8f9] text-sm"
                     />
                   )}
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
 
-      <div className="mt-4 border-t border-navy/8 pt-4">
-        <label htmlFor="submission-notes" className="text-xs font-medium text-navy/60">
-          Notes for the reviewer <span className="text-navy/35">(optional)</span>
-        </label>
-        <Textarea id="submission-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1.5 bg-[#f6f8f9] text-sm" />
-      </div>
+        <div className="mt-3 border-t border-navy/8 pt-3">
+          <label htmlFor="submission-notes" className="text-xs font-medium text-navy/50">
+            Notes for the reviewer <span className="text-navy/35">(optional)</span>
+          </label>
+          <Textarea id="submission-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1.5 bg-[#f6f8f9] text-sm" />
+        </div>
+        {lastSavedAt && (
+          <p className="mt-1.5 text-[11px] text-navy/35">Draft saved automatically · Last saved {lastSavedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
+        )}
+      </section>
 
-      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-      <Button type="submit" disabled={isPending || !allRequiredSatisfied || uploadingId !== null} className="mt-4 h-10 w-full bg-teal text-white hover:bg-teal-ink disabled:bg-navy/10 disabled:text-navy/35">
-        {isPending ? "Submitting…" : "Submit challenge"}
-      </Button>
-      {!allRequiredSatisfied && <p className="mt-1.5 text-center text-xs text-navy/40">Complete all required items to submit</p>}
-      {lastSavedAt && (
-        <p className="mt-1.5 text-center text-[11px] text-navy/35">Draft saved automatically · Last saved {lastSavedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
+      {rubric.length > 0 && (
+        <section className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-navy">Evaluation</h2>
+          </div>
+          <p className="mt-0.5 text-xs text-navy/50">Your submission will be evaluated based on:</p>
+          <div className="mt-3">
+            <RubricList rubric={rubric} />
+          </div>
+
+          {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+          <Button type="submit" disabled={isPending || !allRequiredSatisfied || uploadingId !== null} className="mt-4 h-11 w-full gap-2 bg-teal text-white hover:bg-teal-ink disabled:bg-navy/10 disabled:text-navy/35">
+            {isPending ? "Submitting…" : "Submit challenge"}
+            {!isPending && <ArrowRight className="size-4" aria-hidden="true" />}
+          </Button>
+          {!allRequiredSatisfied && <p className="mt-1.5 text-center text-xs text-navy/40">Complete all required items to submit.</p>}
+        </section>
       )}
     </form>
   );

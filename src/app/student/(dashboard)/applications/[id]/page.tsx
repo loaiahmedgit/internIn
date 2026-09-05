@@ -1,15 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  CheckCircle2,
-  ChevronRight,
-  ClipboardCheck,
-  Clock3,
-  Laptop,
-  ListChecks,
-  Sparkles,
-  Target,
-} from "lucide-react";
+import { BarChart3, ChevronRight, Clock3, FileText, FolderOpen, Lightbulb, ListChecks } from "lucide-react";
 import { eq, and, desc, asc, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
@@ -20,8 +11,8 @@ import { ExpandableText } from "@/components/opportunities/expandable-text";
 import { OfferResponseButtons } from "@/components/opportunities/offer-response-buttons";
 import { StartChallengeButton } from "@/components/opportunities/start-challenge-button";
 import { ChallengeNotes } from "@/components/opportunities/challenge-notes";
-import { describeSubmissionRequirement } from "@/lib/challenges/submission-model";
-import { getArtifactVisual } from "@/lib/artifact-visual";
+import { RubricInline, RubricList } from "@/components/opportunities/rubric-list";
+import { deriveGuidanceBullets, firstSentence, summarizeSubmissionRequirements, summarizeTaskTitles } from "@/lib/challenges/summaries";
 
 const WORK_MODE_LABEL: Record<"remote" | "onsite" | "hybrid", string> = {
   remote: "Remote",
@@ -29,37 +20,22 @@ const WORK_MODE_LABEL: Record<"remote" | "onsite" | "hybrid", string> = {
   hybrid: "Hybrid",
 };
 
-/** Generalized, role-agnostic guidance — deliberately not tech-stack-specific
- * (no "Node.js 18+" boilerplate), since the challenge engine spans every
- * field internIn supports, not just software roles. */
-const WORKSPACE_INSTRUCTIONS = [
-  {
-    icon: Laptop,
-    title: "Working environment",
-    body: "Use whatever tools you'd normally reach for in this kind of role — your own software, templates, or references. There's no required setup; deliver in the format the submission requirements ask for.",
-  },
-  {
-    icon: Target,
-    title: "Quality expectations",
-    body: "Treat this like real client work, not a school exercise. Show your reasoning, structure your output clearly, and address every task — partial or rough work is still evaluated honestly.",
-  },
-  {
-    icon: ClipboardCheck,
-    title: "Before you submit",
-    body: "Re-read the scenario and tasks once more, check each submission requirement is actually satisfied, and make sure anything you link to (a file, repo, or doc) is accessible to someone outside your own account.",
-  },
-];
-
-/** For the pre-start orientation screen only — distinct from
- * WORKSPACE_INSTRUCTIONS above, which is the in-progress workspace's
- * "Guidance" card. Role-agnostic on purpose (see WORKSPACE_INSTRUCTIONS). */
-const BEFORE_YOU_START_CHECKLIST = [
-  "Download the provided resources",
-  "Work using the tools you would normally use for this kind of role",
-  "Review the submission requirements below",
-  "Review how the work will be evaluated",
-  "Make sure any files or links you submit will stay accessible after you submit",
-];
+/** One icon-circle + heading + body row, reused across the Start Challenge
+ * card and (with different content) nowhere else — kept local since it's a
+ * single-purpose layout primitive, not a shared design-system component. */
+function IconRow({ icon: Icon, title, children }: { icon: React.ComponentType<{ className?: string }>; title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal/10 text-teal-ink">
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <div className="min-w-0 flex-1 pt-1">
+        <p className="font-medium text-navy">{title}</p>
+        <div className="mt-0.5 text-sm leading-6 text-navy/64">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 export default async function ApplicationWorkspacePage({
   params,
@@ -171,8 +147,8 @@ export default async function ApplicationWorkspacePage({
       ? "in_progress"
       : "to_do";
   const CHALLENGE_STATUS_LABEL: Record<typeof challengeStatus, { label: string; style: string }> = {
-    to_do: { label: "To do", style: "bg-gray-light text-navy/60" },
-    in_progress: { label: "In progress", style: "bg-amber-50 text-amber-700" },
+    to_do: { label: "Not started", style: "bg-gray-light text-navy/60" },
+    in_progress: { label: "In progress", style: "bg-teal/10 text-teal-ink" },
     submitted: { label: "Submitted", style: "bg-blue-50 text-blue-700" },
     reviewed: { label: "Reviewed", style: "bg-teal/10 text-teal-ink" },
   };
@@ -188,13 +164,12 @@ export default async function ApplicationWorkspacePage({
         {currentVersion && (
           <>
             <ChevronRight className="size-3.5" aria-hidden="true" />
-            <span className="truncate text-navy/60">{currentVersion.title}</span>
+            <span className="truncate text-navy/60">
+              {application.challengeStartedAt || latestSubmission ? currentVersion.title : "Start Challenge"}
+            </span>
           </>
         )}
       </nav>
-      <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-navy/40">
-        {application.companyName} · {application.role}
-      </p>
 
       {offer && (
         <div className="mt-6 border border-teal/30 bg-teal/5 p-5">
@@ -301,257 +276,137 @@ export default async function ApplicationWorkspacePage({
           This Challenge isn&apos;t published yet — check back soon.
         </p>
       ) : !application.challengeStartedAt && !latestSubmission ? (
-        <>
-          <div className="mt-6 rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">
-              {application.companyName} · {application.role}
-            </p>
-            <h1 className="mt-1 text-balance text-2xl font-semibold tracking-[-0.03em] text-navy sm:text-3xl">
-              {currentVersion.title}
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-navy/68">
-              A realistic work-sample challenge to show how you think, build, and communicate.
-            </p>
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-navy/56">
-              <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</span>
-              <span className="flex items-center gap-1.5"><ListChecks className="size-3.5" aria-hidden="true" />{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</span>
-              <span className="inline-flex rounded-full bg-gray-light px-2.5 py-0.5 font-medium text-navy/60">Not started</span>
+        <div className="mx-auto mt-6 max-w-[800px] rounded-2xl border border-black/[0.04] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:p-8">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-base font-semibold text-teal-ink">
+              {application.companyName.charAt(0).toUpperCase()}
             </div>
+            <div>
+              <p className="text-sm font-semibold text-navy">{application.companyName}</p>
+              <p className="text-sm text-navy/58">{application.role}</p>
+            </div>
+          </div>
+
+          <h1 className="mt-5 text-balance text-3xl font-bold tracking-[-0.02em] text-navy">{currentVersion.title}</h1>
+
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-navy/56">
+            <span className="flex items-center gap-1.5"><Clock3 className="size-4" aria-hidden="true" />{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</span>
+            <span className="flex items-center gap-1.5"><ListChecks className="size-4" aria-hidden="true" />{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</span>
+            <span className="rounded-full bg-gray-light px-2.5 py-0.5 text-xs font-medium text-navy/55">Not started</span>
+          </div>
+
+          <p className="mt-4 text-[15px] leading-6 text-navy/70">{firstSentence(currentVersion.scenario)}</p>
+
+          <hr className="my-5 border-navy/8" />
+          <IconRow icon={FileText} title="What you'll do">
+            {summarizeTaskTitles(currentVersion.tasks)}
+          </IconRow>
+
+          <hr className="my-5 border-navy/8" />
+          <IconRow icon={FileText} title="What you'll submit">
+            {summarizeSubmissionRequirements(currentVersion.submissionRequirements)}
+          </IconRow>
+
+          {currentVersion.rubric.length > 0 && (
+            <>
+              <hr className="my-5 border-navy/8" />
+              <IconRow icon={BarChart3} title="How it will be evaluated">
+                <RubricInline rubric={currentVersion.rubric} />
+              </IconRow>
+            </>
+          )}
+
+          <hr className="my-5 border-navy/8" />
+          <div className="flex flex-col items-center gap-2.5">
+            <StartChallengeButton applicationId={application.id} className="h-12 px-8 text-base" />
+            <Link href="/student/opportunities" className="text-sm text-navy/50 hover:text-navy hover:underline">
+              View internship
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="mt-6 flex items-center gap-3">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-base font-semibold text-teal-ink">
+              {application.companyName.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-navy/70">{application.companyName}</p>
+              <p className="text-sm text-navy/55">
+                {application.role}
+                {application.location ? ` · ${application.location}` : ""}
+                {application.workMode ? ` · ${WORK_MODE_LABEL[application.workMode]}` : ""}
+              </p>
+            </div>
+          </div>
+
+          <h1 className="mt-3 text-balance text-2xl font-bold tracking-[-0.02em] text-navy sm:text-3xl">{currentVersion.title}</h1>
+          <p className="mt-1 text-sm leading-6 text-navy/60">{firstSentence(currentVersion.scenario)}</p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-navy/56">
+            <span className="flex items-center gap-1.5"><Clock3 className="size-4" aria-hidden="true" />{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</span>
+            <span className="flex items-center gap-1.5"><ListChecks className="size-4" aria-hidden="true" />{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</span>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${CHALLENGE_STATUS_LABEL[challengeStatus].style}`}>
+              {CHALLENGE_STATUS_LABEL[challengeStatus].label}
+            </span>
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-5 lg:items-start">
             <div className="space-y-6 lg:col-span-3">
               <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Challenge overview</h2>
+                <div className="flex items-center gap-2">
+                  <FileText className="size-4 text-teal-ink" aria-hidden="true" />
+                  <h2 className="text-sm font-semibold text-navy">Challenge overview</h2>
+                </div>
                 <div className="mt-2">
                   <ExpandableText text={currentVersion.scenario} />
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-black/[0.04] bg-teal/5 p-4">
-                <p className="text-xs font-semibold text-teal-ink">Why this challenge?</p>
-                <p className="mt-1 text-sm leading-6 text-navy/70">
-                  This challenge simulates real work you&apos;d do as a {application.role} at {application.companyName}. It helps us both see how you think through a real problem, not just what&apos;s on your CV.
-                </p>
-              </section>
-
-              <section>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">What you&apos;ll do ({currentVersion.tasks.length})</h2>
-                <ol className="mt-3 space-y-2">
+              <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <ListChecks className="size-4 text-teal-ink" aria-hidden="true" />
+                    <h2 className="text-sm font-semibold text-navy">Tasks</h2>
+                  </div>
+                  <span className="shrink-0 text-xs text-navy/45">
+                    {currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"} · {currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`} total
+                  </span>
+                </div>
+                <div className="mt-3 divide-y divide-navy/8">
                   {currentVersion.tasks.map((task, index) => (
-                    <li key={task.id} className="flex items-start gap-3 rounded-xl border border-black/[0.04] bg-white p-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                    <div key={task.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
                       <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink">{index + 1}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="font-medium text-navy">{task.title}</p>
                           <span className="shrink-0 text-xs text-navy/40">~{Math.round(currentVersion.estimatedMinutes / currentVersion.tasks.length)}min</span>
                         </div>
-                        <p className="mt-0.5 line-clamp-2 text-sm leading-6 text-navy/60">{task.description}</p>
+                        <p className="mt-0.5 text-sm leading-6 text-navy/60">{task.description}</p>
                       </div>
-                    </li>
+                    </div>
                   ))}
-                </ol>
+                </div>
               </section>
 
-              <section className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Before you start</h2>
+              <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                <div className="flex items-center gap-2">
+                  <Lightbulb className="size-4 text-teal-ink" aria-hidden="true" />
+                  <h2 className="text-sm font-semibold text-navy">What to keep in mind</h2>
+                </div>
                 <ul className="mt-3 space-y-2">
-                  {BEFORE_YOU_START_CHECKLIST.map((item) => (
-                    <li key={item} className="flex items-start gap-2.5 text-sm text-navy/76">
-                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
-                      <span>{item}</span>
+                  {deriveGuidanceBullets(currentVersion.rubric, currentVersion.submissionRequirements).map((tip) => (
+                    <li key={tip} className="flex items-start gap-2 text-sm leading-6 text-navy/68">
+                      <span className="mt-2 size-1.5 shrink-0 rounded-full bg-teal-ink" aria-hidden="true" />
+                      <span>{tip}</span>
                     </li>
                   ))}
                 </ul>
               </section>
-            </div>
-
-            <div className="space-y-6 lg:sticky lg:top-24 lg:col-span-2 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
-              {challengeResources.length > 0 && (
-                <section>
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Resources provided ({challengeResources.length})</h2>
-                  <ChallengeResourcesList
-                    resources={challengeResources.map((r) => ({
-                      id: r.id,
-                      name: r.name,
-                      artifactKind: r.artifactKind,
-                      resourceType: r.resourceType as "file" | "link",
-                      generationStatus: r.generationStatus as "pending" | "generating" | "ready" | "failed" | "requires_upload",
-                      sizeBytes: r.sizeBytes,
-                    }))}
-                  />
-                </section>
-              )}
-
-              {currentVersion.submissionRequirements.length > 0 && (
-                <section className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Submission preview</h2>
-                  <p className="mt-1 text-xs text-navy/45">What you&apos;ll be asked to deliver — informational only, no inputs yet.</p>
-                  <ul className="mt-3 divide-y divide-navy/8">
-                    {currentVersion.submissionRequirements.map((requirement) => {
-                      const { Icon, iconClassName, bgClassName } = getArtifactVisual(requirement.artifactKind);
-                      return (
-                        <li key={requirement.id} className="flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0">
-                          <div className={`flex size-7 shrink-0 items-center justify-center rounded-md ${bgClassName}`}>
-                            <Icon className={`size-3.5 ${iconClassName}`} aria-hidden="true" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                              <p className="text-sm font-medium text-navy">{requirement.label}</p>
-                              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${requirement.required ? "bg-navy/8 text-navy/55" : "bg-navy/5 text-navy/40"}`}>
-                                {requirement.required ? "Required" : "Optional"}
-                              </span>
-                            </div>
-                            <p className="mt-0.5 text-xs text-navy/50">{describeSubmissionRequirement(requirement)}</p>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              )}
-
-              {currentVersion.rubric.length > 0 && (
-                <section>
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Evaluation preview</h2>
-                  <div className="mt-3 divide-y divide-navy/8 overflow-hidden rounded-xl border border-black/[0.04] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                    {currentVersion.rubric.map((criterion) => (
-                      <div key={criterion.criterion} className="px-4 py-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-medium text-navy">{criterion.criterion}</span>
-                          <span className="shrink-0 rounded-full bg-gray-light px-2 py-0.5 text-[11px] font-medium text-navy/60">{criterion.weight}%</span>
-                        </div>
-                        <p className="mt-0.5 text-xs leading-5 text-navy/56">{criterion.description}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs leading-5 text-navy/45">
-                    This shows how your work will be reviewed. The final hiring decision is made by a person at {application.companyName}.
-                  </p>
-                </section>
-              )}
-
-              <div className="flex flex-col gap-2 border-t border-navy/8 pt-4">
-                <Link href="/student/opportunities" className="text-center text-xs font-medium text-navy/50 hover:text-navy hover:underline">
-                  View internship
-                </Link>
-                <StartChallengeButton applicationId={application.id} />
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="mt-6 flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-teal-ink">
-                <Sparkles className="size-5" aria-hidden="true" />
-              </div>
-              <div>
-                <h1 className="text-balance text-2xl font-semibold tracking-[-0.03em] text-navy sm:text-3xl">
-                  {currentVersion.title}
-                </h1>
-                <p className="mt-0.5 text-sm text-navy/56">
-                  {application.companyName}
-                  {application.location ? ` · ${application.location}` : ""}
-                  {application.workMode ? ` · ${WORK_MODE_LABEL[application.workMode]}` : ""}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 flex divide-x divide-navy/8 overflow-hidden rounded-xl border border-black/[0.04] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-            <div className="flex flex-1 items-center gap-2 px-4 py-3">
-              <Clock3 className="size-4 shrink-0 text-navy/40" aria-hidden="true" />
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-navy/40">Estimated time</p>
-                <p className="text-sm font-medium text-navy">{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</p>
-              </div>
-            </div>
-            <div className="flex flex-1 items-center gap-2 px-4 py-3">
-              <ListChecks className="size-4 shrink-0 text-navy/40" aria-hidden="true" />
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-navy/40">Tasks</p>
-                <p className="text-sm font-medium text-navy">{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</p>
-              </div>
-            </div>
-            <div className="flex flex-1 items-center gap-2 px-4 py-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-navy/40">Status</p>
-                <span className={`mt-0.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${CHALLENGE_STATUS_LABEL[challengeStatus].style}`}>
-                  {CHALLENGE_STATUS_LABEL[challengeStatus].label}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-5 lg:items-start">
-            <div className="space-y-6 lg:col-span-3">
-              <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Challenge overview</h2>
-                <div className="mt-2">
-                  <ExpandableText text={currentVersion.scenario} />
-                </div>
-              </section>
-
-              <section>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Tasks ({currentVersion.tasks.length})</h2>
-                <ol className="mt-3 space-y-2.5">
-                  {currentVersion.tasks.map((task, index) => (
-                    <li key={task.id} className="flex gap-3 rounded-xl border border-black/[0.04] bg-white p-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink">{index + 1}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-medium text-navy">{task.title}</p>
-                          <span className="shrink-0 text-xs text-navy/40">~{Math.round(currentVersion.estimatedMinutes / currentVersion.tasks.length)}min</span>
-                        </div>
-                        <p className="mt-0.5 text-sm leading-6 text-navy/68">{task.description}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </section>
-
-              <section className="rounded-2xl border border-black/[0.04] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                <div className="p-4">
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Guidance</h2>
-                  <div className="mt-3 space-y-3">
-                    {WORKSPACE_INSTRUCTIONS.map((item) => (
-                      <div key={item.title} className="flex items-start gap-3">
-                        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal/8 text-teal-ink">
-                          <item.icon className="size-4" aria-hidden="true" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-navy">{item.title}</p>
-                          <p className="mt-0.5 text-xs leading-5 text-navy/56">{item.body}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {currentVersion.submissionRequirements.length > 0 && (
-                  <div className="border-t border-navy/8 p-4">
-                    <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Acceptance criteria</h2>
-                    <ul className="mt-3 space-y-2">
-                      {currentVersion.submissionRequirements.filter((r) => r.required).map((req) => (
-                        <li key={req.id} className="flex items-start gap-2 text-sm text-navy/76">
-                          <ListChecks className="mt-0.5 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
-                          <span>{req.label} is submitted{req.instructions ? ` — ${req.instructions}` : ""}</span>
-                        </li>
-                      ))}
-                      <li className="flex items-start gap-2 text-sm text-navy/76">
-                        <ListChecks className="mt-0.5 size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
-                        <span>Every task above has been addressed in your submission</span>
-                      </li>
-                    </ul>
-                  </div>
-                )}
-              </section>
 
               {latestSubmission && (
                 <section>
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Your submission</h2>
+                  <h2 className="text-sm font-semibold text-navy">Your submission</h2>
                   <SubmissionSummary
                     submission={{ status: latestSubmission.status, submittedAt: latestSubmission.submittedAt }}
                     offer={offer ? { status: offer.status } : null}
@@ -562,45 +417,44 @@ export default async function ApplicationWorkspacePage({
               )}
             </div>
 
-            <div className="space-y-6 lg:sticky lg:top-24 lg:col-span-2 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+            <div className="space-y-4 lg:sticky lg:top-24 lg:col-span-2 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
               {challengeResources.length > 0 && (
-                <section>
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Resources ({challengeResources.length})</h2>
-                  <ChallengeResourcesList
-                    resources={challengeResources.map((r) => ({
-                      id: r.id,
-                      name: r.name,
-                      artifactKind: r.artifactKind,
-                      resourceType: r.resourceType as "file" | "link",
-                      generationStatus: r.generationStatus as "pending" | "generating" | "ready" | "failed" | "requires_upload",
-                      sizeBytes: r.sizeBytes,
-                    }))}
-                  />
-                </section>
-              )}
-
-              {!latestSubmission && (
-                <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} />
-              )}
-
-              {currentVersion.rubric.length > 0 && (
-                <section>
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-navy/45">Evaluation criteria</h2>
-                  <div className="mt-3 divide-y divide-navy/8 overflow-hidden rounded-xl border border-black/[0.04] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                    {currentVersion.rubric.map((criterion) => (
-                      <div key={criterion.criterion} className="px-4 py-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-medium text-navy">{criterion.criterion}</span>
-                          <span className="shrink-0 rounded-full bg-gray-light px-2 py-0.5 text-[11px] font-medium text-navy/60">{criterion.weight}%</span>
-                        </div>
-                        <p className="mt-0.5 text-xs leading-5 text-navy/56">{criterion.description}</p>
-                      </div>
-                    ))}
+                <section className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                  <div className="flex items-center gap-2">
+                    <FolderOpen className="size-4 text-teal-ink" aria-hidden="true" />
+                    <h2 className="text-sm font-semibold text-navy">Resources</h2>
                   </div>
-                  <p className="mt-2 text-xs leading-5 text-navy/45">
-                    This shows what your work is evaluated against — a person at {application.companyName} makes the actual hiring decision.
-                  </p>
+                  <p className="mt-0.5 text-xs text-navy/50">Use the resources below to complete the challenge.</p>
+                  <div className="mt-3">
+                    <ChallengeResourcesList
+                      resources={challengeResources.map((r) => ({
+                        id: r.id,
+                        name: r.name,
+                        artifactKind: r.artifactKind,
+                        resourceType: r.resourceType as "file" | "link",
+                        generationStatus: r.generationStatus as "pending" | "generating" | "ready" | "failed" | "requires_upload",
+                        sizeBytes: r.sizeBytes,
+                      }))}
+                    />
+                  </div>
                 </section>
+              )}
+
+              {!latestSubmission ? (
+                <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} rubric={currentVersion.rubric} />
+              ) : (
+                currentVersion.rubric.length > 0 && (
+                  <section className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
+                      <h2 className="text-sm font-semibold text-navy">Evaluation</h2>
+                    </div>
+                    <p className="mt-0.5 text-xs text-navy/50">Your submission was evaluated based on:</p>
+                    <div className="mt-3">
+                      <RubricList rubric={currentVersion.rubric} />
+                    </div>
+                  </section>
+                )
               )}
 
               <ChallengeNotes applicationId={application.id} />
