@@ -193,8 +193,10 @@ export function ChallengeSubmissionForm({
           {requirements.map((requirement) => {
             const draft = drafts[requirement.id] ?? emptyDraft();
             const uploading = uploadingId === requirement.id;
-            return (
-              <div key={requirement.id} className="py-3 first:pt-0 last:pb-0">
+            const isFileMode = requirement.inputMode === "file" || requirement.inputMode === "multiple_files";
+            const canAddMore = requirement.inputMode === "file" ? draft.files.length === 0 : !requirement.maxFiles || draft.files.length < requirement.maxFiles;
+            const label = (
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <p className="text-sm font-medium text-navy">{requirement.label}</p>
                   <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${requirement.required ? "bg-navy/8 text-navy/55" : "bg-navy/5 text-navy/40"}`}>
@@ -202,10 +204,14 @@ export function ChallengeSubmissionForm({
                   </span>
                 </div>
                 <p className="mt-0.5 text-xs text-navy/50">{describeSubmissionRequirement(requirement)}</p>
-
-                <div className="mt-2">
-                  {(requirement.inputMode === "file" || requirement.inputMode === "multiple_files") && (
-                    <>
+              </div>
+            );
+            return (
+              <div key={requirement.id} className="py-3 first:pt-0 last:pb-0">
+                {isFileMode && draft.files.length === 0 && canAddMore ? (
+                  <div className="sm:flex sm:items-start sm:justify-between sm:gap-4">
+                    {label}
+                    <div className="mt-2 sm:mt-0 sm:shrink-0">
                       <input
                         ref={(el) => { fileInputRefs.current[requirement.id] = el; }}
                         type="file"
@@ -215,52 +221,82 @@ export function ChallengeSubmissionForm({
                         disabled={uploading}
                         className="hidden"
                       />
-                      {draft.files.length > 0 && (
-                        <ul className="space-y-1.5">
-                          {draft.files.map((file) => (
-                            <li key={file.path} className="flex items-center justify-between gap-2 rounded-lg bg-[#f6f8f9] px-2.5 py-1.5">
-                              <span className="min-w-0 truncate text-xs font-medium text-navy/75">{file.name} <span className="text-navy/40">· {formatBytes(file.size)}</span></span>
-                              <button type="button" onClick={() => removeFile(requirement.id, file.path)} className="shrink-0 text-navy/35 hover:text-destructive" aria-label={`Remove ${file.name}`}>
-                                <Trash2 className="size-3.5" aria-hidden="true" />
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={uploading}
+                        onClick={() => fileInputRefs.current[requirement.id]?.click()}
+                        className="h-9 border-navy/12 text-xs text-navy/70 hover:bg-navy/5"
+                      >
+                        {uploading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Upload className="size-3.5" aria-hidden="true" />}
+                        {uploading ? "Uploading…" : "Upload file"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {label}
+                    <div className="mt-2">
+                      {isFileMode && (
+                        <>
+                          <input
+                            ref={(el) => { fileInputRefs.current[requirement.id] = el; }}
+                            type="file"
+                            multiple={requirement.inputMode === "multiple_files"}
+                            accept={requirement.acceptedFormats?.join(",")}
+                            onChange={(e) => handleFileChange(requirement, e.target.files)}
+                            disabled={uploading}
+                            className="hidden"
+                          />
+                          {draft.files.length > 0 && (
+                            <ul className="space-y-1.5">
+                              {draft.files.map((file) => (
+                                <li key={file.path} className="flex items-center justify-between gap-2 rounded-lg bg-[#f6f8f9] px-2.5 py-1.5">
+                                  <span className="min-w-0 truncate text-xs font-medium text-navy/75">{file.name} <span className="text-navy/40">· {formatBytes(file.size)}</span></span>
+                                  <button type="button" onClick={() => removeFile(requirement.id, file.path)} className="shrink-0 text-navy/35 hover:text-destructive" aria-label={`Remove ${file.name}`}>
+                                    <Trash2 className="size-3.5" aria-hidden="true" />
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {canAddMore && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={uploading}
+                              onClick={() => fileInputRefs.current[requirement.id]?.click()}
+                              className="mt-1.5 h-8 border-navy/12 text-xs text-navy/70 hover:bg-navy/5"
+                            >
+                              {uploading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Upload className="size-3.5" aria-hidden="true" />}
+                              {uploading ? "Uploading…" : "Upload file"}
+                            </Button>
+                          )}
+                        </>
                       )}
-                      {(requirement.inputMode === "file" ? draft.files.length === 0 : !requirement.maxFiles || draft.files.length < requirement.maxFiles) && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={uploading}
-                          onClick={() => fileInputRefs.current[requirement.id]?.click()}
-                          className="mt-1.5 h-8 border-navy/12 text-xs text-navy/70 hover:bg-navy/5"
-                        >
-                          {uploading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Upload className="size-3.5" aria-hidden="true" />}
-                          {uploading ? "Uploading…" : "Upload file"}
-                        </Button>
+                      {requirement.inputMode === "url" && (
+                        <Input
+                          type="url"
+                          placeholder={requirement.providers?.length ? `https://${requirement.providers[0]}/...` : "https://..."}
+                          value={draft.url}
+                          onChange={(e) => updateDraft(requirement.id, { url: e.target.value })}
+                          className="h-9 w-full bg-[#f6f8f9] text-sm"
+                        />
                       )}
-                    </>
-                  )}
-                  {requirement.inputMode === "url" && (
-                    <Input
-                      type="url"
-                      placeholder={requirement.providers?.length ? `https://${requirement.providers[0]}/...` : "https://..."}
-                      value={draft.url}
-                      onChange={(e) => updateDraft(requirement.id, { url: e.target.value })}
-                      className="h-9 bg-[#f6f8f9] text-sm"
-                    />
-                  )}
-                  {requirement.inputMode === "text" && (
-                    <Textarea
-                      value={draft.text}
-                      onChange={(e) => updateDraft(requirement.id, { text: e.target.value })}
-                      rows={3}
-                      placeholder="Write your response…"
-                      className="bg-[#f6f8f9] text-sm"
-                    />
-                  )}
-                </div>
+                      {requirement.inputMode === "text" && (
+                        <Textarea
+                          value={draft.text}
+                          onChange={(e) => updateDraft(requirement.id, { text: e.target.value })}
+                          rows={3}
+                          placeholder="Write your response…"
+                          className="w-full bg-[#f6f8f9] text-sm"
+                        />
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
@@ -271,7 +307,7 @@ export function ChallengeSubmissionForm({
             Notes for reviewer <span className="text-navy/35">(optional)</span>
           </label>
           <p className="mt-0.5 text-xs text-navy/50">Anything else you&apos;d like to add?</p>
-          <Textarea id="submission-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add a note (optional)…" rows={2} className="mt-1.5 bg-[#f6f8f9] text-sm" />
+          <Textarea id="submission-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add a note (optional)…" rows={2} className="mt-1.5 w-full bg-[#f6f8f9] text-sm" />
         </div>
         {lastSavedAt && (
           <p className="mt-1.5 text-[11px] text-navy/35">Draft saved automatically · Last saved {lastSavedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>

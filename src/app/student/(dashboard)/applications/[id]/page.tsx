@@ -154,7 +154,7 @@ export default async function ApplicationWorkspacePage({
   };
 
   return (
-    <div className="mx-auto max-w-[1240px] px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+    <div className="mx-auto max-w-[min(94vw,1440px)] px-6 py-10 sm:px-10 sm:py-14 lg:px-12">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-navy/45">
         <Link href="/student/applications" className="hover:text-navy/70 hover:underline">Applications</Link>
         <ChevronRight className="size-3.5" aria-hidden="true" />
@@ -351,7 +351,7 @@ export default async function ApplicationWorkspacePage({
             </span>
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(360px,1fr)] lg:items-start">
+          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(420px,1fr)] lg:items-start">
             <div className="space-y-5">
               <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
                 <div className="flex items-center gap-2">
