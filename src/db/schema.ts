@@ -238,6 +238,8 @@ export const studentProfiles = pgTable("student_profiles", {
   cvUrl: text("cv_url"),
   cvFileKey: text("cv_file_key"),
   bio: text("bio"),
+  avatarUrl: text("avatar_url"),
+  bannerUrl: text("banner_url"),
   ...timestamps,
 });
 
@@ -303,6 +305,7 @@ export const studentPortfolioItems = pgTable("student_portfolio_items", {
   thumbnailUrl: text("thumbnail_url"),
   externalUrl: text("external_url"),
   repositoryUrl: text("repository_url"),
+  attachmentUrl: text("attachment_url"),
   skills: jsonb("skills").$type<string[]>().notNull().default([]),
   dateLabel: text("date_label"),
   sortOrder: integer("sort_order").notNull().default(0),

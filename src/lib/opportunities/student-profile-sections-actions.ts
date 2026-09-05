@@ -91,6 +91,22 @@ export async function upsertEducationAction(input: z.infer<typeof EducationInput
   } else {
     await db.insert(schema.studentEducation).values({ studentId: user.id, ...values });
   }
+
+  // Keep student_profiles' legacy flat education fields (used by the
+  // header/rail identity text and onboarding routing) in sync with this
+  // entry, so there's no separate "edit education" form living in the Edit
+  // Profile sheet — this multi-entry section is now the one place that
+  // edits education at all.
+  await db
+    .update(schema.studentProfiles)
+    .set({
+      educationStage: v.level ?? null,
+      university: v.institution,
+      major: v.fieldOfStudy || null,
+      graduationYear: v.graduationYear ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.studentProfiles.userId, user.id));
 }
 
 export async function deleteEducationAction(id: string) {
@@ -109,6 +125,7 @@ const PortfolioInputSchema = z.object({
   thumbnailUrl: z.string().trim().url().max(2000).optional().or(z.literal("")),
   externalUrl: z.string().trim().url().max(2000).optional().or(z.literal("")),
   repositoryUrl: z.string().trim().url().max(2000).optional().or(z.literal("")),
+  attachmentUrl: z.string().trim().url().max(2000).optional().or(z.literal("")),
   skills: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
   dateLabel: z.string().trim().max(40).optional(),
 });
@@ -125,6 +142,7 @@ export async function upsertPortfolioItemAction(input: z.infer<typeof PortfolioI
     thumbnailUrl: v.thumbnailUrl || null,
     externalUrl: v.externalUrl || null,
     repositoryUrl: v.repositoryUrl || null,
+    attachmentUrl: v.attachmentUrl || null,
     skills: v.skills ?? [],
     dateLabel: v.dateLabel || null,
     updatedAt: new Date(),
@@ -151,6 +169,23 @@ export async function getPortfolioThumbnailUploadUrlAction(fileName: string) {
 
   const supabase = createAdminClient();
   const path = `${user.id}/${crypto.randomUUID()}-${validatedFileName}`;
+
+  const { data, error } = await supabase.storage.from("student-portfolio").createSignedUploadUrl(path);
+  if (error) throw new Error("Couldn't prepare an upload URL.");
+  const { data: publicUrlData } = supabase.storage.from("student-portfolio").getPublicUrl(path);
+
+  return { signedUrl: data.signedUrl, token: data.token, path, publicUrl: publicUrlData.publicUrl };
+}
+
+/** Signed upload URL for a portfolio item's optional attachment (a research
+ * PDF, a writing sample) — same public bucket/pattern as the thumbnail, just
+ * a different path prefix and (via the bucket's own allow-list) also PDF. */
+export async function getPortfolioAttachmentUploadUrlAction(fileName: string) {
+  const { user } = await requireCurrentStudent();
+  const validatedFileName = FileNameSchema.parse(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  const supabase = createAdminClient();
+  const path = `${user.id}/attachment-${crypto.randomUUID()}-${validatedFileName}`;
 
   const { data, error } = await supabase.storage.from("student-portfolio").createSignedUploadUrl(path);
   if (error) throw new Error("Couldn't prepare an upload URL.");
@@ -228,4 +263,113 @@ export async function deleteProfileLinkAction(id: string) {
   const { user } = await requireCurrentStudent();
   const db = getDb();
   await db.delete(schema.studentProfileLinks).where(and(eq(schema.studentProfileLinks.id, id), eq(schema.studentProfileLinks.studentId, user.id)));
+}
+
+// --- Profile identity (photo, banner, about/location/availability, skills,
+// preferences) — small, focused, PARTIAL updates. student_profiles is a
+// single row per student, so unlike the list tables above these actions
+// only .set() the columns their own section owns, never the whole row —
+// that's what let the old single giant form clobber unrelated fields on
+// every save, and is exactly the architecture problem being fixed here. ---
+
+/** Avatar/banner upload URL — same public bucket/pattern as the portfolio
+ * thumbnail, just a different path prefix. */
+export async function getProfileMediaUploadUrlAction(fileName: string, kind: "avatar" | "banner") {
+  const { user } = await requireCurrentStudent();
+  const validatedFileName = FileNameSchema.parse(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
+  const validatedKind = z.enum(["avatar", "banner"]).parse(kind);
+
+  const supabase = createAdminClient();
+  const path = `${user.id}/${validatedKind}-${crypto.randomUUID()}-${validatedFileName}`;
+
+  const { data, error } = await supabase.storage.from("student-portfolio").createSignedUploadUrl(path);
+  if (error) throw new Error("Couldn't prepare an upload URL.");
+  const { data: publicUrlData } = supabase.storage.from("student-portfolio").getPublicUrl(path);
+
+  return { signedUrl: data.signedUrl, token: data.token, path, publicUrl: publicUrlData.publicUrl };
+}
+
+const MediaInputSchema = z.object({
+  avatarUrl: z.string().trim().url().max(2000).nullable().optional(),
+  bannerUrl: z.string().trim().url().max(2000).nullable().optional(),
+});
+
+/** Sets whichever of avatar/banner is provided; omitting a field leaves it
+ * untouched, passing null clears it (remove photo/remove banner). */
+export async function updateStudentMediaAction(input: z.infer<typeof MediaInputSchema>) {
+  const { user } = await requireCurrentStudent();
+  const v = MediaInputSchema.parse(input);
+  const db = getDb();
+
+  const values: Record<string, unknown> = { updatedAt: new Date() };
+  if ("avatarUrl" in v) values.avatarUrl = v.avatarUrl ?? null;
+  if ("bannerUrl" in v) values.bannerUrl = v.bannerUrl ?? null;
+
+  await db.update(schema.studentProfiles).set(values).where(eq(schema.studentProfiles.userId, user.id));
+}
+
+const IdentityInputSchema = z.object({
+  bio: z.string().trim().max(600).optional(),
+  location: z.string().trim().max(200).optional(),
+  availability: z.string().trim().max(200).optional(),
+});
+
+/** About/location/availability — the Edit Profile sheet's actual scope. */
+export async function updateStudentIdentityAction(input: z.infer<typeof IdentityInputSchema>) {
+  const { user } = await requireCurrentStudent();
+  const v = IdentityInputSchema.parse(input);
+  const db = getDb();
+
+  await db
+    .update(schema.studentProfiles)
+    .set({
+      bio: v.bio || null,
+      location: v.location || null,
+      availability: v.availability || null,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.studentProfiles.userId, user.id));
+}
+
+const SkillsInputSchema = z.array(z.string().trim().min(1).max(60)).max(30);
+
+export async function updateStudentSkillsAction(skills: z.infer<typeof SkillsInputSchema>) {
+  const { user } = await requireCurrentStudent();
+  const v = SkillsInputSchema.parse(skills);
+  const db = getDb();
+  await db.update(schema.studentProfiles).set({ skills: v, updatedAt: new Date() }).where(eq(schema.studentProfiles.userId, user.id));
+}
+
+const PreferencesInputSchema = z.object({
+  interests: z.array(z.string().trim().min(1).max(60)).max(30),
+  opportunityTypes: z.array(z.string().trim().min(1).max(60)).max(10),
+});
+
+export async function updateStudentPreferencesAction(input: z.infer<typeof PreferencesInputSchema>) {
+  const { user } = await requireCurrentStudent();
+  const v = PreferencesInputSchema.parse(input);
+  const db = getDb();
+  await db
+    .update(schema.studentProfiles)
+    .set({ interests: v.interests, opportunityTypes: v.opportunityTypes, updatedAt: new Date() })
+    .where(eq(schema.studentProfiles.userId, user.id));
+}
+
+/** Sets the CV after a plain upload (no AI extraction — this is the Resume
+ * rail card's own self-contained upload, kept separate from onboarding's
+ * "extract skills/interests from your CV" flow so it never silently
+ * mutates skills/interests the student didn't touch). */
+export async function updateStudentCvFileAction(cvFileKey: string) {
+  const { user } = await requireCurrentStudent();
+  const v = z.string().trim().min(1).max(500).parse(cvFileKey);
+  if (!v.startsWith(`${user.id}/`)) throw new Error("Not authorized for this file.");
+  const db = getDb();
+  await db.update(schema.studentProfiles).set({ cvFileKey: v, cvUrl: null, updatedAt: new Date() }).where(eq(schema.studentProfiles.userId, user.id));
+}
+
+/** Clears the CV — the Resume rail card's own "Remove" action. */
+export async function removeStudentCvAction() {
+  const { user } = await requireCurrentStudent();
+  const db = getDb();
+  await db.update(schema.studentProfiles).set({ cvUrl: null, cvFileKey: null, updatedAt: new Date() }).where(eq(schema.studentProfiles.userId, user.id));
 }

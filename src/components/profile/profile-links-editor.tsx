@@ -14,7 +14,7 @@ export interface ProfileLinkItem {
   url: string;
 }
 
-const LABEL_OPTIONS = ["Email", "Phone", "LinkedIn", "GitHub", "Portfolio website", "Behance", "Dribbble", "YouTube", "Medium", "Personal website", "Other"];
+const LABEL_OPTIONS = ["Email", "Phone", "LinkedIn", "GitHub", "Behance", "Dribbble", "Medium", "YouTube", "Website", "Google Scholar"];
 
 const ICONS: Record<string, LucideIcon> = { Email: Mail, Phone: Phone };
 
@@ -40,12 +40,14 @@ export function ProfileLinksEditor({ items }: { items: ProfileLinkItem[] }) {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Omit<ProfileLinkItem, "id">>(emptyDraft());
+  const [customMode, setCustomMode] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   function openAdd() {
     setEditingId(null);
     setDraft(emptyDraft());
+    setCustomMode(false);
     setError(null);
     setOpen(true);
   }
@@ -53,12 +55,17 @@ export function ProfileLinksEditor({ items }: { items: ProfileLinkItem[] }) {
   function openEdit(item: ProfileLinkItem) {
     setEditingId(item.id);
     setDraft({ ...item });
+    setCustomMode(!LABEL_OPTIONS.includes(item.label));
     setError(null);
     setOpen(true);
   }
 
   function save() {
     setError(null);
+    if (customMode && !draft.label.trim()) {
+      setError("Enter a label for this custom link.");
+      return;
+    }
     if (!draft.url.trim()) {
       setError("Enter a value first.");
       return;
@@ -126,10 +133,29 @@ export function ProfileLinksEditor({ items }: { items: ProfileLinkItem[] }) {
         <div className="flex-1 space-y-4 px-5 py-5">
           <div>
             <label className="text-sm font-medium text-navy">Type</label>
-            <select value={draft.label} onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))} className="mt-1.5 h-9 w-full rounded-lg border border-gray-cool/60 bg-white px-2.5 text-sm text-navy focus-visible:border-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/30">
+            <select
+              value={customMode ? "Custom" : draft.label}
+              onChange={(e) => {
+                if (e.target.value === "Custom") {
+                  setCustomMode(true);
+                  setDraft((d) => ({ ...d, label: "" }));
+                } else {
+                  setCustomMode(false);
+                  setDraft((d) => ({ ...d, label: e.target.value }));
+                }
+              }}
+              className="mt-1.5 h-9 w-full rounded-lg border border-gray-cool/60 bg-white px-2.5 text-sm text-navy focus-visible:border-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/30"
+            >
               {LABEL_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+              <option value="Custom">Custom</option>
             </select>
           </div>
+          {customMode && (
+            <div>
+              <label htmlFor="link-label" className="text-sm font-medium text-navy">Label</label>
+              <Input id="link-label" placeholder="e.g. Portfolio site" value={draft.label} onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))} className="mt-1.5" />
+            </div>
+          )}
           <div>
             <label htmlFor="link-value" className="text-sm font-medium text-navy">
               {draft.label === "Email" ? "Email address" : draft.label === "Phone" ? "Phone number" : "URL"}

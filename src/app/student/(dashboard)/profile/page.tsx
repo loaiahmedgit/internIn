@@ -2,7 +2,11 @@ import Link from "next/link";
 import { eq, inArray, desc, asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
-import { StudentProfileForm } from "@/components/opportunities/student-profile-form";
+import { ProfileHeroMedia } from "@/components/profile/profile-hero-media";
+import { IdentityEditorFields } from "@/components/profile/identity-editor-fields";
+import { SkillsEditor } from "@/components/profile/skills-editor";
+import { PreferencesEditor } from "@/components/profile/preferences-editor";
+import { ResumeCard } from "@/components/profile/resume-card";
 import { ExperienceEditor } from "@/components/profile/experience-editor";
 import { EducationEditor } from "@/components/profile/education-editor";
 import { PortfolioEditor } from "@/components/profile/portfolio-editor";
@@ -20,11 +24,9 @@ import {
 } from "@/components/ui/sheet";
 import {
   Award,
-  BarChart3,
   Briefcase,
   CalendarDays,
   CheckCircle2,
-  FileText,
   GraduationCap,
   ImageIcon,
   LayoutGrid,
@@ -40,7 +42,9 @@ const monthYear = new Intl.DateTimeFormat("en", { month: "short", year: "numeric
 /** One real, verified item for the evidence section — either a completed
  * internship program (verified_experience) or a company challenge with
  * evaluated evidence (candidate_evidence). Never invented: both come from
- * a supervisor/company action that already happened. */
+ * a supervisor/company action that already happened. This is the ONLY
+ * "verified" surface on the page — Portfolio below is student-curated and
+ * never carries this badge. */
 type EvidenceItem = {
   key: string;
   kind: "internship" | "challenge";
@@ -184,7 +188,6 @@ export default async function StudentProfilePage() {
       }),
   ].sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
 
-  const skills = profile?.skills ?? [];
   const interests = profile?.interests ?? [];
   const opportunityTypes = profile?.opportunityTypes ?? [];
 
@@ -202,8 +205,13 @@ export default async function StudentProfilePage() {
             {/* Identity + section nav — ONE continuous card. */}
             <div className={`${cardClass} order-2 overflow-hidden lg:order-1`}>
               <div className="hidden p-5 text-center lg:block">
-                <div className="mx-auto flex size-[76px] items-center justify-center rounded-full bg-teal/10 text-lg font-semibold text-teal-ink" aria-hidden="true">
-                  {initials}
+                <div className="relative mx-auto size-[76px] overflow-hidden rounded-full bg-teal/10 text-lg font-semibold text-teal-ink">
+                  {profile?.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- mirrors the hero's own avatar, no layout/priority needs here
+                    <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">{initials}</div>
+                  )}
                 </div>
                 <h1 className="mt-3 text-base font-semibold text-navy">{user.fullName}</h1>
                 <p className="mt-0.5 text-sm text-navy/60">{railTitle}</p>
@@ -244,23 +252,7 @@ export default async function StudentProfilePage() {
             </div>
 
             <div className={`${cardClass} order-12 p-4 lg:order-3`}>
-              <h2 className="text-sm font-semibold text-navy">Resume</h2>
-              <p className="mt-0.5 text-xs text-navy/55">Optional supporting document for your profile.</p>
-              {profile?.cvFileKey || profile?.cvUrl ? (
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center gap-2 rounded-lg bg-[#f6f8f9] px-3 py-2">
-                    <FileText className="size-4 shrink-0 text-teal-ink" aria-hidden="true" />
-                    <span className="min-w-0 truncate text-sm font-medium text-navy">{profile.cvFileKey ? "CV on file" : "CV link added"}</span>
-                  </div>
-                  {profile.cvUrl ? (
-                    <a href={profile.cvUrl} target="_blank" rel="noreferrer" className={`${editTriggerClass} w-full`}>View CV</a>
-                  ) : (
-                    <SheetTrigger className={`${editTriggerClass} w-full`}>Upload new CV</SheetTrigger>
-                  )}
-                </div>
-              ) : (
-                <SheetTrigger className="mt-2 inline-block text-sm font-medium text-teal-ink hover:underline">Add resume →</SheetTrigger>
-              )}
+              <ResumeCard hasCv={Boolean(profile?.cvFileKey || profile?.cvUrl)} cvUrl={profile?.cvUrl ?? null} />
             </div>
 
             <div className={`${cardClass} order-13 p-4 lg:order-4`}>
@@ -281,10 +273,9 @@ export default async function StudentProfilePage() {
 
           {/* --- Main content ----------------------------------------------- */}
           <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-3">
-            <div className={`${cardClass} relative order-1 min-h-[196px] overflow-hidden p-5 sm:p-7 lg:order-1`}>
-              <div className="pointer-events-none absolute -right-14 -top-20 size-80 rounded-full bg-teal/12 blur-3xl" aria-hidden="true" />
-              <div className="pointer-events-none absolute -bottom-24 -left-20 size-64 rounded-full bg-teal/8 blur-3xl" aria-hidden="true" />
-              <div className="relative flex h-full flex-col justify-between gap-5 sm:flex-row sm:items-start">
+            <div className={`${cardClass} relative order-1 overflow-hidden lg:order-1`}>
+              <ProfileHeroMedia avatarUrl={profile?.avatarUrl ?? null} bannerUrl={profile?.bannerUrl ?? null} initials={initials} />
+              <div className="flex flex-col justify-between gap-5 px-5 pb-5 pt-11 sm:flex-row sm:items-start sm:px-7 sm:pb-7">
                 <div className="min-w-0">
                   <h1 className="text-2xl font-semibold tracking-[-0.02em] text-navy">{user.fullName}</h1>
                   <p className="mt-1 text-sm font-medium text-teal-ink">{focus ? `Interested in ${focus}` : stageLabel || "Student"}</p>
@@ -353,26 +344,9 @@ export default async function StudentProfilePage() {
               )}
             </section>
 
-            <section aria-labelledby="skills-heading" className={`${cardClass} order-4 p-5 lg:order-3`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
-                  <h2 id="skills-heading" className="text-base font-semibold text-navy">Skills</h2>
-                </div>
-                <SheetTrigger className="text-sm font-medium text-teal-ink hover:underline">Edit</SheetTrigger>
-              </div>
-              {skills.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {skills.map((skill) => (
-                    <span key={skill} className="rounded-full border border-navy/8 bg-white px-2.5 py-1 text-xs text-navy/62">{skill}</span>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-navy/55">
-                  No skills added yet. <SheetTrigger className="font-medium text-teal-ink hover:underline">Add skills →</SheetTrigger>
-                </p>
-              )}
-            </section>
+            <div className="order-4 lg:order-3">
+              <SkillsEditor skills={profile?.skills ?? []} />
+            </div>
 
             <section aria-labelledby="evidence-heading" className={`${cardClass} order-5 p-5 lg:order-4`}>
               <div className="flex items-center justify-between gap-3">
@@ -399,7 +373,11 @@ export default async function StudentProfilePage() {
                         </div>
                       </div>
                       {item.date && <p className="mt-2 text-xs text-navy/45">{monthYear.format(item.date)}</p>}
-                      <Link href={item.href} className="mt-2 inline-block text-xs font-medium text-teal-ink hover:underline">View evidence →</Link>
+                      <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-teal-ink">
+                        <ShieldCheck className="size-3" aria-hidden="true" />
+                        Verified by internIn
+                      </p>
+                      <Link href={item.href} className="mt-1 inline-block text-xs font-medium text-teal-ink hover:underline">View evidence →</Link>
                     </div>
                   ))}
                 </div>
@@ -427,59 +405,20 @@ export default async function StudentProfilePage() {
               <CertificationsEditor items={certificationRows} />
             </div>
 
-            {(interests.length > 0 || opportunityTypes.length > 0) && (
-              <section id="preferences" aria-labelledby="preferences-heading" className={`${cardClass} order-11 scroll-mt-24 p-5 lg:order-9`}>
-                <h2 id="preferences-heading" className="text-base font-semibold text-navy">Preferences</h2>
-                <div className="mt-3 space-y-3">
-                  {interests.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-navy/45">Interested in</p>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {interests.map((item) => (
-                          <span key={item} className="rounded-full bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">{item}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {opportunityTypes.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-navy/45">Looking for</p>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {opportunityTypes.map((item) => (
-                          <span key={item} className="rounded-full bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">{item}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
+            <div className="order-11 lg:order-9">
+              <PreferencesEditor interests={interests} opportunityTypes={opportunityTypes} />
+            </div>
           </div>
         </div>
       </div>
 
-      <SheetContent className="flex flex-col gap-0 overflow-y-auto p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md data-[side=right]:lg:max-w-lg">
+      <SheetContent className="flex flex-col gap-0 overflow-y-auto p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md">
         <SheetHeader className="border-b border-navy/8 px-5 py-4">
           <SheetTitle>Edit profile</SheetTitle>
-          <SheetDescription>This information stays private to internIn — companies see it through your applications and profile summary.</SheetDescription>
+          <SheetDescription>About you, your location, and your availability. Companies see this through your profile.</SheetDescription>
         </SheetHeader>
         <div className="flex-1 px-5 py-5">
-          <StudentProfileForm
-            initial={{
-              educationStage: profile?.educationStage ?? "",
-              university: profile?.university ?? "",
-              major: profile?.major ?? "",
-              graduationYear: profile?.graduationYear ? String(profile.graduationYear) : "",
-              location: profile?.location ?? "",
-              bio: profile?.bio ?? "",
-              interests: (profile?.interests ?? []).join(", "),
-              opportunityTypes: (profile?.opportunityTypes ?? []).join(", "),
-              skills: (profile?.skills ?? []).join(", "),
-              availability: profile?.availability ?? "",
-              cvUrl: profile?.cvUrl ?? "",
-              cvFileKey: profile?.cvFileKey ?? "",
-            }}
-          />
+          <IdentityEditorFields bio={profile?.bio ?? ""} location={profile?.location ?? ""} availability={profile?.availability ?? ""} />
         </div>
       </SheetContent>
     </Sheet>

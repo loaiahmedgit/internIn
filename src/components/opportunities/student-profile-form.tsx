@@ -4,16 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { createClient } from "@/lib/supabase/client";
-import {
-  updateStudentProfileAction,
-  getCvUploadUrlAction,
-  extractCvAction,
-} from "@/lib/opportunities/student-actions";
+import { updateStudentProfileAction } from "@/lib/opportunities/student-actions";
 import { STAGE_OPTIONS, type EducationStage } from "@/lib/education-stages";
-import { CalendarClock, FileText, GraduationCap, MapPin, Sparkles, Target, User, type LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const STAGE_FIELD_LABELS: Record<EducationStage, { institution: string; program: string; year: string }> = {
   high_school: { institution: "School", program: "", year: "Expected graduation year" },
@@ -308,83 +300,6 @@ function SelectWithOther({
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs font-medium text-navy/42">{label}</p>
-      <p className={cn("mt-1.5 truncate text-sm font-medium", value ? "text-navy" : "text-navy/36")}>{value || "Not added yet"}</p>
-    </div>
-  );
-}
-
-function ChipList({ values, emptyText }: { values: string[]; emptyText: string }) {
-  if (values.length === 0) return <p className="text-sm text-navy/40">{emptyText}</p>;
-  return <div className="flex flex-wrap gap-2">{values.map((value) => <span key={value} className="rounded-full border border-navy/8 bg-[#f7f9fa] px-3 py-1.5 text-xs font-medium text-navy/62">{value}</span>)}</div>;
-}
-
-function SectionCard({
-  title,
-  editing,
-  onEdit,
-  onCancel,
-  onSave,
-  saving,
-  children,
-  view,
-  icon: Icon,
-  description,
-  className,
-}: {
-  title: string;
-  editing: boolean;
-  onEdit: () => void;
-  onCancel: () => void;
-  onSave: () => void;
-  saving: boolean;
-  children: React.ReactNode;
-  view: React.ReactNode;
-  icon: LucideIcon;
-  description: string;
-  className?: string;
-}) {
-  return (
-    <section className={cn("rounded-2xl border border-navy/10 bg-white p-5 shadow-[0_8px_28px_rgba(33,50,72,0.035)] sm:p-6", className)}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-teal/9 text-teal-ink" aria-hidden="true"><Icon className="size-[17px]" /></span>
-          <div><h3 className="text-base font-semibold text-navy">{title}</h3><p className="mt-0.5 text-xs leading-5 text-navy/46">{description}</p></div>
-        </div>
-        {!editing && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-lg border border-navy/12 bg-white px-3 py-1.5 text-xs font-medium text-navy/68 transition-colors hover:border-teal/25 hover:bg-teal/5 hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
-          >
-            Edit
-          </button>
-        )}
-      </div>
-      <div className="mt-6">
-        {editing ? (
-          <div className="space-y-5">
-            {children}
-            <div className="flex items-center gap-2 pt-1">
-              <Button type="button" onClick={onSave} disabled={saving} className="h-9 bg-teal text-white hover:bg-teal/90">
-                {saving ? "Saving…" : "Save"}
-              </Button>
-              <Button type="button" variant="outline" onClick={onCancel} disabled={saving} className="h-9">
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          view
-        )}
-      </div>
-    </section>
-  );
-}
-
 type ProfileValues = {
   educationStage: EducationStage | "";
   university: string;
@@ -407,57 +322,28 @@ function toList(value: string) {
     .filter((s) => s.length > 0);
 }
 
-type Section = "about" | "education" | "preferences" | "skills";
-
+/**
+ * Onboarding/preferences intake form only — the profile page's own editing
+ * now happens per-section (see src/components/profile/*-editor.tsx), each
+ * writing only the field(s) it owns instead of round-tripping the whole
+ * profile through one giant form.
+ */
 export function StudentProfileForm({
   initial,
-  variant = "full",
+  variant,
 }: {
   initial: ProfileValues;
-  variant?: "full" | "onboarding" | "preferences";
+  variant: "onboarding" | "preferences";
 }) {
   const router = useRouter();
   const [values, setValues] = useState(initial);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [cvBusy, setCvBusy] = useState(false);
-  const [cvMessage, setCvMessage] = useState<string | null>(null);
-  const [cvError, setCvError] = useState<string | null>(null);
-  const [editingSection, setEditingSection] = useState<Section | null>(null);
 
   function set<K extends keyof ProfileValues>(key: K, value: string) {
     setSaved(false);
     setValues((v) => ({ ...v, [key]: value }));
-  }
-
-  async function handleCvUpload(file: File) {
-    setCvBusy(true);
-    setCvError(null);
-    setCvMessage(null);
-    try {
-      const { token, path } = await getCvUploadUrlAction(file.name);
-      const supabase = createClient();
-      const { error: uploadError } = await supabase.storage.from("student-cvs").uploadToSignedUrl(path, token, file);
-      if (uploadError) throw new Error(`Couldn't upload the file: ${uploadError.message}`);
-
-      const extracted = await extractCvAction(path);
-      const mergedSkills = Array.from(new Set([...toList(values.skills), ...extracted.skills]));
-      const mergedInterests = Array.from(new Set([...toList(values.interests), ...extracted.interests]));
-      setValues((v) => ({
-        ...v,
-        skills: mergedSkills.join(", "),
-        interests: mergedInterests.join(", "),
-        cvFileKey: path,
-      }));
-      setCvMessage(
-        `Found ${extracted.skills.length} skill(s) and ${extracted.interests.length} interest area(s). Review them below, then save your changes.`,
-      );
-    } catch (err) {
-      setCvError(err instanceof Error ? err.message : "Couldn't process that file.");
-    } finally {
-      setCvBusy(false);
-    }
   }
 
   async function save() {
@@ -497,53 +383,13 @@ export function StudentProfileForm({
         router.push("/student/preferences");
         return;
       }
-      if (variant === "preferences") {
-        router.push("/student/dashboard");
-        return;
-      }
-      setSaved(true);
+      router.push("/student/dashboard");
     });
-  }
-
-  function saveSection() {
-    startTransition(async () => {
-      const ok = await save();
-      if (ok) setEditingSection(null);
-    });
-  }
-
-  function cancelSection(section: Section) {
-    if (section === "about") {
-      setValues((v) => ({ ...v, bio: initial.bio }));
-    } else if (section === "education") {
-      setValues((v) => ({
-        ...v,
-        educationStage: initial.educationStage,
-        university: initial.university,
-        major: initial.major,
-        graduationYear: initial.graduationYear,
-        location: initial.location,
-      }));
-    } else if (section === "preferences") {
-      setValues((v) => ({ ...v, interests: initial.interests, opportunityTypes: initial.opportunityTypes }));
-    } else {
-      setValues((v) => ({
-        ...v,
-        availability: initial.availability,
-        skills: initial.skills,
-        cvUrl: initial.cvUrl,
-        cvFileKey: initial.cvFileKey,
-      }));
-    }
-    setEditingSection(null);
-    setCvMessage(null);
-    setCvError(null);
   }
 
   const stage = values.educationStage || undefined;
   const stageLabels = stage ? STAGE_FIELD_LABELS[stage] : null;
   const institutionOptions = stage === "high_school" ? QATAR_SCHOOLS : QATAR_UNIVERSITIES;
-  const stageLabel = STAGE_OPTIONS.find((o) => o.value === values.educationStage)?.label ?? "";
 
   const educationFields = (
     <>
@@ -626,160 +472,6 @@ export function StudentProfileForm({
       />
     </>
   );
-
-  const skillsFields = (
-    <>
-      <div>
-        <label htmlFor="availability" className="text-sm font-medium text-navy">
-          Availability
-        </label>
-        <Input
-          id="availability"
-          placeholder="20 hours/week, starting June…"
-          value={values.availability}
-          onChange={(e) => set("availability", e.target.value)}
-          className="mt-1.5"
-        />
-      </div>
-
-      <div>
-        <label htmlFor="skills" className="text-sm font-medium text-navy">
-          Skills
-        </label>
-        <Input
-          id="skills"
-          placeholder="Excel, SQL, Figma…"
-          value={values.skills}
-          onChange={(e) => set("skills", e.target.value)}
-          className="mt-1.5"
-        />
-        <p className="mt-1 text-xs text-navy/50">Comma-separated.</p>
-      </div>
-
-      <div>
-        <label htmlFor="cv-url" className="text-sm font-medium text-navy">
-          CV link (optional)
-        </label>
-        <Input
-          id="cv-url"
-          type="url"
-          placeholder="https://…"
-          value={values.cvUrl}
-          onChange={(e) => set("cvUrl", e.target.value)}
-          className="mt-1.5"
-        />
-      </div>
-
-      <div>
-        <label htmlFor="cv-upload" className="text-sm font-medium text-navy">
-          Or upload your CV (optional)
-        </label>
-        <p className="mt-1 text-xs text-navy/50">
-          PDF only. We&apos;ll pull out skills and interest areas for you to review. Nothing saves automatically.
-        </p>
-        <input
-          id="cv-upload"
-          type="file"
-          accept="application/pdf"
-          disabled={cvBusy}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleCvUpload(file);
-            e.target.value = "";
-          }}
-          className="mt-1.5 text-sm text-navy/70"
-        />
-        {cvBusy && <p className="mt-1 text-xs text-navy/50">Reading your CV…</p>}
-        {cvMessage && <p className="mt-1 text-xs text-teal-ink">{cvMessage}</p>}
-        {cvError && <p className="mt-1 text-xs text-destructive">{cvError}</p>}
-        {values.cvFileKey && !cvBusy && !cvMessage && <p className="mt-1 text-xs text-navy/50">A CV is on file.</p>}
-      </div>
-    </>
-  );
-
-  if (variant === "full") {
-    return (
-      <div className="mt-6 grid gap-5 lg:grid-cols-12">
-        <SectionCard
-          title="About me"
-          description="A short introduction companies see on your profile"
-          icon={User}
-          className="lg:col-span-12"
-          editing={editingSection === "about"}
-          onEdit={() => setEditingSection("about")}
-          onCancel={() => cancelSection("about")}
-          onSave={saveSection}
-          saving={isPending}
-          view={<p className={cn("text-sm leading-6", values.bio ? "text-navy/72" : "text-navy/40")}>{values.bio || "Not added yet"}</p>}
-        >
-          <div>
-            <label htmlFor="bio" className="text-sm font-medium text-navy">About me</label>
-            <Textarea id="bio" value={values.bio} onChange={(e) => set("bio", e.target.value)} rows={4} maxLength={600} className="mt-1.5" />
-            <p className="mt-1 text-xs text-navy/50">{values.bio.length}/600</p>
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Education"
-          description="Your current education and location"
-          icon={GraduationCap}
-          className="lg:col-span-7"
-          editing={editingSection === "education"}
-          onEdit={() => setEditingSection("education")}
-          onCancel={() => cancelSection("education")}
-          onSave={saveSection}
-          saving={isPending}
-          view={
-            <div className="grid gap-5 sm:grid-cols-2">
-              <InfoRow label="Education stage" value={stageLabel} />
-              {stageLabels?.institution && <InfoRow label={stageLabels.institution} value={values.university} />}
-              {stageLabels?.program && <InfoRow label={stageLabels.program} value={values.major} />}
-              {stageLabels?.year && <InfoRow label={stageLabels.year} value={values.graduationYear} />}
-              <div className="flex items-start gap-2"><MapPin className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" /><InfoRow label="Location" value={values.location} /></div>
-            </div>
-          }
-        >
-          {educationFields}
-        </SectionCard>
-
-        <SectionCard
-          title="Preferences"
-          description="The opportunities you want to discover"
-          icon={Target}
-          className="lg:col-span-5"
-          editing={editingSection === "preferences"}
-          onEdit={() => setEditingSection("preferences")}
-          onCancel={() => cancelSection("preferences")}
-          onSave={saveSection}
-          saving={isPending}
-          view={
-            <div className="space-y-5"><div><p className="mb-2 text-xs font-medium text-navy/42">Career interests</p><ChipList values={toList(values.interests)} emptyText="Add a career interest to improve recommendations." /></div><div><p className="mb-2 text-xs font-medium text-navy/42">Opportunity types</p><ChipList values={toList(values.opportunityTypes)} emptyText="Add the types of opportunities you want." /></div></div>
-          }
-        >
-          {preferencesFields}
-        </SectionCard>
-
-        <SectionCard
-          title="Skills & documents"
-          description="The evidence companies can review"
-          icon={Sparkles}
-          className="lg:col-span-12"
-          editing={editingSection === "skills"}
-          onEdit={() => setEditingSection("skills")}
-          onCancel={() => cancelSection("skills")}
-          onSave={saveSection}
-          saving={isPending}
-          view={
-            <div className="grid gap-6 lg:grid-cols-[1fr_0.72fr]"><div><p className="mb-2 text-xs font-medium text-navy/42">Skills</p><ChipList values={toList(values.skills)} emptyText="Add skills so companies can understand your strengths." /></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1"><div className="flex items-start gap-2.5 rounded-xl border border-navy/8 bg-[#f8fafb] p-3.5"><CalendarClock className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" /><InfoRow label="Availability" value={values.availability} /></div><div className="flex items-start gap-2.5 rounded-xl border border-navy/8 bg-[#f8fafb] p-3.5"><FileText className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" /><InfoRow label="CV" value={values.cvFileKey ? "Uploaded CV" : values.cvUrl ? values.cvUrl : ""} /></div></div></div>
-          }
-        >
-          {skillsFields}
-        </SectionCard>
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
