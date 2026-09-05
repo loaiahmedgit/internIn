@@ -154,7 +154,7 @@ export default async function ApplicationWorkspacePage({
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+    <div className="mx-auto max-w-[1240px] px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-navy/45">
         <Link href="/student/applications" className="hover:text-navy/70 hover:underline">Applications</Link>
         <ChevronRight className="size-3.5" aria-hidden="true" />
@@ -340,7 +340,7 @@ export default async function ApplicationWorkspacePage({
             </div>
           </div>
 
-          <h1 className="mt-3 text-balance text-2xl font-bold tracking-[-0.02em] text-navy sm:text-3xl">{currentVersion.title}</h1>
+          <h1 className="mt-3 text-balance text-3xl font-bold tracking-[-0.02em] text-navy sm:text-4xl">{currentVersion.title}</h1>
           <p className="mt-1 text-sm leading-6 text-navy/60">{firstSentence(currentVersion.scenario)}</p>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-navy/56">
@@ -351,12 +351,12 @@ export default async function ApplicationWorkspacePage({
             </span>
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-5 lg:items-start">
-            <div className="space-y-6 lg:col-span-3">
+          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(360px,1fr)] lg:items-start">
+            <div className="space-y-5">
               <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
                 <div className="flex items-center gap-2">
                   <FileText className="size-4 text-teal-ink" aria-hidden="true" />
-                  <h2 className="text-sm font-semibold text-navy">Challenge overview</h2>
+                  <h2 className="text-base font-semibold text-navy">Challenge overview</h2>
                 </div>
                 <div className="mt-2">
                   <ExpandableText text={currentVersion.scenario} />
@@ -367,7 +367,7 @@ export default async function ApplicationWorkspacePage({
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <ListChecks className="size-4 text-teal-ink" aria-hidden="true" />
-                    <h2 className="text-sm font-semibold text-navy">Tasks</h2>
+                    <h2 className="text-base font-semibold text-navy">Tasks</h2>
                   </div>
                   <span className="shrink-0 text-xs text-navy/45">
                     {currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"} · {currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`} total
@@ -375,8 +375,8 @@ export default async function ApplicationWorkspacePage({
                 </div>
                 <div className="mt-3 divide-y divide-navy/8">
                   {currentVersion.tasks.map((task, index) => (
-                    <div key={task.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink">{index + 1}</span>
+                    <div key={task.id} className="flex items-start gap-3 py-5 first:pt-0 last:pb-0">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-teal/10 text-sm font-semibold text-teal-ink">{index + 1}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="font-medium text-navy">{task.title}</p>
@@ -392,7 +392,7 @@ export default async function ApplicationWorkspacePage({
               <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
                 <div className="flex items-center gap-2">
                   <Lightbulb className="size-4 text-teal-ink" aria-hidden="true" />
-                  <h2 className="text-sm font-semibold text-navy">What to keep in mind</h2>
+                  <h2 className="text-base font-semibold text-navy">What to keep in mind</h2>
                 </div>
                 <ul className="mt-3 space-y-2">
                   {deriveGuidanceBullets(currentVersion.rubric, currentVersion.submissionRequirements).map((tip) => (
@@ -406,7 +406,7 @@ export default async function ApplicationWorkspacePage({
 
               {latestSubmission && (
                 <section>
-                  <h2 className="text-sm font-semibold text-navy">Your submission</h2>
+                  <h2 className="text-base font-semibold text-navy">Your submission</h2>
                   <SubmissionSummary
                     submission={{ status: latestSubmission.status, submittedAt: latestSubmission.submittedAt }}
                     offer={offer ? { status: offer.status } : null}
@@ -417,12 +417,12 @@ export default async function ApplicationWorkspacePage({
               )}
             </div>
 
-            <div className="space-y-4 lg:sticky lg:top-24 lg:col-span-2 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+            <div className="space-y-5">
               {challengeResources.length > 0 && (
-                <section className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
                   <div className="flex items-center gap-2">
                     <FolderOpen className="size-4 text-teal-ink" aria-hidden="true" />
-                    <h2 className="text-sm font-semibold text-navy">Resources</h2>
+                    <h2 className="text-base font-semibold text-navy">Resources</h2>
                   </div>
                   <p className="mt-0.5 text-xs text-navy/50">Use the resources below to complete the challenge.</p>
                   <div className="mt-3">
@@ -440,21 +440,20 @@ export default async function ApplicationWorkspacePage({
                 </section>
               )}
 
-              {!latestSubmission ? (
-                <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} rubric={currentVersion.rubric} />
-              ) : (
-                currentVersion.rubric.length > 0 && (
-                  <section className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                    <div className="flex items-center gap-2">
-                      <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
-                      <h2 className="text-sm font-semibold text-navy">Evaluation</h2>
-                    </div>
-                    <p className="mt-0.5 text-xs text-navy/50">Your submission was evaluated based on:</p>
-                    <div className="mt-3">
-                      <RubricList rubric={currentVersion.rubric} />
-                    </div>
-                  </section>
-                )
+              {!latestSubmission && (
+                <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} />
+              )}
+
+              {currentVersion.rubric.length > 0 && (
+                <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
+                    <h2 className="text-base font-semibold text-navy">Evaluation criteria</h2>
+                  </div>
+                  <div className="mt-3">
+                    <RubricList rubric={currentVersion.rubric} />
+                  </div>
+                </section>
               )}
 
               <ChallengeNotes applicationId={application.id} />

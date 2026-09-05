@@ -18,7 +18,7 @@ export function ExpandableText({ text }: { text: string }) {
         onClick={() => setExpanded((v) => !v)}
         className="mt-1 text-xs font-medium text-teal-ink hover:underline"
       >
-        {expanded ? "Show less" : "Read more"}
+        {expanded ? "Show less" : "Read more →"}
       </button>
     </div>
   );

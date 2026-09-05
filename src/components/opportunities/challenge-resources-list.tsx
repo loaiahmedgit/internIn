@@ -45,7 +45,7 @@ export function ChallengeResourcesList({ resources }: { resources: ChallengeReso
         const ready = resource.generationStatus === "ready";
         const { Icon, iconClassName, bgClassName } = getArtifactVisual(resource.artifactKind);
         return (
-          <div key={resource.id} className="flex items-center gap-2.5 rounded-lg border border-black/[0.04] bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <div key={resource.id} className="flex items-center gap-2.5 rounded-lg border border-black/[0.04] bg-white px-3 py-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <div className={`flex size-8 shrink-0 items-center justify-center rounded-md ${bgClassName}`}>
               <Icon className={`size-4 ${iconClassName}`} aria-hidden="true" />
             </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, BarChart3, Loader2, Trash2, Upload } from "lucide-react";
+import { ArrowRight, Loader2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,6 @@ import { createClient } from "@/lib/supabase/client";
 import { getSubmissionUploadUrlAction, submitChallengeAction } from "@/lib/opportunities/student-actions";
 import { describeSubmissionRequirement, type SubmissionRequirement } from "@/lib/challenges/submission-model";
 import { formatBytes } from "@/lib/artifact-visual";
-import { RubricList, type RubricCriterion } from "./rubric-list";
 
 interface ArtifactPayload {
   requirementId: string;
@@ -63,21 +62,12 @@ function isSatisfied(requirement: SubmissionRequirement, draft: RequirementDraft
   }
 }
 
-/**
- * Renders as two sibling sections — Submission (requirement inputs) and
- * Evaluation (real rubric + the Submit action) — so the page can lay them
- * out as two separate cards while sharing one draft/validation state,
- * matching the approved Active Challenge reference (Submit lives at the
- * bottom of the Evaluation card, not the Submission card).
- */
 export function ChallengeSubmissionForm({
   applicationId,
   requirements,
-  rubric,
 }: {
   applicationId: string;
   requirements: SubmissionRequirement[];
-  rubric: RubricCriterion[];
 }) {
   const router = useRouter();
   // Lazy initializer, not an effect: reading localStorage here (guarded by
@@ -191,11 +181,11 @@ export function ChallengeSubmissionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="contents">
-      <section className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+    <form onSubmit={handleSubmit}>
+      <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
         <div className="flex items-center gap-2">
           <Upload className="size-4 text-teal-ink" aria-hidden="true" />
-          <h2 className="text-sm font-semibold text-navy">Submission</h2>
+          <h2 className="text-base font-semibold text-navy">Submission</h2>
         </div>
         <p className="mt-0.5 text-xs text-navy/50">Submit the following deliverables when you&apos;re ready.</p>
 
@@ -278,34 +268,22 @@ export function ChallengeSubmissionForm({
 
         <div className="mt-3 border-t border-navy/8 pt-3">
           <label htmlFor="submission-notes" className="text-xs font-medium text-navy/50">
-            Notes for the reviewer <span className="text-navy/35">(optional)</span>
+            Notes for reviewer <span className="text-navy/35">(optional)</span>
           </label>
-          <Textarea id="submission-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1.5 bg-[#f6f8f9] text-sm" />
+          <p className="mt-0.5 text-xs text-navy/50">Anything else you&apos;d like to add?</p>
+          <Textarea id="submission-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add a note (optional)…" rows={2} className="mt-1.5 bg-[#f6f8f9] text-sm" />
         </div>
         {lastSavedAt && (
           <p className="mt-1.5 text-[11px] text-navy/35">Draft saved automatically · Last saved {lastSavedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
         )}
+
+        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+        <Button type="submit" disabled={isPending || !allRequiredSatisfied || uploadingId !== null} className="mt-4 h-11 w-full gap-2 bg-teal text-white hover:bg-teal-ink disabled:bg-navy/10 disabled:text-navy/35">
+          {isPending ? "Submitting…" : "Submit challenge"}
+          {!isPending && <ArrowRight className="size-4" aria-hidden="true" />}
+        </Button>
+        {!allRequiredSatisfied && <p className="mt-1.5 text-center text-xs text-navy/40">Complete all required items to submit.</p>}
       </section>
-
-      {rubric.length > 0 && (
-        <section className="rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
-            <h2 className="text-sm font-semibold text-navy">Evaluation</h2>
-          </div>
-          <p className="mt-0.5 text-xs text-navy/50">Your submission will be evaluated based on:</p>
-          <div className="mt-3">
-            <RubricList rubric={rubric} />
-          </div>
-
-          {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={isPending || !allRequiredSatisfied || uploadingId !== null} className="mt-4 h-11 w-full gap-2 bg-teal text-white hover:bg-teal-ink disabled:bg-navy/10 disabled:text-navy/35">
-            {isPending ? "Submitting…" : "Submit challenge"}
-            {!isPending && <ArrowRight className="size-4" aria-hidden="true" />}
-          </Button>
-          {!allRequiredSatisfied && <p className="mt-1.5 text-center text-xs text-navy/40">Complete all required items to submit.</p>}
-        </section>
-      )}
     </form>
   );
 }
