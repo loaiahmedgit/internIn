@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import {
   updateStudentProfileAction,
@@ -11,7 +12,7 @@ import {
   extractCvAction,
 } from "@/lib/opportunities/student-actions";
 import { STAGE_OPTIONS, type EducationStage } from "@/lib/education-stages";
-import { CalendarClock, FileText, GraduationCap, MapPin, Sparkles, Target, type LucideIcon } from "lucide-react";
+import { CalendarClock, FileText, GraduationCap, MapPin, Sparkles, Target, User, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STAGE_FIELD_LABELS: Record<EducationStage, { institution: string; program: string; year: string }> = {
@@ -390,6 +391,7 @@ type ProfileValues = {
   major: string;
   graduationYear: string;
   location: string;
+  bio: string;
   interests: string;
   opportunityTypes: string;
   skills: string;
@@ -405,7 +407,7 @@ function toList(value: string) {
     .filter((s) => s.length > 0);
 }
 
-type Section = "education" | "preferences" | "skills";
+type Section = "about" | "education" | "preferences" | "skills";
 
 export function StudentProfileForm({
   initial,
@@ -471,6 +473,7 @@ export function StudentProfileForm({
         major: values.major,
         graduationYear: values.graduationYear ? Number(values.graduationYear) : undefined,
         location: values.location,
+        bio: values.bio,
         interests: toList(values.interests),
         opportunityTypes: toList(values.opportunityTypes),
         skills: toList(values.skills),
@@ -510,7 +513,9 @@ export function StudentProfileForm({
   }
 
   function cancelSection(section: Section) {
-    if (section === "education") {
+    if (section === "about") {
+      setValues((v) => ({ ...v, bio: initial.bio }));
+    } else if (section === "education") {
       setValues((v) => ({
         ...v,
         educationStage: initial.educationStage,
@@ -695,6 +700,25 @@ export function StudentProfileForm({
   if (variant === "full") {
     return (
       <div className="mt-6 grid gap-5 lg:grid-cols-12">
+        <SectionCard
+          title="About me"
+          description="A short introduction companies see on your profile"
+          icon={User}
+          className="lg:col-span-12"
+          editing={editingSection === "about"}
+          onEdit={() => setEditingSection("about")}
+          onCancel={() => cancelSection("about")}
+          onSave={saveSection}
+          saving={isPending}
+          view={<p className={cn("text-sm leading-6", values.bio ? "text-navy/72" : "text-navy/40")}>{values.bio || "Not added yet"}</p>}
+        >
+          <div>
+            <label htmlFor="bio" className="text-sm font-medium text-navy">About me</label>
+            <Textarea id="bio" value={values.bio} onChange={(e) => set("bio", e.target.value)} rows={4} maxLength={600} className="mt-1.5" />
+            <p className="mt-1 text-xs text-navy/50">{values.bio.length}/600</p>
+          </div>
+        </SectionCard>
+
         <SectionCard
           title="Education"
           description="Your current education and location"

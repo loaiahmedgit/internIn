@@ -237,6 +237,104 @@ export const studentProfiles = pgTable("student_profiles", {
   availability: text("availability"),
   cvUrl: text("cv_url"),
   cvFileKey: text("cv_file_key"),
+  bio: text("bio"),
+  ...timestamps,
+});
+
+/**
+ * Real, student-editable profile sections beyond the flat fields already on
+ * student_profiles (education stage/university/major/graduationYear stay as
+ * the legacy single-entry fallback used in onboarding/dashboard/the profile
+ * header — student_education below is the new multi-entry list for the
+ * profile page's own Education section). All five tables here share one
+ * shape: student_id, a sort_order the student controls via drag/reorder
+ * later (defaults to insertion order for now), and timestamps. RLS mirrors
+ * student_profiles' own policy exactly (see 0014_secure_public_tables_rls.sql):
+ * the owning student can read/write their own rows; a company member can
+ * only SELECT once a real application links that student to their company.
+ *
+ * type/item_type/level fields below are plain text, not new pg enums — this
+ * matches the codebase's existing convention for taxonomies that keep
+ * growing across every profession internIn supports (see
+ * SUBMISSION_ARTIFACT_KINDS' own comment), not a small fixed set like
+ * offer_status. The UI constrains input with a curated select + "Other".
+ */
+export const studentExperience = pgTable("student_experience", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  studentId: uuid("student_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  organization: text("organization").notNull(),
+  location: text("location"),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  isCurrent: boolean("is_current").notNull().default(false),
+  description: text("description"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps,
+});
+
+/** New multi-entry education list — see this block's own comment above for
+ * why student_profiles' flat education fields stay untouched alongside it. */
+export const studentEducation = pgTable("student_education", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  studentId: uuid("student_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  level: educationStageEnum("level"),
+  institution: text("institution").notNull(),
+  fieldOfStudy: text("field_of_study"),
+  graduationYear: integer("graduation_year"),
+  location: text("location"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps,
+});
+
+export const studentPortfolioItems = pgTable("student_portfolio_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  studentId: uuid("student_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  itemType: text("item_type"),
+  description: text("description"),
+  thumbnailUrl: text("thumbnail_url"),
+  externalUrl: text("external_url"),
+  repositoryUrl: text("repository_url"),
+  skills: jsonb("skills").$type<string[]>().notNull().default([]),
+  dateLabel: text("date_label"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps,
+});
+
+export const studentCertifications = pgTable("student_certifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  studentId: uuid("student_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  issuer: text("issuer").notNull(),
+  issueDate: text("issue_date"),
+  expiryDate: text("expiry_date"),
+  credentialUrl: text("credential_url"),
+  credentialId: text("credential_id"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps,
+});
+
+/** Contact & Links card — flexible label so it fits every profession
+ * (GitHub for developers, Behance/Dribbble for designers, Google Scholar
+ * for researchers, ...) without a fixed enum of link types. */
+export const studentProfileLinks = pgTable("student_profile_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  studentId: uuid("student_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  url: text("url").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps,
 });
 

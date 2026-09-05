@@ -127,6 +127,20 @@
       "when": 1788488129993,
       "tag": "0017_icy_texas_twister",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788621851153,
+      "tag": "0018_clean_synch",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788622097862,
+      "tag": "0019_illegal_kree",
+      "breakpoints": true
     }
   ]
 }

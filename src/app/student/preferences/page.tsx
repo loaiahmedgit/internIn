@@ -34,6 +34,7 @@ export default async function StudentPreferencesPage() {
           major: profile.major ?? "",
           graduationYear: profile.graduationYear ? String(profile.graduationYear) : "",
           location: profile.location ?? "",
+          bio: profile.bio ?? "",
           interests: (profile.interests ?? []).join(", "),
           opportunityTypes: (profile.opportunityTypes ?? []).join(", "),
           skills: (profile.skills ?? []).join(", "),

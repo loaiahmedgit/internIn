@@ -504,6 +504,7 @@ const StudentProfileInputSchema = z.object({
   availability: z.string().trim().max(200).optional(),
   cvUrl: z.string().trim().url().max(2000).optional().or(z.literal("")),
   cvFileKey: z.string().max(500).optional(),
+  bio: z.string().trim().max(600).optional(),
 });
 
 export async function updateStudentProfileAction(input: z.infer<typeof StudentProfileInputSchema>) {
@@ -525,6 +526,7 @@ export async function updateStudentProfileAction(input: z.infer<typeof StudentPr
       availability: validated.availability || null,
       cvUrl: validated.cvUrl || null,
       cvFileKey: validated.cvFileKey || null,
+      bio: validated.bio || null,
       updatedAt: new Date(),
     })
     .where(eq(schema.studentProfiles.userId, user.id));
