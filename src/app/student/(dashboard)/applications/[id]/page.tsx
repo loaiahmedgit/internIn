@@ -154,7 +154,7 @@ export default async function ApplicationWorkspacePage({
   };
 
   return (
-    <div className="mx-auto max-w-[min(94vw,1440px)] px-6 py-10 sm:px-10 sm:py-14 lg:px-12">
+    <div className="mx-auto max-w-[min(94vw,1440px)] px-6 pt-6 pb-10 sm:px-10 sm:pt-8 sm:pb-14 lg:px-12">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-navy/45">
         <Link href="/student/applications" className="hover:text-navy/70 hover:underline">Applications</Link>
         <ChevronRight className="size-3.5" aria-hidden="true" />
@@ -326,7 +326,7 @@ export default async function ApplicationWorkspacePage({
         </div>
       ) : (
         <>
-          <div className="mt-6 flex items-center gap-3">
+          <div className="mt-4 flex items-center gap-3">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-base font-semibold text-teal-ink">
               {application.companyName.charAt(0).toUpperCase()}
             </div>
@@ -340,10 +340,10 @@ export default async function ApplicationWorkspacePage({
             </div>
           </div>
 
-          <h1 className="mt-3 text-balance text-3xl font-bold tracking-[-0.02em] text-navy sm:text-4xl">{currentVersion.title}</h1>
+          <h1 className="mt-2 text-balance text-3xl font-bold tracking-[-0.02em] text-navy sm:text-4xl">{currentVersion.title}</h1>
           <p className="mt-1 text-sm leading-6 text-navy/60">{firstSentence(currentVersion.scenario)}</p>
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-navy/56">
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-navy/56">
             <span className="flex items-center gap-1.5"><Clock3 className="size-4" aria-hidden="true" />{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</span>
             <span className="flex items-center gap-1.5"><ListChecks className="size-4" aria-hidden="true" />{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</span>
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${CHALLENGE_STATUS_LABEL[challengeStatus].style}`}>
@@ -351,9 +351,9 @@ export default async function ApplicationWorkspacePage({
             </span>
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(420px,1fr)] lg:items-start">
-            <div className="space-y-5">
-              <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(420px,1fr)] lg:items-start">
+            <div className="space-y-4">
+              <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
                 <div className="flex items-center gap-2">
                   <FileText className="size-4 text-teal-ink" aria-hidden="true" />
                   <h2 className="text-base font-semibold text-navy">Challenge overview</h2>
@@ -363,7 +363,7 @@ export default async function ApplicationWorkspacePage({
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+              <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <ListChecks className="size-4 text-teal-ink" aria-hidden="true" />
@@ -373,10 +373,10 @@ export default async function ApplicationWorkspacePage({
                     {currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"} · {currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`} total
                   </span>
                 </div>
-                <div className="mt-3 divide-y divide-navy/8">
+                <div className="mt-2 divide-y divide-navy/8">
                   {currentVersion.tasks.map((task, index) => (
-                    <div key={task.id} className="flex items-start gap-3 py-5 first:pt-0 last:pb-0">
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-teal/10 text-sm font-semibold text-teal-ink">{index + 1}</span>
+                    <div key={task.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink">{index + 1}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="font-medium text-navy">{task.title}</p>
@@ -389,12 +389,12 @@ export default async function ApplicationWorkspacePage({
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+              <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
                 <div className="flex items-center gap-2">
                   <Lightbulb className="size-4 text-teal-ink" aria-hidden="true" />
                   <h2 className="text-base font-semibold text-navy">What to keep in mind</h2>
                 </div>
-                <ul className="mt-3 space-y-2">
+                <ul className="mt-2 space-y-1.5">
                   {deriveGuidanceBullets(currentVersion.rubric, currentVersion.submissionRequirements).map((tip) => (
                     <li key={tip} className="flex items-start gap-2 text-sm leading-6 text-navy/68">
                       <span className="mt-2 size-1.5 shrink-0 rounded-full bg-teal-ink" aria-hidden="true" />
@@ -417,15 +417,15 @@ export default async function ApplicationWorkspacePage({
               )}
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-4">
               {challengeResources.length > 0 && (
-                <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
                   <div className="flex items-center gap-2">
                     <FolderOpen className="size-4 text-teal-ink" aria-hidden="true" />
                     <h2 className="text-base font-semibold text-navy">Resources</h2>
                   </div>
                   <p className="mt-0.5 text-xs text-navy/50">Use the resources below to complete the challenge.</p>
-                  <div className="mt-3">
+                  <div className="mt-2">
                     <ChallengeResourcesList
                       resources={challengeResources.map((r) => ({
                         id: r.id,
@@ -445,18 +445,20 @@ export default async function ApplicationWorkspacePage({
               )}
 
               {currentVersion.rubric.length > 0 && (
-                <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
                     <h2 className="text-base font-semibold text-navy">Evaluation criteria</h2>
                   </div>
-                  <div className="mt-3">
+                  <div className="mt-2">
                     <RubricList rubric={currentVersion.rubric} />
                   </div>
                 </section>
               )}
 
-              <ChallengeNotes applicationId={application.id} />
+              <div className="border-t border-navy/8 pt-3">
+                <ChallengeNotes applicationId={application.id} />
+              </div>
             </div>
           </div>
         </>

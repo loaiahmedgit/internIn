@@ -182,14 +182,14 @@ export function ChallengeSubmissionForm({
 
   return (
     <form onSubmit={handleSubmit}>
-      <section className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+      <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
         <div className="flex items-center gap-2">
           <Upload className="size-4 text-teal-ink" aria-hidden="true" />
           <h2 className="text-base font-semibold text-navy">Submission</h2>
         </div>
         <p className="mt-0.5 text-xs text-navy/50">Submit the following deliverables when you&apos;re ready.</p>
 
-        <div className="mt-3 divide-y divide-navy/8">
+        <div className="mt-2 divide-y divide-navy/8">
           {requirements.map((requirement) => {
             const draft = drafts[requirement.id] ?? emptyDraft();
             const uploading = uploadingId === requirement.id;
@@ -207,7 +207,7 @@ export function ChallengeSubmissionForm({
               </div>
             );
             return (
-              <div key={requirement.id} className="py-3 first:pt-0 last:pb-0">
+              <div key={requirement.id} className="py-2.5 first:pt-0 last:pb-0">
                 {isFileMode && draft.files.length === 0 && canAddMore ? (
                   <div className="sm:flex sm:items-start sm:justify-between sm:gap-4">
                     {label}
@@ -289,7 +289,7 @@ export function ChallengeSubmissionForm({
                         <Textarea
                           value={draft.text}
                           onChange={(e) => updateDraft(requirement.id, { text: e.target.value })}
-                          rows={3}
+                          rows={2}
                           placeholder="Write your response…"
                           className="w-full bg-[#f6f8f9] text-sm"
                         />
@@ -302,19 +302,18 @@ export function ChallengeSubmissionForm({
           })}
         </div>
 
-        <div className="mt-3 border-t border-navy/8 pt-3">
-          <label htmlFor="submission-notes" className="text-xs font-medium text-navy/50">
-            Notes for reviewer <span className="text-navy/35">(optional)</span>
+        <div className="mt-2 border-t border-navy/8 pt-2">
+          <label htmlFor="submission-notes" className="text-xs text-navy/45">
+            Notes for reviewer <span className="text-navy/30">(optional)</span> — anything else you&apos;d like to add?
           </label>
-          <p className="mt-0.5 text-xs text-navy/50">Anything else you&apos;d like to add?</p>
-          <Textarea id="submission-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add a note (optional)…" rows={2} className="mt-1.5 w-full bg-[#f6f8f9] text-sm" />
+          <Textarea id="submission-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add a note (optional)…" rows={2} className="mt-1 w-full bg-[#f6f8f9] text-sm" />
         </div>
         {lastSavedAt && (
           <p className="mt-1.5 text-[11px] text-navy/35">Draft saved automatically · Last saved {lastSavedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
         )}
 
-        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-        <Button type="submit" disabled={isPending || !allRequiredSatisfied || uploadingId !== null} className="mt-4 h-11 w-full gap-2 bg-teal text-white hover:bg-teal-ink disabled:bg-navy/10 disabled:text-navy/35">
+        {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+        <Button type="submit" disabled={isPending || !allRequiredSatisfied || uploadingId !== null} className="mt-3 h-11 w-full gap-2 bg-teal text-white hover:bg-teal-ink disabled:bg-navy/10 disabled:text-navy/35">
           {isPending ? "Submitting…" : "Submit challenge"}
           {!isPending && <ArrowRight className="size-4" aria-hidden="true" />}
         </Button>
