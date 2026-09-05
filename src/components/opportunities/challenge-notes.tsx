@@ -46,12 +46,17 @@ export function ChallengeNotes({ applicationId }: { applicationId: string }) {
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
-        className="flex items-center gap-1.5 text-sm font-medium text-navy/50 hover:text-navy"
+        className="flex w-full items-start gap-2 text-left"
         aria-expanded={expanded}
       >
-        <NotebookPen className="size-3.5" aria-hidden="true" />
-        Private notes
-        <ChevronDown className={`size-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
+        <NotebookPen className="mt-0.5 size-3.5 shrink-0 text-navy/45" aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5 text-sm font-medium text-navy/70">
+            Private notes
+            <ChevronDown className={`size-3.5 shrink-0 text-navy/40 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
+          </span>
+          {!expanded && <span className="block text-xs text-navy/45">Only visible to you</span>}
+        </span>
       </button>
       {expanded && (
         <div className="mt-2 rounded-lg border border-navy/10 p-3">

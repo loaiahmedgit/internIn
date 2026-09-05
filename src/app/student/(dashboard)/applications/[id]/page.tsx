@@ -458,6 +458,8 @@ export default async function ApplicationWorkspacePage({
               </ul>
             </section>
 
+            <ChallengeNotes applicationId={application.id} />
+
             {latestSubmission && (
               <section>
                 <h2 className="text-base font-semibold text-navy">Your submission</h2>
@@ -472,9 +474,8 @@ export default async function ApplicationWorkspacePage({
           </div>
 
           {/* RIGHT column — its own independent vertical stack. On mobile
-              only Submission + Private notes render here (Resources/
-              Evaluation are hidden here and shown in their mobile-only
-              position in the left column above instead). */}
+              Resources/Evaluation are hidden here and shown in their
+              mobile-only position in the left column above instead. */}
           <div className="flex flex-col gap-4">
             <div className="hidden lg:flex lg:flex-col lg:gap-4">
               {resourcesCard}
@@ -484,10 +485,6 @@ export default async function ApplicationWorkspacePage({
             {!latestSubmission && (
               <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} />
             )}
-
-            <div className="border-t border-navy/8 pt-3">
-              <ChallengeNotes applicationId={application.id} />
-            </div>
           </div>
         </div>
       )}
