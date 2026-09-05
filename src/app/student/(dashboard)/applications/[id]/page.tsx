@@ -326,139 +326,159 @@ export default async function ApplicationWorkspacePage({
         </div>
       ) : (
         <>
-          <div className="mt-4 flex items-center gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-base font-semibold text-teal-ink">
-              {application.companyName.charAt(0).toUpperCase()}
+          <style>{`
+            .challenge-grid {
+              display: grid;
+              grid-template-columns: 1fr;
+              gap: 1rem;
+              grid-template-areas: "header" "overview" "resources" "evaluation" "tasks" "guidance" "submission" "yoursubmission" "privatenotes";
+            }
+            @media (min-width: 1024px) {
+              .challenge-grid {
+                grid-template-columns: minmax(0, 1.55fr) minmax(420px, 1fr);
+                align-items: start;
+                grid-template-areas:
+                  "header resources"
+                  "overview evaluation"
+                  "tasks submission"
+                  "guidance submission"
+                  "yoursubmission privatenotes";
+              }
+            }
+          `}</style>
+          <div className="challenge-grid mt-4">
+            <div style={{ gridArea: "header" }}>
+              <div className="flex items-center gap-3">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-base font-semibold text-teal-ink">
+                  {application.companyName.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-navy/70">{application.companyName}</p>
+                  <p className="text-sm text-navy/55">
+                    {application.role}
+                    {application.location ? ` · ${application.location}` : ""}
+                    {application.workMode ? ` · ${WORK_MODE_LABEL[application.workMode]}` : ""}
+                  </p>
+                </div>
+              </div>
+
+              <h1 className="mt-2 text-balance text-3xl font-bold tracking-[-0.02em] text-navy sm:text-4xl">{currentVersion.title}</h1>
+              <p className="mt-1 text-sm leading-6 text-navy/60">{firstSentence(currentVersion.scenario)}</p>
+
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-navy/56">
+                <span className="flex items-center gap-1.5"><Clock3 className="size-4" aria-hidden="true" />{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</span>
+                <span className="flex items-center gap-1.5"><ListChecks className="size-4" aria-hidden="true" />{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</span>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${CHALLENGE_STATUS_LABEL[challengeStatus].style}`}>
+                  {CHALLENGE_STATUS_LABEL[challengeStatus].label}
+                </span>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-navy/70">{application.companyName}</p>
-              <p className="text-sm text-navy/55">
-                {application.role}
-                {application.location ? ` · ${application.location}` : ""}
-                {application.workMode ? ` · ${WORK_MODE_LABEL[application.workMode]}` : ""}
-              </p>
-            </div>
-          </div>
 
-          <h1 className="mt-2 text-balance text-3xl font-bold tracking-[-0.02em] text-navy sm:text-4xl">{currentVersion.title}</h1>
-          <p className="mt-1 text-sm leading-6 text-navy/60">{firstSentence(currentVersion.scenario)}</p>
+            <section style={{ gridArea: "overview" }} className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+              <div className="flex items-center gap-2">
+                <FileText className="size-4 text-teal-ink" aria-hidden="true" />
+                <h2 className="text-base font-semibold text-navy">Challenge overview</h2>
+              </div>
+              <div className="mt-2">
+                <ExpandableText text={currentVersion.scenario} />
+              </div>
+            </section>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-navy/56">
-            <span className="flex items-center gap-1.5"><Clock3 className="size-4" aria-hidden="true" />{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</span>
-            <span className="flex items-center gap-1.5"><ListChecks className="size-4" aria-hidden="true" />{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</span>
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${CHALLENGE_STATUS_LABEL[challengeStatus].style}`}>
-              {CHALLENGE_STATUS_LABEL[challengeStatus].label}
-            </span>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(420px,1fr)] lg:items-start">
-            <div className="space-y-4">
-              <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+            {challengeResources.length > 0 && (
+              <section style={{ gridArea: "resources" }} className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
                 <div className="flex items-center gap-2">
-                  <FileText className="size-4 text-teal-ink" aria-hidden="true" />
-                  <h2 className="text-base font-semibold text-navy">Challenge overview</h2>
+                  <FolderOpen className="size-4 text-teal-ink" aria-hidden="true" />
+                  <h2 className="text-base font-semibold text-navy">Resources</h2>
+                </div>
+                <p className="mt-0.5 text-xs text-navy/50">Use the resources below to complete the challenge.</p>
+                <div className="mt-2">
+                  <ChallengeResourcesList
+                    resources={challengeResources.map((r) => ({
+                      id: r.id,
+                      name: r.name,
+                      artifactKind: r.artifactKind,
+                      resourceType: r.resourceType as "file" | "link",
+                      generationStatus: r.generationStatus as "pending" | "generating" | "ready" | "failed" | "requires_upload",
+                      sizeBytes: r.sizeBytes,
+                    }))}
+                  />
+                </div>
+              </section>
+            )}
+
+            {currentVersion.rubric.length > 0 && (
+              <section style={{ gridArea: "evaluation" }} className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
+                  <h2 className="text-base font-semibold text-navy">Evaluation criteria</h2>
                 </div>
                 <div className="mt-2">
-                  <ExpandableText text={currentVersion.scenario} />
+                  <RubricList rubric={currentVersion.rubric} />
                 </div>
               </section>
+            )}
 
-              <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <ListChecks className="size-4 text-teal-ink" aria-hidden="true" />
-                    <h2 className="text-base font-semibold text-navy">Tasks</h2>
-                  </div>
-                  <span className="shrink-0 text-xs text-navy/45">
-                    {currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"} · {currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`} total
-                  </span>
-                </div>
-                <div className="mt-2 divide-y divide-navy/8">
-                  {currentVersion.tasks.map((task, index) => (
-                    <div key={task.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink">{index + 1}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-medium text-navy">{task.title}</p>
-                          <span className="shrink-0 text-xs text-navy/40">~{Math.round(currentVersion.estimatedMinutes / currentVersion.tasks.length)}min</span>
-                        </div>
-                        <p className="mt-0.5 text-sm leading-6 text-navy/60">{task.description}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+            <section style={{ gridArea: "tasks" }} className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <Lightbulb className="size-4 text-teal-ink" aria-hidden="true" />
-                  <h2 className="text-base font-semibold text-navy">What to keep in mind</h2>
+                  <ListChecks className="size-4 text-teal-ink" aria-hidden="true" />
+                  <h2 className="text-base font-semibold text-navy">Tasks</h2>
                 </div>
-                <ul className="mt-2 space-y-1.5">
-                  {deriveGuidanceBullets(currentVersion.rubric, currentVersion.submissionRequirements).map((tip) => (
-                    <li key={tip} className="flex items-start gap-2 text-sm leading-6 text-navy/68">
-                      <span className="mt-2 size-1.5 shrink-0 rounded-full bg-teal-ink" aria-hidden="true" />
-                      <span>{tip}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-
-              {latestSubmission && (
-                <section>
-                  <h2 className="text-base font-semibold text-navy">Your submission</h2>
-                  <SubmissionSummary
-                    submission={{ status: latestSubmission.status, submittedAt: latestSubmission.submittedAt }}
-                    offer={offer ? { status: offer.status } : null}
-                    artifacts={submissionArtifactRows}
-                    deliverables={currentVersion.submissionRequirements.map((r) => r.label)}
-                  />
-                </section>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              {challengeResources.length > 0 && (
-                <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                  <div className="flex items-center gap-2">
-                    <FolderOpen className="size-4 text-teal-ink" aria-hidden="true" />
-                    <h2 className="text-base font-semibold text-navy">Resources</h2>
-                  </div>
-                  <p className="mt-0.5 text-xs text-navy/50">Use the resources below to complete the challenge.</p>
-                  <div className="mt-2">
-                    <ChallengeResourcesList
-                      resources={challengeResources.map((r) => ({
-                        id: r.id,
-                        name: r.name,
-                        artifactKind: r.artifactKind,
-                        resourceType: r.resourceType as "file" | "link",
-                        generationStatus: r.generationStatus as "pending" | "generating" | "ready" | "failed" | "requires_upload",
-                        sizeBytes: r.sizeBytes,
-                      }))}
-                    />
-                  </div>
-                </section>
-              )}
-
-              {!latestSubmission && (
-                <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} />
-              )}
-
-              {currentVersion.rubric.length > 0 && (
-                <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
-                    <h2 className="text-base font-semibold text-navy">Evaluation criteria</h2>
-                  </div>
-                  <div className="mt-2">
-                    <RubricList rubric={currentVersion.rubric} />
-                  </div>
-                </section>
-              )}
-
-              <div className="border-t border-navy/8 pt-3">
-                <ChallengeNotes applicationId={application.id} />
+                <span className="shrink-0 text-xs text-navy/45">
+                  {currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"} · {currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`} total
+                </span>
               </div>
+              <div className="mt-2 divide-y divide-navy/8">
+                {currentVersion.tasks.map((task, index) => (
+                  <div key={task.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal/10 text-xs font-semibold text-teal-ink">{index + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium text-navy">{task.title}</p>
+                        <span className="shrink-0 text-xs text-navy/40">~{Math.round(currentVersion.estimatedMinutes / currentVersion.tasks.length)}min</span>
+                      </div>
+                      <p className="mt-0.5 text-sm leading-6 text-navy/60">{task.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section style={{ gridArea: "guidance" }} className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="size-4 text-teal-ink" aria-hidden="true" />
+                <h2 className="text-base font-semibold text-navy">What to keep in mind</h2>
+              </div>
+              <ul className="mt-2 space-y-1.5">
+                {deriveGuidanceBullets(currentVersion.rubric, currentVersion.submissionRequirements).map((tip) => (
+                  <li key={tip} className="flex items-start gap-2 text-sm leading-6 text-navy/68">
+                    <span className="mt-2 size-1.5 shrink-0 rounded-full bg-teal-ink" aria-hidden="true" />
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {!latestSubmission && (
+              <div style={{ gridArea: "submission" }}>
+                <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} />
+              </div>
+            )}
+
+            {latestSubmission && (
+              <section style={{ gridArea: "yoursubmission" }}>
+                <h2 className="text-base font-semibold text-navy">Your submission</h2>
+                <SubmissionSummary
+                  submission={{ status: latestSubmission.status, submittedAt: latestSubmission.submittedAt }}
+                  offer={offer ? { status: offer.status } : null}
+                  artifacts={submissionArtifactRows}
+                  deliverables={currentVersion.submissionRequirements.map((r) => r.label)}
+                />
+              </section>
+            )}
+
+            <div style={{ gridArea: "privatenotes" }} className="border-t border-navy/8 pt-3">
+              <ChallengeNotes applicationId={application.id} />
             </div>
           </div>
         </>
