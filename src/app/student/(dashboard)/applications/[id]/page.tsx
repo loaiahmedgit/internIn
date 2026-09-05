@@ -153,8 +153,48 @@ export default async function ApplicationWorkspacePage({
     reviewed: { label: "Reviewed", style: "bg-teal/10 text-teal-ink" },
   };
 
+  // Presentational-only (no state) — computed once, referenced twice below:
+  // once in the mobile-only interleaved position (between Overview and
+  // Tasks), once in the desktop-only right column. Two independent flex
+  // columns can't share content at different DOM positions per breakpoint
+  // any other way without CSS Grid rows coupling the two columns' heights
+  // together (the exact bug being fixed here).
+  const resourcesCard = challengeResources.length > 0 && (
+    <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+      <div className="flex items-center gap-2">
+        <FolderOpen className="size-4 text-teal-ink" aria-hidden="true" />
+        <h2 className="text-base font-semibold text-navy">Resources</h2>
+      </div>
+      <p className="mt-0.5 text-xs text-navy/50">Use the resources below to complete the challenge.</p>
+      <div className="mt-2">
+        <ChallengeResourcesList
+          resources={challengeResources.map((r) => ({
+            id: r.id,
+            name: r.name,
+            artifactKind: r.artifactKind,
+            resourceType: r.resourceType as "file" | "link",
+            generationStatus: r.generationStatus as "pending" | "generating" | "ready" | "failed" | "requires_upload",
+            sizeBytes: r.sizeBytes,
+          }))}
+        />
+      </div>
+    </section>
+  );
+
+  const evaluationCard = currentVersion && currentVersion.rubric.length > 0 && (
+    <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+      <div className="flex items-center gap-2">
+        <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
+        <h2 className="text-base font-semibold text-navy">Evaluation criteria</h2>
+      </div>
+      <div className="mt-2">
+        <RubricList rubric={currentVersion.rubric} />
+      </div>
+    </section>
+  );
+
   return (
-    <div className="mx-auto max-w-[min(94vw,1440px)] px-6 pt-6 pb-10 sm:px-10 sm:pt-8 sm:pb-14 lg:px-12">
+    <div className="mx-auto max-w-[min(94vw,1440px)] px-6 pt-6 pb-10 sm:px-10 sm:pt-7 sm:pb-14 lg:px-12">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-navy/45">
         <Link href="/student/applications" className="hover:text-navy/70 hover:underline">Applications</Link>
         <ChevronRight className="size-3.5" aria-hidden="true" />
@@ -325,29 +365,12 @@ export default async function ApplicationWorkspacePage({
           </div>
         </div>
       ) : (
-        <>
-          <style>{`
-            .challenge-grid {
-              display: grid;
-              grid-template-columns: 1fr;
-              gap: 1rem;
-              grid-template-areas: "header" "overview" "resources" "evaluation" "tasks" "guidance" "submission" "yoursubmission" "privatenotes";
-            }
-            @media (min-width: 1024px) {
-              .challenge-grid {
-                grid-template-columns: minmax(0, 1.55fr) minmax(420px, 1fr);
-                align-items: start;
-                grid-template-areas:
-                  "header resources"
-                  "overview evaluation"
-                  "tasks submission"
-                  "guidance submission"
-                  "yoursubmission privatenotes";
-              }
-            }
-          `}</style>
-          <div className="challenge-grid mt-4">
-            <div style={{ gridArea: "header" }}>
+        <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(420px,1fr)] lg:items-start">
+          {/* LEFT column — its own independent vertical stack. Nothing in
+              the right column can ever push these cards down, and vice
+              versa: the two columns share no grid row. */}
+          <div className="flex flex-col gap-4">
+            <div>
               <div className="flex items-center gap-3">
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-base font-semibold text-teal-ink">
                   {application.companyName.charAt(0).toUpperCase()}
@@ -374,7 +397,7 @@ export default async function ApplicationWorkspacePage({
               </div>
             </div>
 
-            <section style={{ gridArea: "overview" }} className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+            <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
               <div className="flex items-center gap-2">
                 <FileText className="size-4 text-teal-ink" aria-hidden="true" />
                 <h2 className="text-base font-semibold text-navy">Challenge overview</h2>
@@ -384,41 +407,17 @@ export default async function ApplicationWorkspacePage({
               </div>
             </section>
 
-            {challengeResources.length > 0 && (
-              <section style={{ gridArea: "resources" }} className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                <div className="flex items-center gap-2">
-                  <FolderOpen className="size-4 text-teal-ink" aria-hidden="true" />
-                  <h2 className="text-base font-semibold text-navy">Resources</h2>
-                </div>
-                <p className="mt-0.5 text-xs text-navy/50">Use the resources below to complete the challenge.</p>
-                <div className="mt-2">
-                  <ChallengeResourcesList
-                    resources={challengeResources.map((r) => ({
-                      id: r.id,
-                      name: r.name,
-                      artifactKind: r.artifactKind,
-                      resourceType: r.resourceType as "file" | "link",
-                      generationStatus: r.generationStatus as "pending" | "generating" | "ready" | "failed" | "requires_upload",
-                      sizeBytes: r.sizeBytes,
-                    }))}
-                  />
-                </div>
-              </section>
+            {/* Mobile-only: Resources + Evaluation interleaved here, between
+                Overview and Tasks. Hidden on desktop, where the same cards
+                render once in the right column below. */}
+            {(resourcesCard || evaluationCard) && (
+              <div className="flex flex-col gap-4 lg:hidden">
+                {resourcesCard}
+                {evaluationCard}
+              </div>
             )}
 
-            {currentVersion.rubric.length > 0 && (
-              <section style={{ gridArea: "evaluation" }} className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
-                  <h2 className="text-base font-semibold text-navy">Evaluation criteria</h2>
-                </div>
-                <div className="mt-2">
-                  <RubricList rubric={currentVersion.rubric} />
-                </div>
-              </section>
-            )}
-
-            <section style={{ gridArea: "tasks" }} className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+            <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <ListChecks className="size-4 text-teal-ink" aria-hidden="true" />
@@ -444,7 +443,7 @@ export default async function ApplicationWorkspacePage({
               </div>
             </section>
 
-            <section style={{ gridArea: "guidance" }} className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+            <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
               <div className="flex items-center gap-2">
                 <Lightbulb className="size-4 text-teal-ink" aria-hidden="true" />
                 <h2 className="text-base font-semibold text-navy">What to keep in mind</h2>
@@ -459,14 +458,8 @@ export default async function ApplicationWorkspacePage({
               </ul>
             </section>
 
-            {!latestSubmission && (
-              <div style={{ gridArea: "submission" }}>
-                <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} />
-              </div>
-            )}
-
             {latestSubmission && (
-              <section style={{ gridArea: "yoursubmission" }}>
+              <section>
                 <h2 className="text-base font-semibold text-navy">Your submission</h2>
                 <SubmissionSummary
                   submission={{ status: latestSubmission.status, submittedAt: latestSubmission.submittedAt }}
@@ -476,12 +469,27 @@ export default async function ApplicationWorkspacePage({
                 />
               </section>
             )}
+          </div>
 
-            <div style={{ gridArea: "privatenotes" }} className="border-t border-navy/8 pt-3">
+          {/* RIGHT column — its own independent vertical stack. On mobile
+              only Submission + Private notes render here (Resources/
+              Evaluation are hidden here and shown in their mobile-only
+              position in the left column above instead). */}
+          <div className="flex flex-col gap-4">
+            <div className="hidden lg:flex lg:flex-col lg:gap-4">
+              {resourcesCard}
+              {evaluationCard}
+            </div>
+
+            {!latestSubmission && (
+              <ChallengeSubmissionForm applicationId={application.id} requirements={currentVersion.submissionRequirements} />
+            )}
+
+            <div className="border-t border-navy/8 pt-3">
               <ChallengeNotes applicationId={application.id} />
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
