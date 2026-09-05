@@ -176,7 +176,24 @@ export function PortfolioEditor({ items }: { items: PortfolioItem[] }) {
             ))}
           </div>
         ) : (
-          <p className="mt-2 text-sm text-navy/55">Show what you&apos;ve built, designed, written, researched, or created.</p>
+          <SheetTrigger onClick={openAdd} className="mt-3 grid w-full grid-cols-2 gap-3 text-left sm:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <span
+                key={i}
+                className={`flex aspect-[4/3] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed ${i === 0 ? "border-teal/30 bg-teal/4" : "border-navy/12 bg-navy/[0.02]"}`}
+              >
+                {i === 0 ? (
+                  <>
+                    <Plus className="size-4 text-teal-ink" aria-hidden="true" />
+                    <span className="px-2 text-center text-xs font-medium text-teal-ink">Add project</span>
+                  </>
+                ) : (
+                  <ImageIcon className="size-4 text-navy/15" aria-hidden="true" />
+                )}
+              </span>
+            ))}
+            <p className="col-span-2 mt-0.5 text-sm text-navy/55 sm:col-span-4">Show what you&apos;ve built, designed, written, researched, or created.</p>
+          </SheetTrigger>
         )}
       </section>
 

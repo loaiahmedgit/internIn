@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { eq, inArray, desc, asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
@@ -19,16 +20,19 @@ import {
 } from "@/components/ui/sheet";
 import {
   Award,
-  BadgeCheck,
+  BarChart3,
   Briefcase,
   CalendarDays,
+  CheckCircle2,
   FileText,
   GraduationCap,
   ImageIcon,
   LayoutGrid,
   MapPin,
   Pencil,
+  ShieldCheck,
   SlidersHorizontal,
+  User,
 } from "lucide-react";
 
 const monthYear = new Intl.DateTimeFormat("en", { month: "short", year: "numeric" });
@@ -44,6 +48,7 @@ type EvidenceItem = {
   companyName: string;
   skills: string[];
   date: Date | null;
+  href: string;
 };
 
 const NAV_ITEMS = [
@@ -54,6 +59,8 @@ const NAV_ITEMS = [
   { href: "#certifications", label: "Certifications", icon: Award },
   { href: "#preferences", label: "Preferences", icon: SlidersHorizontal },
 ];
+
+const cardClass = "rounded-2xl border border-black/[0.05] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_6px_16px_-4px_rgba(16,24,40,0.08)]";
 
 export default async function StudentProfilePage() {
   const { user } = await requireCurrentStudent();
@@ -158,6 +165,7 @@ export default async function StudentProfilePage() {
       companyName: v.companyName,
       skills: v.skillsDemonstrated,
       date: v.verifiedAt,
+      href: "/student/experience",
     })),
     ...submissionRows
       .filter((s) => evidencedSubmissionIds.has(s.id))
@@ -171,6 +179,7 @@ export default async function StudentProfilePage() {
           companyName: application?.companyName ?? "",
           skills: version?.skills ?? [],
           date: s.submittedAt,
+          href: `/student/applications/${s.applicationId}`,
         };
       }),
   ].sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
@@ -182,71 +191,79 @@ export default async function StudentProfilePage() {
   const editTriggerClass =
     "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-navy/12 bg-white px-3.5 text-sm font-medium text-navy transition-colors hover:border-teal/25 hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40";
   const initials = user.fullName.split(/\s+/).map((part) => part.charAt(0)).join("").slice(0, 2).toUpperCase();
+  const railTitle = profile?.major ? `${profile.major} Student` : stageLabel || "Student";
 
   return (
     <Sheet>
-      <div className="mx-auto max-w-[min(94vw,1360px)] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+      <div className="mx-auto w-[calc(100%-48px)] max-w-[1300px] py-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-5">
           {/* --- Left rail ------------------------------------------------ */}
-          <div className="contents lg:flex lg:w-[264px] lg:shrink-0 lg:flex-col lg:gap-6 lg:sticky lg:top-6 lg:self-start">
-            <div className="hidden rounded-2xl border border-black/[0.04] bg-white p-5 text-center shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] lg:block lg:order-1">
-              <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-teal/10 text-lg font-semibold text-teal-ink" aria-hidden="true">
-                {initials}
+          <div className="contents lg:flex lg:w-[258px] lg:shrink-0 lg:flex-col lg:gap-3 lg:sticky lg:top-6 lg:self-start">
+            {/* Identity + section nav — ONE continuous card. */}
+            <div className={`${cardClass} order-2 overflow-hidden lg:order-1`}>
+              <div className="hidden p-5 text-center lg:block">
+                <div className="mx-auto flex size-[76px] items-center justify-center rounded-full bg-teal/10 text-lg font-semibold text-teal-ink" aria-hidden="true">
+                  {initials}
+                </div>
+                <h1 className="mt-3 text-base font-semibold text-navy">{user.fullName}</h1>
+                <p className="mt-0.5 text-sm text-navy/60">{railTitle}</p>
+                {profile?.location && (
+                  <p className="mt-1.5 flex items-center justify-center gap-1 text-xs text-navy/50">
+                    <MapPin className="size-3.5" aria-hidden="true" />
+                    {profile.location}
+                  </p>
+                )}
+                <SheetTrigger className={`${editTriggerClass} mt-4 w-full`}>
+                  <Pencil className="size-3.5" aria-hidden="true" />
+                  Edit profile
+                </SheetTrigger>
               </div>
-              <h1 className="mt-3 text-base font-semibold tracking-[-0.01em] text-navy">{user.fullName}</h1>
-              <p className="mt-0.5 text-sm text-teal-ink">{focus ? `Interested in ${focus}` : stageLabel || "Student"}</p>
-              {profile?.location && (
-                <p className="mt-1.5 flex items-center justify-center gap-1 text-xs text-navy/50">
-                  <MapPin className="size-3.5" aria-hidden="true" />
-                  {profile.location}
-                </p>
-              )}
-              <SheetTrigger className={`${editTriggerClass} mt-4 w-full`}>
-                <Pencil className="size-3.5" aria-hidden="true" />
-                Edit profile
-              </SheetTrigger>
+              <nav aria-label="Profile sections" className="p-2 lg:border-t lg:border-navy/6 lg:pt-2">
+                <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+                  {NAV_ITEMS.map((item, i) => (
+                    <li key={item.href} className="shrink-0 lg:shrink">
+                      <a
+                        href={item.href}
+                        className={
+                          i === 0
+                            ? "flex items-center gap-2.5 rounded-lg bg-teal/8 px-3 py-2 text-sm font-medium text-teal-ink"
+                            : "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-navy/64 transition-colors hover:bg-navy/4"
+                        }
+                      >
+                        <item.icon className="size-4" aria-hidden="true" />
+                        {item.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
             </div>
 
-            <nav aria-label="Profile sections" className="order-2 rounded-2xl border border-black/[0.04] bg-white p-2 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] lg:order-2">
-              <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
-                {NAV_ITEMS.map((item) => (
-                  <li key={item.href} className="shrink-0 lg:shrink">
-                    <a href={item.href} className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-navy/68 transition-colors hover:bg-teal/6 hover:text-teal-ink">
-                      <item.icon className="size-4" aria-hidden="true" />
-                      {item.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-
-            <div className="order-10 lg:order-3">
+            <div className={`${cardClass} order-10 p-4 lg:order-2`}>
               <ProfileLinksEditor items={linkRows} />
             </div>
 
-            <div className="order-12 rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] lg:order-4">
+            <div className={`${cardClass} order-12 p-4 lg:order-3`}>
               <h2 className="text-sm font-semibold text-navy">Resume</h2>
+              <p className="mt-0.5 text-xs text-navy/55">Optional supporting document for your profile.</p>
               {profile?.cvFileKey || profile?.cvUrl ? (
-                <div className="mt-2.5 flex items-center justify-between gap-3">
-                  <span className="flex min-w-0 items-center gap-2">
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center gap-2 rounded-lg bg-[#f6f8f9] px-3 py-2">
                     <FileText className="size-4 shrink-0 text-teal-ink" aria-hidden="true" />
                     <span className="min-w-0 truncate text-sm font-medium text-navy">{profile.cvFileKey ? "CV on file" : "CV link added"}</span>
-                  </span>
+                  </div>
                   {profile.cvUrl ? (
-                    <a href={profile.cvUrl} target="_blank" rel="noreferrer" className="shrink-0 text-sm font-medium text-teal-ink hover:underline">View</a>
+                    <a href={profile.cvUrl} target="_blank" rel="noreferrer" className={`${editTriggerClass} w-full`}>View CV</a>
                   ) : (
-                    <SheetTrigger className="shrink-0 text-sm font-medium text-teal-ink hover:underline">Replace</SheetTrigger>
+                    <SheetTrigger className={`${editTriggerClass} w-full`}>Upload new CV</SheetTrigger>
                   )}
                 </div>
               ) : (
-                <div className="mt-2">
-                  <p className="text-xs text-navy/55">Optional supporting document for your profile.</p>
-                  <SheetTrigger className="mt-1.5 inline-block text-sm font-medium text-teal-ink hover:underline">Add resume →</SheetTrigger>
-                </div>
+                <SheetTrigger className="mt-2 inline-block text-sm font-medium text-teal-ink hover:underline">Add resume →</SheetTrigger>
               )}
             </div>
 
-            <div className="order-13 rounded-2xl border border-black/[0.04] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] lg:order-5">
+            <div className={`${cardClass} order-13 p-4 lg:order-4`}>
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-navy">Profile completeness</h2>
                 <span className="text-sm font-semibold text-teal-ink">{profileCompletion.percent}%</span>
@@ -255,102 +272,95 @@ export default async function StudentProfilePage() {
                 <div className="h-full rounded-full bg-teal transition-[width]" style={{ width: `${profileCompletion.percent}%` }} />
               </div>
               {profileCompletion.missing.length > 0 && profileCompletion.percent < 100 && (
-                <p className="mt-2 text-xs text-navy/50">Next: {profileCompletion.missing[0]}</p>
+                <p className="mt-2 text-xs text-navy/50">
+                  Keep going! Add {profileCompletion.missing.slice(0, 2).join(" and ").toLowerCase()} to complete your profile.
+                </p>
               )}
             </div>
           </div>
 
           {/* --- Main content ----------------------------------------------- */}
-          <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-6">
-            <div className="relative order-1 overflow-hidden rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:p-6 lg:order-1">
-              <div className="pointer-events-none absolute -right-16 -top-16 size-64 rounded-full bg-teal/6 blur-3xl" aria-hidden="true" />
-              <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-3">
+            <div className={`${cardClass} relative order-1 min-h-[196px] overflow-hidden p-5 sm:p-7 lg:order-1`}>
+              <div className="pointer-events-none absolute -right-14 -top-20 size-80 rounded-full bg-teal/12 blur-3xl" aria-hidden="true" />
+              <div className="pointer-events-none absolute -bottom-24 -left-20 size-64 rounded-full bg-teal/8 blur-3xl" aria-hidden="true" />
+              <div className="relative flex h-full flex-col justify-between gap-5 sm:flex-row sm:items-start">
                 <div className="min-w-0">
-                  <h1 className="text-xl font-semibold tracking-[-0.02em] text-navy">{user.fullName}</h1>
+                  <h1 className="text-2xl font-semibold tracking-[-0.02em] text-navy">{user.fullName}</h1>
                   <p className="mt-1 text-sm font-medium text-teal-ink">{focus ? `Interested in ${focus}` : stageLabel || "Student"}</p>
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-navy/56">
+                  {profile?.bio && <p className="mt-2 max-w-xl text-sm leading-6 text-navy/62">{profile.bio}</p>}
+
+                  <div className="mt-3.5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-navy/60">
                     {profile?.major || profile?.university ? (
-                      <span className="flex items-center gap-1.5">
-                        <GraduationCap className="size-3.5" aria-hidden="true" />
-                        {[profile?.major, profile?.university].filter(Boolean).join(" · ")}
+                      <span className="flex items-start gap-2">
+                        <GraduationCap className="mt-0.5 size-4 shrink-0 text-navy/40" aria-hidden="true" />
+                        <span>
+                          {profile?.major && <span className="block text-navy/78">{profile.major}</span>}
+                          {profile?.university && <span className="block text-xs text-navy/50">{profile.university}</span>}
+                        </span>
                       </span>
                     ) : null}
                     {profile?.location ? (
-                      <span className="flex items-center gap-1.5"><MapPin className="size-3.5" aria-hidden="true" />{profile.location}</span>
+                      <span className="flex items-center gap-2"><MapPin className="size-4 shrink-0 text-navy/40" aria-hidden="true" />{profile.location}</span>
                     ) : null}
                     {profile?.availability ? (
-                      <span className="flex items-center gap-1.5"><CalendarDays className="size-3.5" aria-hidden="true" />{profile.availability}</span>
+                      <span className="flex items-center gap-2"><CalendarDays className="size-4 shrink-0 text-navy/40" aria-hidden="true" />{profile.availability}</span>
                     ) : null}
                   </div>
-                  {(stageLabel || opportunityTypes.length > 0) && (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {stageLabel && <span className="rounded-full border border-teal/20 bg-teal/6 px-2.5 py-1 text-xs font-medium text-teal-ink">{stageLabel}</span>}
-                      {opportunityTypes.slice(0, 2).map((t) => (
-                        <span key={t} className="rounded-full border border-navy/8 bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">{t}</span>
+
+                  {opportunityTypes.length > 0 && (
+                    <div className="mt-3.5 flex flex-wrap gap-1.5">
+                      {opportunityTypes.map((t) => (
+                        <span key={t} className="rounded-full border border-navy/8 bg-[#f6f8f9] px-2.5 py-1 text-xs font-medium text-navy/62">{t}</span>
                       ))}
                     </div>
                   )}
                 </div>
-                <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+
+                <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+                  <div className="w-full sm:w-40">
+                    <div className="flex items-center justify-between text-xs text-navy/50">
+                      <span>Profile completion</span>
+                      <span className="font-semibold text-teal-ink">{profileCompletion.percent}%</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-navy/8">
+                      <div className="h-full rounded-full bg-teal transition-[width]" style={{ width: `${profileCompletion.percent}%` }} />
+                    </div>
+                  </div>
                   <SheetTrigger className={editTriggerClass}>
                     <Pencil className="size-3.5" aria-hidden="true" />
                     Edit profile
                   </SheetTrigger>
-                  {profileCompletion.percent < 100 && (
-                    <p className="text-xs text-navy/50">Profile {profileCompletion.percent}% complete</p>
-                  )}
                 </div>
               </div>
             </div>
 
-            <section id="overview" aria-labelledby="about-heading" className="order-3 scroll-mt-24 rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] lg:order-2">
-              <h2 id="about-heading" className="text-base font-semibold text-navy">About me</h2>
+            <section id="overview" aria-labelledby="about-heading" className={`${cardClass} order-3 scroll-mt-24 p-5 lg:order-2`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <User className="size-4 text-teal-ink" aria-hidden="true" />
+                  <h2 id="about-heading" className="text-base font-semibold text-navy">About me</h2>
+                </div>
+                <SheetTrigger className="text-sm font-medium text-teal-ink hover:underline">Edit</SheetTrigger>
+              </div>
               {profile?.bio ? (
                 <p className="mt-2 text-sm leading-6 text-navy/72">{profile.bio}</p>
               ) : (
                 <p className="mt-2 text-sm text-navy/55">
-                  Tell companies who you are. <SheetTrigger className="font-medium text-teal-ink hover:underline">Add a bio →</SheetTrigger>
+                  Tell companies what you&apos;re interested in, what you&apos;re learning, and what kind of work excites you.{" "}
+                  <SheetTrigger className="font-medium text-teal-ink hover:underline">Add bio →</SheetTrigger>
                 </p>
               )}
             </section>
 
-            <section aria-labelledby="evidence-heading" className="order-5 rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] lg:order-3">
-              <h2 id="evidence-heading" className="text-base font-semibold text-navy">Verified work &amp; challenges</h2>
-              {evidence.length > 0 ? (
-                <div className="mt-3 space-y-3">
-                  {evidence.map((item) => (
-                    <div key={item.key} className="rounded-xl border border-navy/10 bg-white p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-navy">{item.title}</p>
-                          <p className="mt-0.5 text-xs text-navy/55">
-                            {item.kind === "internship" ? "Internship" : "Company challenge"}
-                            {item.companyName ? ` · ${item.companyName}` : ""}
-                          </p>
-                        </div>
-                        {item.date && <p className="shrink-0 text-xs text-navy/45">{monthYear.format(item.date)}</p>}
-                      </div>
-                      {item.skills.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {item.skills.slice(0, 6).map((skill) => (
-                            <span key={skill} className="rounded-full border border-navy/7 bg-[#f6f8f9] px-2.5 py-1 text-xs text-navy/58">{skill}</span>
-                          ))}
-                        </div>
-                      )}
-                      <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-teal-ink">
-                        <BadgeCheck className="size-3.5" aria-hidden="true" />
-                        Company verified
-                      </p>
-                    </div>
-                  ))}
+            <section aria-labelledby="skills-heading" className={`${cardClass} order-4 p-5 lg:order-3`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
+                  <h2 id="skills-heading" className="text-base font-semibold text-navy">Skills</h2>
                 </div>
-              ) : (
-                <p className="mt-2 text-sm text-navy/58">Your verified internship work and completed company challenges will appear here as companies review your submissions.</p>
-              )}
-            </section>
-
-            <section aria-labelledby="skills-heading" className="order-4 rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] lg:order-4">
-              <h2 id="skills-heading" className="text-base font-semibold text-navy">Skills</h2>
+                <SheetTrigger className="text-sm font-medium text-teal-ink hover:underline">Edit</SheetTrigger>
+              </div>
               {skills.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {skills.map((skill) => (
@@ -364,16 +374,53 @@ export default async function StudentProfilePage() {
               )}
             </section>
 
-            <div className="order-8 lg:order-5">
-              <PortfolioEditor items={portfolioRows} />
-            </div>
+            <section aria-labelledby="evidence-heading" className={`${cardClass} order-5 p-5 lg:order-4`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="size-4 text-teal-ink" aria-hidden="true" />
+                  <h2 id="evidence-heading" className="text-base font-semibold text-navy">Verified work &amp; challenges</h2>
+                </div>
+                {evidence.length > 0 && (
+                  <Link href="/student/applications" className="text-sm font-medium text-teal-ink hover:underline">View all →</Link>
+                )}
+              </div>
+              {evidence.length > 0 ? (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {evidence.map((item) => (
+                    <div key={item.key} className="rounded-xl border border-navy/8 bg-[#fafcfc] p-4">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-navy">{item.title}</p>
+                          <p className="mt-0.5 text-xs text-navy/55">
+                            {item.kind === "internship" ? "Internship" : "Company challenge"}
+                            {item.companyName ? ` · ${item.companyName}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      {item.date && <p className="mt-2 text-xs text-navy/45">{monthYear.format(item.date)}</p>}
+                      <Link href={item.href} className="mt-2 inline-block text-xs font-medium text-teal-ink hover:underline">View evidence →</Link>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <p className="text-sm text-navy/58">Your completed company challenges and verified internship work will appear here.</p>
+                  <Link href="/student/opportunities" className="mt-1.5 inline-block text-sm font-medium text-teal-ink hover:underline">Explore internships →</Link>
+                </div>
+              )}
+            </section>
 
-            <div className="order-6 lg:order-6">
+            <div className="order-6 lg:order-5">
               <ExperienceEditor items={experienceRows} />
             </div>
 
-            <div className="order-7 lg:order-7">
+            <div className="order-7 lg:order-6">
               <EducationEditor items={educationRows} />
+            </div>
+
+            <div className="order-8 lg:order-7">
+              <PortfolioEditor items={portfolioRows} />
             </div>
 
             <div className="order-9 lg:order-8">
@@ -381,7 +428,7 @@ export default async function StudentProfilePage() {
             </div>
 
             {(interests.length > 0 || opportunityTypes.length > 0) && (
-              <section id="preferences" aria-labelledby="preferences-heading" className="order-11 scroll-mt-24 rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] lg:order-9">
+              <section id="preferences" aria-labelledby="preferences-heading" className={`${cardClass} order-11 scroll-mt-24 p-5 lg:order-9`}>
                 <h2 id="preferences-heading" className="text-base font-semibold text-navy">Preferences</h2>
                 <div className="mt-3 space-y-3">
                   {interests.length > 0 && (

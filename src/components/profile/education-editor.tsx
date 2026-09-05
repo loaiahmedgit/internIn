@@ -83,10 +83,16 @@ export function EducationEditor({ items }: { items: EducationItem[] }) {
             <GraduationCap className="size-4 text-teal-ink" aria-hidden="true" />
             <h2 className="text-base font-semibold text-navy">Education</h2>
           </div>
-          <SheetTrigger onClick={openAdd} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline">
-            <Plus className="size-3.5" aria-hidden="true" />
-            Add education
-          </SheetTrigger>
+          {items.length > 0 ? (
+            <SheetTrigger onClick={() => openEdit(items[0])} className="text-sm font-medium text-teal-ink hover:underline">
+              Edit
+            </SheetTrigger>
+          ) : (
+            <SheetTrigger onClick={openAdd} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline">
+              <Plus className="size-3.5" aria-hidden="true" />
+              Add education
+            </SheetTrigger>
+          )}
         </div>
 
         {items.length > 0 ? (
@@ -94,22 +100,26 @@ export function EducationEditor({ items }: { items: EducationItem[] }) {
             {items.map((item) => (
               <div key={item.id} className="group flex items-start justify-between gap-3 py-3.5 first:pt-0 last:pb-0">
                 <div className="flex items-start gap-2.5 min-w-0">
-                  <GraduationCap className="mt-0.5 size-4 shrink-0 text-navy/35" aria-hidden="true" />
+                  <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-teal/8" aria-hidden="true">
+                    <GraduationCap className="size-3.5 text-teal-ink" />
+                  </span>
                   <div className="min-w-0">
                     <p className="font-medium text-navy">{item.institution}</p>
                     <p className="text-sm text-navy/60">
                       {[item.fieldOfStudy, item.graduationYear ? `Expected ${item.graduationYear}` : null].filter(Boolean).join(" · ")}
                     </p>
-                    {item.location && <p className="mt-0.5 flex items-center gap-1 text-xs text-navy/45"><MapPin className="size-3" aria-hidden="true" />{item.location}</p>}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button type="button" onClick={() => openEdit(item)} aria-label={`Edit ${item.institution}`} className="rounded-md p-1.5 text-navy/40 hover:bg-navy/5 hover:text-teal-ink">
-                    <Pencil className="size-3.5" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => remove(item.id)} aria-label={`Remove ${item.institution}`} className="rounded-md p-1.5 text-navy/40 hover:bg-navy/5 hover:text-destructive">
-                    <Trash2 className="size-3.5" aria-hidden="true" />
-                  </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {item.location && <p className="flex items-center gap-1 text-xs text-navy/45"><MapPin className="size-3" aria-hidden="true" />{item.location}</p>}
+                  <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button type="button" onClick={() => openEdit(item)} aria-label={`Edit ${item.institution}`} className="rounded-md p-1.5 text-navy/40 hover:bg-navy/5 hover:text-teal-ink">
+                      <Pencil className="size-3.5" aria-hidden="true" />
+                    </button>
+                    <button type="button" onClick={() => remove(item.id)} aria-label={`Remove ${item.institution}`} className="rounded-md p-1.5 text-navy/40 hover:bg-navy/5 hover:text-destructive">
+                      <Trash2 className="size-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
