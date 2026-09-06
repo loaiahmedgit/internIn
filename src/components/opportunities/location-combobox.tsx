@@ -44,16 +44,21 @@ export function LocationCombobox({
   onChange,
   placeholder = "Search a city…",
   ariaLabel = "Location",
+  suggestions = COMMON_LOCATIONS,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   ariaLabel?: string;
+  /** Override the suggestion list (e.g. Qatar municipalities + Remote for
+   * Experience location). Defaults to the existing global list — every
+   * current caller keeps its exact current behavior. */
+  suggestions?: readonly string[];
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const exactMatch = COMMON_LOCATIONS.some((l) => l.toLowerCase() === query.trim().toLowerCase());
+  const exactMatch = suggestions.some((l) => l.toLowerCase() === query.trim().toLowerCase());
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -73,7 +78,7 @@ export function LocationCombobox({
           <CommandList>
             <CommandEmpty>No matching city.</CommandEmpty>
             <CommandGroup>
-              {COMMON_LOCATIONS.map((location) => (
+              {suggestions.map((location) => (
                 <CommandItem
                   key={location}
                   value={location}

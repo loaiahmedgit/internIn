@@ -3,22 +3,28 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SheetClose } from "@/components/ui/sheet";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateStudentIdentityAction } from "@/lib/opportunities/student-profile-sections-actions";
+import { MUNICIPALITY_OPTIONS, isMunicipality, type Municipality } from "@/lib/qatar-municipalities";
 
 /**
- * The Edit Profile sheet's ONLY content — about/location/availability.
- * Photo and banner are edited in place on the hero itself (ProfileHeroMedia).
- * Education, skills, portfolio, preferences, and CV each manage themselves
- * elsewhere on the page — this is deliberately small.
+ * The Edit Profile sheet's ONLY content — about + location. Availability
+ * removed (was free text that went stale — structured intent lives in
+ * Preferences' opportunityTypes instead). Photo and banner are edited in
+ * place on the hero itself (ProfileHeroMedia). Education, skills, portfolio,
+ * preferences, and CV each manage themselves elsewhere on the page — this
+ * is deliberately small.
  */
-export function IdentityEditorFields({ bio: initialBio, location: initialLocation, availability: initialAvailability }: { bio: string; location: string; availability: string }) {
+export function IdentityEditorFields({ bio: initialBio, location: initialLocation }: { bio: string; location: string }) {
   const router = useRouter();
   const [bio, setBio] = useState(initialBio);
-  const [location, setLocation] = useState(initialLocation);
-  const [availability, setAvailability] = useState(initialAvailability);
+  // Only pre-select the municipality Select when the stored value is
+  // already one of the 8 canonical values — a legacy/free-text value never
+  // gets forced into the control, and saving About-me alone never sends a
+  // location the server would reject.
+  const [location, setLocation] = useState<Municipality | "">(isMunicipality(initialLocation) ? initialLocation : "");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -27,7 +33,7 @@ export function IdentityEditorFields({ bio: initialBio, location: initialLocatio
     setError(null);
     startTransition(async () => {
       try {
-        await updateStudentIdentityAction({ bio, location, availability });
+        await updateStudentIdentityAction({ bio, ...(location ? { location } : {}) });
         closeRef.current?.click();
         router.refresh();
       } catch (err) {
@@ -45,11 +51,14 @@ export function IdentityEditorFields({ bio: initialBio, location: initialLocatio
       </div>
       <div>
         <label htmlFor="identity-location" className="text-sm font-medium text-navy">Location</label>
-        <Input id="identity-location" value={location} onChange={(e) => setLocation(e.target.value)} className="mt-1.5" />
-      </div>
-      <div>
-        <label htmlFor="identity-availability" className="text-sm font-medium text-navy">Availability</label>
-        <Input id="identity-availability" placeholder="20 hours/week, starting June…" value={availability} onChange={(e) => setAvailability(e.target.value)} className="mt-1.5" />
+        <Select value={location} onValueChange={(v) => setLocation((v as Municipality) || "")}>
+          <SelectTrigger id="identity-location" className="mt-1.5 h-9 w-full">
+            <SelectValue placeholder="Select municipality" />
+          </SelectTrigger>
+          <SelectContent>
+            {MUNICIPALITY_OPTIONS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-2 pt-1">

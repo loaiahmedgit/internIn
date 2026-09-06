@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { updateStudentProfileAction } from "@/lib/opportunities/student-actions";
 import { STAGE_OPTIONS, type EducationStage } from "@/lib/education-stages";
+import { MUNICIPALITY_OPTIONS, isMunicipality } from "@/lib/qatar-municipalities";
+import { QATAR_HIGHER_ED_INSTITUTIONS } from "@/lib/qatar-institutions";
+import { FIELD_OPTIONS, OPPORTUNITY_TYPE_OPTIONS } from "@/lib/opportunity-taxonomy";
 
 const STAGE_FIELD_LABELS: Record<EducationStage, { institution: string; program: string; year: string }> = {
   high_school: { institution: "School", program: "", year: "Expected graduation year" },
@@ -14,51 +17,6 @@ const STAGE_FIELD_LABELS: Record<EducationStage, { institution: string; program:
   vocational: { institution: "Institution", program: "Program", year: "Expected completion year" },
   other: { institution: "", program: "Current education / career stage", year: "" },
 };
-
-// Sourced via Firecrawl from the Ministry of Education and Higher
-// Education's official page (edu.gov.qa/en/Content/HigherEducationinQatar)
-// and cross-verified against MOEHE's own official university-list PDF
-// (dated Jan 2026). Still a static list, not a live scrape at request
-// time — "Other" covers anything renamed/closed since.
-const QATAR_UNIVERSITIES = [
-  // Public
-  "Qatar University",
-  "Community College of Qatar",
-  "Qatar Aeronautical Academy",
-  "University of Doha for Science and Technology",
-  "Qatar Finance and Business Academy (with Northumbria University)",
-  "Qatar Leadership Centre (with Georgetown University)",
-  "Qatar Olympic Academy (with the University of Lleida, Spain)",
-  // Security and military
-  "Ahmed Bin Mohammed Military College",
-  "Al Zaeem Mohamed Bin Abdullah Al Attiyah Air College (with Aix-Marseille University, France)",
-  "Joaan Bin Jassim Academy for Defense Studies",
-  "Police Academy",
-  "Mohammed Bin Ghanem Al Ghanem Maritime Academy (with the University of Western Brittany, France)",
-  "The Cyber Security Academy",
-  // Qatar Foundation, Education City
-  "Hamad Bin Khalifa University",
-  "Georgetown University in Qatar",
-  "Northwestern University in Qatar",
-  "Virginia Commonwealth University School of Design in Qatar",
-  "Texas A&M University at Qatar",
-  "Carnegie Mellon University in Qatar",
-  "HEC Paris, Doha",
-  "Weill Cornell Medicine - Qatar",
-  "Qatar Center for Professional Development",
-  // Private
-  "Al Rayyan International University College (with the University of Derby, UK)",
-  "Doha Institute for Graduate Studies",
-  "AFG College (with the University of Aberdeen, UK)",
-  "University Foundation College",
-  "City University Qatar (with Ulster University, UK)",
-  "Oryx University (with Liverpool John Moores University, UK)",
-  "Lusail University",
-  "Global Studies Institute (with Arkansas State University, USA)",
-  "MIE (with Savitribai Phule Pune University, India)",
-  "The National University of Malaysia (UKM) in Qatar",
-  "Barzan University College (with Swinburne University of Technology, Australia)",
-];
 
 // Sourced via Firecrawl from edarabia.com/schools/qatar/ (a maintained Gulf
 // school directory), not memory-based — still not exhaustive (Qatar has
@@ -92,20 +50,6 @@ const QATAR_SCHOOLS = [
   "A Qatari public/government school",
 ];
 
-const QATAR_CITIES = [
-  "Doha",
-  "Al Rayyan",
-  "Al Wakrah",
-  "Umm Salal",
-  "Al Khor",
-  "Al Daayen",
-  "Al Shamal",
-  "Al Shahaniya",
-  "Dukhan",
-  "Mesaieed",
-  "Lusail",
-];
-
 const MAJORS = [
   "Computer Science",
   "Information Technology",
@@ -130,22 +74,6 @@ const MAJORS = [
   "Human Resources",
   "Education",
 ];
-
-const FIELD_OPTIONS = [
-  "Software Engineering",
-  "Data & Analytics",
-  "Marketing",
-  "Finance",
-  "Design",
-  "Business & Operations",
-  "Sales",
-  "Human Resources",
-  "Research",
-  "Product Management",
-  "Customer Support",
-];
-
-const OPPORTUNITY_TYPE_OPTIONS = ["Internship", "Part-time", "Full-time", "Volunteer"];
 
 const selectClassName =
   "mt-1.5 h-8 w-full rounded-lg border border-gray-cool/60 bg-white px-2.5 text-sm text-navy focus-visible:border-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/30";
@@ -358,7 +286,7 @@ export function StudentProfileForm({
         university: values.university,
         major: values.major,
         graduationYear: values.graduationYear ? Number(values.graduationYear) : undefined,
-        location: values.location,
+        location: isMunicipality(values.location) ? values.location : undefined,
         bio: values.bio,
         interests: toList(values.interests),
         opportunityTypes: toList(values.opportunityTypes),
@@ -389,7 +317,7 @@ export function StudentProfileForm({
 
   const stage = values.educationStage || undefined;
   const stageLabels = stage ? STAGE_FIELD_LABELS[stage] : null;
-  const institutionOptions = stage === "high_school" ? QATAR_SCHOOLS : QATAR_UNIVERSITIES;
+  const institutionOptions = stage === "high_school" ? QATAR_SCHOOLS : [...QATAR_HIGHER_ED_INSTITUTIONS];
 
   const educationFields = (
     <>
@@ -446,13 +374,26 @@ export function StudentProfileForm({
         </div>
       )}
 
-      <SelectWithOther
-        id="location"
-        label="Location"
-        options={QATAR_CITIES}
-        value={values.location}
-        onChange={(v) => set("location", v)}
-      />
+      <div>
+        <label htmlFor="location" className="text-sm font-medium text-navy">
+          Location
+        </label>
+        <select
+          id="location"
+          value={values.location}
+          onChange={(e) => set("location", e.target.value)}
+          className={selectClassName}
+        >
+          <option value="" disabled>
+            Select municipality
+          </option>
+          {MUNICIPALITY_OPTIONS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </div>
     </>
   );
 
@@ -460,13 +401,13 @@ export function StudentProfileForm({
     <>
       <MultiChipSelect
         label="Fields / career areas you're interested in"
-        options={FIELD_OPTIONS}
+        options={[...FIELD_OPTIONS]}
         value={values.interests}
         onChange={(v) => set("interests", v)}
       />
       <MultiChipSelect
         label="Type of opportunities you're looking for"
-        options={OPPORTUNITY_TYPE_OPTIONS}
+        options={[...OPPORTUNITY_TYPE_OPTIONS]}
         value={values.opportunityTypes}
         onChange={(v) => set("opportunityTypes", v)}
       />

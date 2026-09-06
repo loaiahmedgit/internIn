@@ -14,7 +14,7 @@ export interface ProfileLinkItem {
   url: string;
 }
 
-const LABEL_OPTIONS = ["Email", "Phone", "LinkedIn", "GitHub", "Behance", "Dribbble", "Medium", "YouTube", "Website", "Google Scholar"];
+const LABEL_OPTIONS = ["Email", "Phone", "LinkedIn", "GitHub", "Behance", "Dribbble", "Medium", "YouTube", "Google Scholar", "Personal website", "Portfolio website"];
 
 const ICONS: Record<string, LucideIcon> = { Email: Mail, Phone: Phone };
 

@@ -1,12 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Award, Pencil, Plus, Trash2 } from "lucide-react";
+import { Award, FileText, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { deleteCertificationAction, upsertCertificationAction } from "@/lib/opportunities/student-profile-sections-actions";
+import { MonthYearSelect } from "@/components/profile/month-year-select";
+import { createClient } from "@/lib/supabase/client";
+import {
+  deleteCertificationAction,
+  getCertificationAttachmentDownloadUrlAction,
+  getCertificationAttachmentUploadUrlAction,
+  upsertCertificationAction,
+} from "@/lib/opportunities/student-profile-sections-actions";
 
 export interface CertificationItem {
   id: string;
@@ -16,38 +23,97 @@ export interface CertificationItem {
   expiryDate: string | null;
   credentialUrl: string | null;
   credentialId: string | null;
+  attachmentPath: string | null;
+  attachmentFileName: string | null;
 }
 
-function emptyDraft(): Omit<CertificationItem, "id"> {
-  return { name: "", issuer: "", issueDate: "", expiryDate: "", credentialUrl: "", credentialId: "" };
+type Draft = Omit<CertificationItem, "id">;
+
+function emptyDraft(): Draft {
+  return { name: "", issuer: "", issueDate: "", expiryDate: "", credentialUrl: "", credentialId: "", attachmentPath: "", attachmentFileName: "" };
 }
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 export function CertificationsEditor({ items }: { items: CertificationItem[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Omit<CertificationItem, "id">>(emptyDraft());
+  const [draft, setDraft] = useState<Draft>(emptyDraft());
+  const [doesNotExpire, setDoesNotExpire] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function openAdd() {
     setEditingId(null);
     setDraft(emptyDraft());
+    setDoesNotExpire(false);
     setError(null);
     setOpen(true);
   }
 
   function openEdit(item: CertificationItem) {
     setEditingId(item.id);
-    setDraft({ ...item, issueDate: item.issueDate ?? "", expiryDate: item.expiryDate ?? "", credentialUrl: item.credentialUrl ?? "", credentialId: item.credentialId ?? "" });
+    setDraft({
+      name: item.name,
+      issuer: item.issuer,
+      issueDate: item.issueDate ?? "",
+      expiryDate: item.expiryDate ?? "",
+      credentialUrl: item.credentialUrl ?? "",
+      credentialId: item.credentialId ?? "",
+      attachmentPath: item.attachmentPath ?? "",
+      attachmentFileName: item.attachmentFileName ?? "",
+    });
+    setDoesNotExpire(!item.expiryDate && Boolean(item.issueDate));
     setError(null);
     setOpen(true);
   }
 
+  async function handleAttachment(file: File) {
+    if (file.type !== "application/pdf") {
+      setError("Only PDF files are supported for the certificate.");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setError("That file is too large — max 8MB.");
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const { path, token } = await getCertificationAttachmentUploadUrlAction(file.name);
+      const supabase = createClient();
+      const { error: uploadError } = await supabase.storage.from("student-certifications").uploadToSignedUrl(path, token, file);
+      if (uploadError) throw new Error(`Couldn't upload "${file.name}": ${uploadError.message}`);
+      setDraft((d) => ({ ...d, attachmentPath: path, attachmentFileName: file.name }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't upload that file.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function viewAttachment() {
+    if (!editingId) return;
+    setError(null);
+    try {
+      const { url } = await getCertificationAttachmentDownloadUrlAction(editingId);
+      window.open(url, "_blank", "noreferrer");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't open that file.");
+    }
+  }
+
   function save() {
     setError(null);
-    if (!draft.name.trim() || !draft.issuer.trim()) {
-      setError("Name and issuer are required.");
+    if (!draft.name.trim()) {
+      setError("Certification name is required.");
+      return;
+    }
+    if (!draft.issuer.trim()) {
+      setError("Issuer is required.");
       return;
     }
     startTransition(async () => {
@@ -57,9 +123,11 @@ export function CertificationsEditor({ items }: { items: CertificationItem[] }) 
           name: draft.name,
           issuer: draft.issuer,
           issueDate: draft.issueDate || undefined,
-          expiryDate: draft.expiryDate || undefined,
+          expiryDate: doesNotExpire ? undefined : draft.expiryDate || undefined,
           credentialUrl: draft.credentialUrl || undefined,
           credentialId: draft.credentialId || undefined,
+          attachmentPath: draft.attachmentPath || undefined,
+          attachmentFileName: draft.attachmentFileName || undefined,
         });
         setOpen(false);
         router.refresh();
@@ -99,7 +167,10 @@ export function CertificationsEditor({ items }: { items: CertificationItem[] }) 
                   <p className="text-sm text-navy/60">
                     {item.issuer}{item.issueDate ? ` · Issued ${item.issueDate}` : ""}
                   </p>
-                  {item.credentialUrl && <a href={item.credentialUrl} target="_blank" rel="noreferrer" className="mt-0.5 inline-block text-xs font-medium text-teal-ink hover:underline">View credential →</a>}
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {item.credentialUrl && <a href={item.credentialUrl} target="_blank" rel="noreferrer" className="inline-block text-xs font-medium text-teal-ink hover:underline">View credential →</a>}
+                    {item.attachmentFileName && <span className="inline-flex items-center gap-1 text-xs text-navy/50"><FileText className="size-3" aria-hidden="true" />{item.attachmentFileName}</span>}
+                  </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <button type="button" onClick={() => openEdit(item)} aria-label={`Edit ${item.name}`} className="rounded-md p-1.5 text-navy/40 hover:bg-navy/5 hover:text-teal-ink">
@@ -130,16 +201,24 @@ export function CertificationsEditor({ items }: { items: CertificationItem[] }) 
             <label htmlFor="cert-issuer" className="text-sm font-medium text-navy">Issuer</label>
             <Input id="cert-issuer" value={draft.issuer} onChange={(e) => setDraft((d) => ({ ...d, issuer: e.target.value }))} className="mt-1.5" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="cert-issued" className="text-sm font-medium text-navy">Issued (optional)</label>
-              <Input id="cert-issued" placeholder="2026" value={draft.issueDate ?? ""} onChange={(e) => setDraft((d) => ({ ...d, issueDate: e.target.value }))} className="mt-1.5" />
-            </div>
-            <div>
-              <label htmlFor="cert-expiry" className="text-sm font-medium text-navy">Expires (optional)</label>
-              <Input id="cert-expiry" placeholder="2028" value={draft.expiryDate ?? ""} onChange={(e) => setDraft((d) => ({ ...d, expiryDate: e.target.value }))} className="mt-1.5" />
+          <div>
+            <label className="text-sm font-medium text-navy">Issued (optional)</label>
+            <div className="mt-1.5">
+              <MonthYearSelect value={draft.issueDate || null} onChange={(v) => setDraft((d) => ({ ...d, issueDate: v }))} minYear={CURRENT_YEAR - 60} maxYear={CURRENT_YEAR} />
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm text-navy/70">
+            <input type="checkbox" checked={doesNotExpire} onChange={(e) => setDoesNotExpire(e.target.checked)} className="size-3.5 rounded border-navy/30 accent-teal" />
+            This credential does not expire
+          </label>
+          {!doesNotExpire && (
+            <div>
+              <label className="text-sm font-medium text-navy">Expires (optional)</label>
+              <div className="mt-1.5">
+                <MonthYearSelect value={draft.expiryDate || null} onChange={(v) => setDraft((d) => ({ ...d, expiryDate: v }))} minYear={CURRENT_YEAR} maxYear={CURRENT_YEAR + 30} />
+              </div>
+            </div>
+          )}
           <div>
             <label htmlFor="cert-url" className="text-sm font-medium text-navy">Credential URL (optional)</label>
             <Input id="cert-url" type="url" placeholder="https://…" value={draft.credentialUrl ?? ""} onChange={(e) => setDraft((d) => ({ ...d, credentialUrl: e.target.value }))} className="mt-1.5" />
@@ -148,9 +227,42 @@ export function CertificationsEditor({ items }: { items: CertificationItem[] }) 
             <label htmlFor="cert-id" className="text-sm font-medium text-navy">Credential ID (optional)</label>
             <Input id="cert-id" value={draft.credentialId ?? ""} onChange={(e) => setDraft((d) => ({ ...d, credentialId: e.target.value }))} className="mt-1.5" />
           </div>
+          <div>
+            <label className="text-sm font-medium text-navy">Certificate PDF (optional)</label>
+            {draft.attachmentFileName ? (
+              <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-gray-cool/60 bg-white px-2.5 py-2 text-sm text-navy">
+                <FileText className="size-3.5 shrink-0 text-navy/50" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">{draft.attachmentFileName}</span>
+                {editingId && draft.attachmentPath === items.find((i) => i.id === editingId)?.attachmentPath && (
+                  <button type="button" onClick={viewAttachment} className="shrink-0 text-xs font-medium text-teal-ink hover:underline">View</button>
+                )}
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="shrink-0 text-xs font-medium text-teal-ink hover:underline">Replace</button>
+                <button type="button" onClick={() => setDraft((d) => ({ ...d, attachmentPath: "", attachmentFileName: "" }))} aria-label="Remove certificate PDF" className="shrink-0 rounded-md p-1 text-navy/35 hover:bg-navy/5 hover:text-destructive">
+                  <X className="size-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="mt-1.5 flex h-9 w-full items-center gap-1.5 rounded-lg border border-dashed border-gray-cool/60 bg-white px-2.5 text-sm text-navy/55 hover:border-teal/40"
+              >
+                <FileText className="size-3.5" aria-hidden="true" />
+                {uploading ? "Uploading…" : "Upload certificate PDF"}
+              </button>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAttachment(f); e.target.value = ""; }}
+            />
+          </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex items-center gap-2 pt-1">
-            <Button type="button" onClick={save} disabled={isPending} className="h-9 bg-teal text-white hover:bg-teal-ink">{isPending ? "Saving…" : "Save"}</Button>
+            <Button type="button" onClick={save} disabled={isPending || uploading} className="h-9 bg-teal text-white hover:bg-teal-ink">{isPending ? "Saving…" : "Save"}</Button>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending} className="h-9">Cancel</Button>
           </div>
         </div>

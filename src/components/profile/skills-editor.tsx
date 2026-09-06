@@ -4,25 +4,21 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { SkillsCombobox } from "@/components/profile/skills-combobox";
 import { updateStudentSkillsAction } from "@/lib/opportunities/student-profile-sections-actions";
-
-function toList(value: string) {
-  return value.split(",").map((s) => s.trim()).filter(Boolean);
-}
 
 /** Skills manages itself now — the old giant Edit Profile sheet no longer
  * owns this. Only the skills column is ever written here. */
 export function SkillsEditor({ skills }: { skills: string[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(skills.join(", "));
+  const [draft, setDraft] = useState<string[]>(skills);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   function openEdit() {
-    setDraft(skills.join(", "));
+    setDraft(skills);
     setError(null);
     setOpen(true);
   }
@@ -31,7 +27,7 @@ export function SkillsEditor({ skills }: { skills: string[] }) {
     setError(null);
     startTransition(async () => {
       try {
-        await updateStudentSkillsAction(toList(draft));
+        await updateStudentSkillsAction(draft);
         setOpen(false);
         router.refresh();
       } catch (err) {
@@ -69,9 +65,10 @@ export function SkillsEditor({ skills }: { skills: string[] }) {
         </SheetHeader>
         <div className="flex-1 space-y-4 px-5 py-5">
           <div>
-            <label htmlFor="skills-input" className="text-sm font-medium text-navy">Skills</label>
-            <Input id="skills-input" placeholder="Excel, SQL, Figma…" value={draft} onChange={(e) => setDraft(e.target.value)} className="mt-1.5" />
-            <p className="mt-1 text-xs text-navy/50">Comma-separated.</p>
+            <label className="text-sm font-medium text-navy">Skills</label>
+            <div className="mt-1.5">
+              <SkillsCombobox value={draft} onChange={setDraft} />
+            </div>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex items-center gap-2 pt-1">

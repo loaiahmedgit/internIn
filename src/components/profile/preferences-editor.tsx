@@ -7,22 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { updateStudentPreferencesAction } from "@/lib/opportunities/student-profile-sections-actions";
-
-const FIELD_OPTIONS = [
-  "Software Engineering",
-  "Data & Analytics",
-  "Marketing",
-  "Finance",
-  "Design",
-  "Business & Operations",
-  "Sales",
-  "Human Resources",
-  "Research",
-  "Product Management",
-  "Customer Support",
-];
-
-const OPPORTUNITY_TYPE_OPTIONS = ["Internship", "Part-time", "Full-time", "Volunteer"];
+import { FIELD_OPTIONS, OPPORTUNITY_TYPE_OPTIONS } from "@/lib/opportunity-taxonomy";
 
 function toList(value: string) {
   return value.split(",").map((s) => s.trim()).filter(Boolean);
@@ -139,8 +124,8 @@ export function PreferencesEditor({ interests, opportunityTypes }: { interests: 
           <SheetTitle>Edit preferences</SheetTitle>
         </SheetHeader>
         <div className="flex-1 space-y-5 px-5 py-5">
-          <ChipMultiSelect label="Fields / career areas you're interested in" options={FIELD_OPTIONS} value={interestsDraft} onChange={setInterestsDraft} />
-          <ChipMultiSelect label="Type of opportunities you're looking for" options={OPPORTUNITY_TYPE_OPTIONS} value={typesDraft} onChange={setTypesDraft} />
+          <ChipMultiSelect label="Fields / career areas you're interested in" options={[...FIELD_OPTIONS]} value={interestsDraft} onChange={setInterestsDraft} />
+          <ChipMultiSelect label="Type of opportunities you're looking for" options={[...OPPORTUNITY_TYPE_OPTIONS]} value={typesDraft} onChange={setTypesDraft} />
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex items-center gap-2 pt-1">
             <Button type="button" onClick={save} disabled={isPending} className="h-9 bg-teal text-white hover:bg-teal-ink">{isPending ? "Saving…" : "Save"}</Button>

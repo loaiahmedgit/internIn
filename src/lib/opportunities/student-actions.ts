@@ -8,6 +8,7 @@ import { z } from "zod";
 import { classifyApplicationSource } from "@/lib/opportunities/application-source";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SUBMISSION_ARTIFACT_KINDS, SUBMISSION_INPUT_MODES } from "@/lib/challenges/submission-model";
+import { MUNICIPALITY_OPTIONS } from "@/lib/qatar-municipalities";
 
 async function getCompanyContext(opportunityId: string) {
   const db = getDb();
@@ -497,7 +498,7 @@ const StudentProfileInputSchema = z.object({
   university: z.string().trim().max(200).optional(),
   major: z.string().trim().max(200).optional(),
   graduationYear: z.number().int().min(1950).max(2100).optional(),
-  location: z.string().trim().max(200).optional(),
+  location: z.enum(MUNICIPALITY_OPTIONS).optional(),
   interests: z.array(z.string().trim().min(1).max(60)).max(30),
   opportunityTypes: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
   skills: z.array(z.string().trim().min(1).max(60)).max(30),

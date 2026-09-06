@@ -2,25 +2,31 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { GraduationCap, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
+import { GraduationCap, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { InstitutionCombobox } from "@/components/profile/institution-combobox";
+import { YearSelect } from "@/components/profile/month-year-select";
 import { deleteEducationAction, upsertEducationAction } from "@/lib/opportunities/student-profile-sections-actions";
-import { STAGE_OPTIONS, type EducationStage } from "@/lib/education-stages";
+import { EDUCATION_CREDENTIAL_LEVELS, isLegacyCredentialLevel, legacyCredentialLevelDisplay } from "@/lib/education-credential-levels";
+import { QATAR_HIGHER_ED_INSTITUTIONS } from "@/lib/qatar-institutions";
 
 export interface EducationItem {
   id: string;
-  level: EducationStage | null;
+  level: string | null;
   institution: string;
   fieldOfStudy: string | null;
+  isCurrent: boolean;
   graduationYear: number | null;
   location: string | null;
 }
 
 function emptyDraft(): Omit<EducationItem, "id"> {
-  return { level: null, institution: "", fieldOfStudy: "", graduationYear: null, location: "" };
+  return { level: null, institution: "", fieldOfStudy: "", isCurrent: false, graduationYear: null, location: "" };
 }
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 export function EducationEditor({ items }: { items: EducationItem[] }) {
   const router = useRouter();
@@ -39,7 +45,7 @@ export function EducationEditor({ items }: { items: EducationItem[] }) {
 
   function openEdit(item: EducationItem) {
     setEditingId(item.id);
-    setDraft({ ...item, fieldOfStudy: item.fieldOfStudy ?? "", location: item.location ?? "" });
+    setDraft({ ...item, fieldOfStudy: item.fieldOfStudy ?? "" });
     setError(null);
     setOpen(true);
   }
@@ -50,6 +56,10 @@ export function EducationEditor({ items }: { items: EducationItem[] }) {
       setError("Institution is required.");
       return;
     }
+    if (!draft.level) {
+      setError("Education level is required.");
+      return;
+    }
     startTransition(async () => {
       try {
         await upsertEducationAction({
@@ -57,8 +67,8 @@ export function EducationEditor({ items }: { items: EducationItem[] }) {
           level: draft.level ?? undefined,
           institution: draft.institution,
           fieldOfStudy: draft.fieldOfStudy || undefined,
+          isCurrent: draft.isCurrent,
           graduationYear: draft.graduationYear ?? undefined,
-          location: draft.location || undefined,
         });
         setOpen(false);
         router.refresh();
@@ -74,6 +84,9 @@ export function EducationEditor({ items }: { items: EducationItem[] }) {
       router.refresh();
     });
   }
+
+  const isSecondary = draft.level === "secondary";
+  const legacyNote = draft.level && isLegacyCredentialLevel(draft.level) ? legacyCredentialLevelDisplay(draft.level) : null;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -106,12 +119,11 @@ export function EducationEditor({ items }: { items: EducationItem[] }) {
                   <div className="min-w-0">
                     <p className="font-medium text-navy">{item.institution}</p>
                     <p className="text-sm text-navy/60">
-                      {[item.fieldOfStudy, item.graduationYear ? `Expected ${item.graduationYear}` : null].filter(Boolean).join(" · ")}
+                      {[item.fieldOfStudy, item.graduationYear ? `${item.isCurrent ? "Expected" : ""} ${item.graduationYear}`.trim() : null].filter(Boolean).join(" · ")}
                     </p>
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  {item.location && <p className="flex items-center gap-1 text-xs text-navy/45"><MapPin className="size-3" aria-hidden="true" />{item.location}</p>}
                   <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <button type="button" onClick={() => openEdit(item)} aria-label={`Edit ${item.institution}`} className="rounded-md p-1.5 text-navy/40 hover:bg-navy/5 hover:text-teal-ink">
                       <Pencil className="size-3.5" aria-hidden="true" />
@@ -137,33 +149,62 @@ export function EducationEditor({ items }: { items: EducationItem[] }) {
           <div>
             <label className="text-sm font-medium text-navy">Level</label>
             <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {STAGE_OPTIONS.map((opt) => (
+              {EDUCATION_CREDENTIAL_LEVELS.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setDraft((d) => ({ ...d, level: opt.value }))}
+                  onClick={() => setDraft((d) => ({ ...d, level: opt.value, institution: d.level !== opt.value ? "" : d.institution }))}
                   className={`rounded-lg border px-3 py-2 text-sm font-medium ${draft.level === opt.value ? "border-teal bg-teal/5 text-teal" : "border-gray-cool/60 text-navy/60"}`}
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
+            {legacyNote && (
+              <p className="mt-1.5 text-xs text-navy/50">Previous value: {legacyNote} — pick a new level above.</p>
+            )}
           </div>
           <div>
-            <label htmlFor="edu-institution" className="text-sm font-medium text-navy">Institution</label>
-            <Input id="edu-institution" value={draft.institution} onChange={(e) => setDraft((d) => ({ ...d, institution: e.target.value }))} className="mt-1.5" />
+            <label className="text-sm font-medium text-navy">Institution</label>
+            <div className="mt-1.5">
+              {isSecondary ? (
+                <Input
+                  value={draft.institution}
+                  onChange={(e) => setDraft((d) => ({ ...d, institution: e.target.value }))}
+                  placeholder="Search for your school"
+                />
+              ) : (
+                <InstitutionCombobox
+                  value={draft.institution}
+                  onChange={(v) => setDraft((d) => ({ ...d, institution: v }))}
+                  institutions={QATAR_HIGHER_ED_INSTITUTIONS}
+                />
+              )}
+            </div>
           </div>
           <div>
             <label htmlFor="edu-field" className="text-sm font-medium text-navy">Field of study (optional)</label>
             <Input id="edu-field" value={draft.fieldOfStudy ?? ""} onChange={(e) => setDraft((d) => ({ ...d, fieldOfStudy: e.target.value }))} className="mt-1.5" />
           </div>
+          <label className="flex items-center gap-2 text-sm text-navy/70">
+            <input
+              type="checkbox"
+              checked={draft.isCurrent}
+              onChange={(e) => setDraft((d) => ({ ...d, isCurrent: e.target.checked }))}
+              className="size-3.5 rounded border-navy/30 accent-teal"
+            />
+            Currently studying here
+          </label>
           <div>
-            <label htmlFor="edu-year" className="text-sm font-medium text-navy">Graduation year (optional)</label>
-            <Input id="edu-year" type="number" value={draft.graduationYear ?? ""} onChange={(e) => setDraft((d) => ({ ...d, graduationYear: e.target.value ? Number(e.target.value) : null }))} className="mt-1.5" />
-          </div>
-          <div>
-            <label htmlFor="edu-location" className="text-sm font-medium text-navy">Location (optional)</label>
-            <Input id="edu-location" value={draft.location ?? ""} onChange={(e) => setDraft((d) => ({ ...d, location: e.target.value }))} className="mt-1.5" />
+            <label className="text-sm font-medium text-navy">{draft.isCurrent ? "Expected graduation year (optional)" : "Graduation year (optional)"}</label>
+            <div className="mt-1.5">
+              <YearSelect
+                value={draft.graduationYear}
+                onChange={(y) => setDraft((d) => ({ ...d, graduationYear: y }))}
+                minYear={draft.isCurrent ? CURRENT_YEAR : CURRENT_YEAR - 60}
+                maxYear={draft.isCurrent ? CURRENT_YEAR + 8 : CURRENT_YEAR}
+              />
+            </div>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex items-center gap-2 pt-1">

@@ -25,7 +25,6 @@ import {
 import {
   Award,
   Briefcase,
-  CalendarDays,
   CheckCircle2,
   GraduationCap,
   ImageIcon,
@@ -294,9 +293,6 @@ export default async function StudentProfilePage() {
                     {profile?.location ? (
                       <span className="flex items-center gap-2"><MapPin className="size-4 shrink-0 text-navy/40" aria-hidden="true" />{profile.location}</span>
                     ) : null}
-                    {profile?.availability ? (
-                      <span className="flex items-center gap-2"><CalendarDays className="size-4 shrink-0 text-navy/40" aria-hidden="true" />{profile.availability}</span>
-                    ) : null}
                   </div>
 
                   {opportunityTypes.length > 0 && (
@@ -415,10 +411,10 @@ export default async function StudentProfilePage() {
       <SheetContent className="flex flex-col gap-0 overflow-y-auto p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md">
         <SheetHeader className="border-b border-navy/8 px-5 py-4">
           <SheetTitle>Edit profile</SheetTitle>
-          <SheetDescription>About you, your location, and your availability. Companies see this through your profile.</SheetDescription>
+          <SheetDescription>About you and your location. Companies see this through your profile.</SheetDescription>
         </SheetHeader>
         <div className="flex-1 px-5 py-5">
-          <IdentityEditorFields bio={profile?.bio ?? ""} location={profile?.location ?? ""} availability={profile?.availability ?? ""} />
+          <IdentityEditorFields bio={profile?.bio ?? ""} location={profile?.location ?? ""} />
         </div>
       </SheetContent>
     </Sheet>

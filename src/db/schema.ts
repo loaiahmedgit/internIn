@@ -285,9 +285,14 @@ export const studentEducation = pgTable("student_education", {
   studentId: uuid("student_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  level: educationStageEnum("level"),
+  // Plain text, not educationStageEnum — an education ENTRY's credential
+  // level (Secondary/Diploma/Associate/Bachelor's/Master's/Doctorate/Other)
+  // is a different taxonomy than the profile-level educationStage above, and
+  // needs values the enum doesn't have. See this table group's own comment.
+  level: text("level"),
   institution: text("institution").notNull(),
   fieldOfStudy: text("field_of_study"),
+  isCurrent: boolean("is_current").notNull().default(false),
   graduationYear: integer("graduation_year"),
   location: text("location"),
   sortOrder: integer("sort_order").notNull().default(0),
@@ -323,6 +328,11 @@ export const studentCertifications = pgTable("student_certifications", {
   expiryDate: text("expiry_date"),
   credentialUrl: text("credential_url"),
   credentialId: text("credential_id"),
+  // Private student-certifications bucket path (never a public/signed URL —
+  // a signed URL is minted per-request after an ownership check). Optional
+  // student-uploaded evidence; never implies internIn-verified.
+  attachmentPath: text("attachment_path"),
+  attachmentFileName: text("attachment_file_name"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps,
 });

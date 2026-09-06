@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { MonthYearSelect } from "@/components/profile/month-year-select";
+import { LocationCombobox } from "@/components/opportunities/location-combobox";
+import { MUNICIPALITY_OPTIONS } from "@/lib/qatar-municipalities";
 import { deleteExperienceAction, upsertExperienceAction } from "@/lib/opportunities/student-profile-sections-actions";
 
 export interface ExperienceItem {
@@ -21,7 +24,12 @@ export interface ExperienceItem {
   description: string | null;
 }
 
-const TYPE_OPTIONS = ["Job", "Internship", "Volunteering", "Freelance", "Student organization", "Research", "Leadership", "Other"];
+const TYPE_OPTIONS = [
+  "Internship", "Full-time", "Part-time", "Freelance", "Volunteer",
+  "Research", "Student organization / leadership", "Apprenticeship / training", "Other",
+];
+
+const EXPERIENCE_LOCATION_SUGGESTIONS = [...MUNICIPALITY_OPTIONS, "Remote"];
 
 const monthYearFormatter = new Intl.DateTimeFormat("en", { month: "short", year: "numeric" });
 function formatMonth(value: string | null): string {
@@ -31,8 +39,10 @@ function formatMonth(value: string | null): string {
 }
 
 function emptyDraft(): Omit<ExperienceItem, "id"> {
-  return { type: "Job", title: "", organization: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" };
+  return { type: "Internship", title: "", organization: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" };
 }
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 export function ExperienceEditor({ items }: { items: ExperienceItem[] }) {
   const router = useRouter();
@@ -58,8 +68,16 @@ export function ExperienceEditor({ items }: { items: ExperienceItem[] }) {
 
   function save() {
     setError(null);
-    if (!draft.title.trim() || !draft.organization.trim()) {
-      setError("Title and organization are required.");
+    if (!draft.title.trim()) {
+      setError("Title is required.");
+      return;
+    }
+    if (!draft.organization.trim()) {
+      setError("Organization is required.");
+      return;
+    }
+    if (!draft.isCurrent && draft.startDate && draft.endDate && draft.endDate < draft.startDate) {
+      setError("End date must be after start date.");
       return;
     }
     startTransition(async () => {
@@ -130,8 +148,8 @@ export function ExperienceEditor({ items }: { items: ExperienceItem[] }) {
         </SheetHeader>
         <div className="flex-1 space-y-4 px-5 py-5">
           <div>
-            <label className="text-sm font-medium text-navy">Type</label>
-            <select value={draft.type} onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value }))} className="mt-1.5 h-9 w-full rounded-lg border border-gray-cool/60 bg-white px-2.5 text-sm text-navy focus-visible:border-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/30">
+            <label htmlFor="exp-type" className="text-sm font-medium text-navy">Type</label>
+            <select id="exp-type" value={draft.type} onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value }))} className="mt-1.5 h-9 w-full rounded-lg border border-gray-cool/60 bg-white px-2.5 text-sm text-navy focus-visible:border-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/30">
               {TYPE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
             </select>
           </div>
@@ -144,26 +162,37 @@ export function ExperienceEditor({ items }: { items: ExperienceItem[] }) {
             <Input id="exp-org" value={draft.organization} onChange={(e) => setDraft((d) => ({ ...d, organization: e.target.value }))} className="mt-1.5" />
           </div>
           <div>
-            <label htmlFor="exp-location" className="text-sm font-medium text-navy">Location (optional)</label>
-            <Input id="exp-location" value={draft.location ?? ""} onChange={(e) => setDraft((d) => ({ ...d, location: e.target.value }))} className="mt-1.5" />
+            <label className="text-sm font-medium text-navy">Location (optional)</label>
+            <div className="mt-1.5">
+              <LocationCombobox
+                value={draft.location ?? ""}
+                onChange={(v) => setDraft((d) => ({ ...d, location: v }))}
+                suggestions={EXPERIENCE_LOCATION_SUGGESTIONS}
+                placeholder="Doha, Remote, Dubai…"
+              />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="exp-start" className="text-sm font-medium text-navy">Start</label>
-              <input id="exp-start" type="month" value={draft.startDate ?? ""} onChange={(e) => setDraft((d) => ({ ...d, startDate: e.target.value }))} className="mt-1.5 h-9 w-full rounded-lg border border-gray-cool/60 bg-white px-2.5 text-sm text-navy focus-visible:border-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/30" />
+              <label className="text-sm font-medium text-navy">Start</label>
+              <div className="mt-1.5">
+                <MonthYearSelect value={draft.startDate || null} onChange={(v) => setDraft((d) => ({ ...d, startDate: v }))} minYear={CURRENT_YEAR - 60} maxYear={CURRENT_YEAR} />
+              </div>
             </div>
             <div>
-              <label htmlFor="exp-end" className="text-sm font-medium text-navy">End</label>
-              <input id="exp-end" type="month" disabled={draft.isCurrent} value={draft.endDate ?? ""} onChange={(e) => setDraft((d) => ({ ...d, endDate: e.target.value }))} className="mt-1.5 h-9 w-full rounded-lg border border-gray-cool/60 bg-white px-2.5 text-sm text-navy focus-visible:border-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/30 disabled:bg-navy/5 disabled:text-navy/35" />
+              <label className="text-sm font-medium text-navy">End</label>
+              <div className="mt-1.5">
+                <MonthYearSelect value={draft.endDate || null} onChange={(v) => setDraft((d) => ({ ...d, endDate: v }))} minYear={CURRENT_YEAR - 60} maxYear={CURRENT_YEAR} disabled={draft.isCurrent} />
+              </div>
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-navy/70">
-            <input type="checkbox" checked={draft.isCurrent} onChange={(e) => setDraft((d) => ({ ...d, isCurrent: e.target.checked }))} className="size-3.5 rounded border-navy/30 accent-teal" />
+            <input type="checkbox" checked={draft.isCurrent} onChange={(e) => setDraft((d) => ({ ...d, isCurrent: e.target.checked, endDate: e.target.checked ? "" : d.endDate }))} className="size-3.5 rounded border-navy/30 accent-teal" />
             I currently do this
           </label>
           <div>
             <label htmlFor="exp-desc" className="text-sm font-medium text-navy">Description (optional)</label>
-            <Textarea id="exp-desc" value={draft.description ?? ""} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} rows={3} className="mt-1.5" />
+            <Textarea id="exp-desc" value={draft.description ?? ""} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} rows={3} placeholder="Describe what you worked on, contributed, learned, or achieved." className="mt-1.5" />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex items-center gap-2 pt-1">
