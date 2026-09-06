@@ -12,6 +12,7 @@ import { EducationEditor } from "@/components/profile/education-editor";
 import { PortfolioEditor } from "@/components/profile/portfolio-editor";
 import { CertificationsEditor } from "@/components/profile/certifications-editor";
 import { ProfileLinksEditor } from "@/components/profile/profile-links-editor";
+import { PROFILE_SECTION_CLASS, ProfileSectionHeading } from "@/components/profile/profile-section";
 import { STAGE_OPTIONS } from "@/lib/education-stages";
 import { getProfileCompletion } from "@/lib/profile-completion";
 import {
@@ -322,86 +323,75 @@ export default async function StudentProfilePage() {
               </div>
             </div>
 
-            <section id="overview" aria-labelledby="about-heading" className={`${cardClass} order-3 scroll-mt-24 p-5 lg:order-2`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <User className="size-4 text-teal-ink" aria-hidden="true" />
-                  <h2 id="about-heading" className="text-base font-semibold text-navy">About me</h2>
-                </div>
-                <SheetTrigger className="text-sm font-medium text-teal-ink hover:underline">Edit</SheetTrigger>
-              </div>
-              {profile?.bio ? (
-                <p className="mt-2 text-sm leading-6 text-navy/72">{profile.bio}</p>
-              ) : (
-                <p className="mt-2 text-sm text-navy/55">
-                  Tell companies what you&apos;re interested in, what you&apos;re learning, and what kind of work excites you.{" "}
-                  <SheetTrigger className="font-medium text-teal-ink hover:underline">Add bio →</SheetTrigger>
-                </p>
-              )}
-            </section>
-
-            <div className="order-4 lg:order-3">
-              <SkillsEditor skills={profile?.skills ?? []} />
-            </div>
-
-            <section aria-labelledby="evidence-heading" className={`${cardClass} order-5 p-5 lg:order-4`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="size-4 text-teal-ink" aria-hidden="true" />
-                  <h2 id="evidence-heading" className="text-base font-semibold text-navy">Verified work &amp; challenges</h2>
-                </div>
-                {evidence.length > 0 && (
-                  <Link href="/student/applications" className="text-sm font-medium text-teal-ink hover:underline">View all →</Link>
+            {/* ONE continuous profile surface — no per-section floating
+                cards. Each child section shares PROFILE_SECTION_CLASS
+                (padding + bottom border), not its own rounded/shadow/bg. */}
+            <div className={`${cardClass} order-3 overflow-hidden lg:order-2`}>
+              <section id="overview" aria-labelledby="about-heading" className={`scroll-mt-24 ${PROFILE_SECTION_CLASS}`}>
+                <ProfileSectionHeading
+                  icon={User}
+                  title="About me"
+                  headingId="about-heading"
+                  action={<SheetTrigger className="text-sm font-medium text-teal-ink hover:underline">Edit</SheetTrigger>}
+                />
+                {profile?.bio ? (
+                  <p className="mt-2 text-sm leading-6 text-navy/72">{profile.bio}</p>
+                ) : (
+                  <p className="mt-2 text-sm text-navy/55">
+                    Tell companies what you&apos;re interested in, what you&apos;re learning, and what kind of work excites you.{" "}
+                    <SheetTrigger className="font-medium text-teal-ink hover:underline">Add bio →</SheetTrigger>
+                  </p>
                 )}
-              </div>
-              {evidence.length > 0 ? (
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {evidence.map((item) => (
-                    <div key={item.key} className="rounded-xl border border-navy/8 bg-[#fafcfc] p-4">
-                      <div className="flex items-start gap-2">
-                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-navy">{item.title}</p>
-                          <p className="mt-0.5 text-xs text-navy/55">
-                            {item.kind === "internship" ? "Internship" : "Company challenge"}
-                            {item.companyName ? ` · ${item.companyName}` : ""}
-                          </p>
+              </section>
+
+              <SkillsEditor skills={profile?.skills ?? []} />
+
+              <section aria-labelledby="evidence-heading" className={PROFILE_SECTION_CLASS}>
+                <ProfileSectionHeading
+                  icon={ShieldCheck}
+                  title="Verified work & challenges"
+                  headingId="evidence-heading"
+                  action={
+                    evidence.length > 0 && (
+                      <Link href="/student/applications" className="text-sm font-medium text-teal-ink hover:underline">View all →</Link>
+                    )
+                  }
+                />
+                {evidence.length > 0 ? (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {evidence.map((item) => (
+                      <div key={item.key} className="rounded-xl border border-navy/8 bg-[#fafcfc] p-4">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-navy">{item.title}</p>
+                            <p className="mt-0.5 text-xs text-navy/55">
+                              {item.kind === "internship" ? "Internship" : "Company challenge"}
+                              {item.companyName ? ` · ${item.companyName}` : ""}
+                            </p>
+                          </div>
                         </div>
+                        {item.date && <p className="mt-2 text-xs text-navy/45">{monthYear.format(item.date)}</p>}
+                        <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-teal-ink">
+                          <ShieldCheck className="size-3" aria-hidden="true" />
+                          Verified by internIn
+                        </p>
+                        <Link href={item.href} className="mt-1 inline-block text-xs font-medium text-teal-ink hover:underline">View evidence →</Link>
                       </div>
-                      {item.date && <p className="mt-2 text-xs text-navy/45">{monthYear.format(item.date)}</p>}
-                      <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-teal-ink">
-                        <ShieldCheck className="size-3" aria-hidden="true" />
-                        Verified by internIn
-                      </p>
-                      <Link href={item.href} className="mt-1 inline-block text-xs font-medium text-teal-ink hover:underline">View evidence →</Link>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-2">
-                  <p className="text-sm text-navy/58">Your completed company challenges and verified internship work will appear here.</p>
-                  <Link href="/student/opportunities" className="mt-1.5 inline-block text-sm font-medium text-teal-ink hover:underline">Explore internships →</Link>
-                </div>
-              )}
-            </section>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <p className="text-sm text-navy/58">Your completed company challenges and verified internship work will appear here.</p>
+                    <Link href="/student/opportunities" className="mt-1.5 inline-block text-sm font-medium text-teal-ink hover:underline">Explore internships →</Link>
+                  </div>
+                )}
+              </section>
 
-            <div className="order-6 lg:order-5">
               <ExperienceEditor items={experienceRows} />
-            </div>
-
-            <div className="order-7 lg:order-6">
               <EducationEditor items={educationRows} />
-            </div>
-
-            <div className="order-8 lg:order-7">
               <PortfolioEditor items={portfolioRows} />
-            </div>
-
-            <div className="order-9 lg:order-8">
               <CertificationsEditor items={certificationRows} />
-            </div>
-
-            <div className="order-11 lg:order-9">
               <PreferencesEditor interests={interests} opportunityTypes={opportunityTypes} />
             </div>
           </div>

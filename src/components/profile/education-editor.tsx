@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { InstitutionCombobox } from "@/components/profile/institution-combobox";
 import { YearSelect } from "@/components/profile/month-year-select";
+import { PROFILE_SECTION_CLASS, ProfileSectionHeading } from "@/components/profile/profile-section";
 import { deleteEducationAction, upsertEducationAction } from "@/lib/opportunities/student-profile-sections-actions";
 import { EDUCATION_CREDENTIAL_LEVELS, isLegacyCredentialLevel, legacyCredentialLevelDisplay } from "@/lib/education-credential-levels";
 import { QATAR_HIGHER_ED_INSTITUTIONS } from "@/lib/qatar-institutions";
@@ -90,23 +91,23 @@ export function EducationEditor({ items }: { items: EducationItem[] }) {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <section id="education" className="scroll-mt-24 rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <GraduationCap className="size-4 text-teal-ink" aria-hidden="true" />
-            <h2 className="text-base font-semibold text-navy">Education</h2>
-          </div>
-          {items.length > 0 ? (
-            <SheetTrigger onClick={() => openEdit(items[0])} className="text-sm font-medium text-teal-ink hover:underline">
-              Edit
-            </SheetTrigger>
-          ) : (
-            <SheetTrigger onClick={openAdd} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline">
-              <Plus className="size-3.5" aria-hidden="true" />
-              Add education
-            </SheetTrigger>
-          )}
-        </div>
+      <section id="education" className={`scroll-mt-24 ${PROFILE_SECTION_CLASS}`}>
+        <ProfileSectionHeading
+          icon={GraduationCap}
+          title="Education"
+          action={
+            items.length > 0 ? (
+              <SheetTrigger onClick={() => openEdit(items[0])} className="text-sm font-medium text-teal-ink hover:underline">
+                Edit
+              </SheetTrigger>
+            ) : (
+              <SheetTrigger onClick={openAdd} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline">
+                <Plus className="size-3.5" aria-hidden="true" />
+                Add education
+              </SheetTrigger>
+            )
+          }
+        />
 
         {items.length > 0 ? (
           <div className="mt-3 divide-y divide-navy/8">

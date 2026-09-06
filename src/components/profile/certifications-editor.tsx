@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { MonthYearSelect } from "@/components/profile/month-year-select";
+import { PROFILE_SECTION_CLASS, ProfileSectionHeading } from "@/components/profile/profile-section";
 import { createClient } from "@/lib/supabase/client";
 import {
   deleteCertificationAction,
@@ -146,17 +147,17 @@ export function CertificationsEditor({ items }: { items: CertificationItem[] }) 
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <section id="certifications" className="scroll-mt-24 rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Award className="size-4 text-teal-ink" aria-hidden="true" />
-            <h2 className="text-base font-semibold text-navy">Certifications</h2>
-          </div>
-          <SheetTrigger onClick={openAdd} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline">
-            <Plus className="size-3.5" aria-hidden="true" />
-            Add certification
-          </SheetTrigger>
-        </div>
+      <section id="certifications" className={`scroll-mt-24 ${PROFILE_SECTION_CLASS}`}>
+        <ProfileSectionHeading
+          icon={Award}
+          title="Certifications"
+          action={
+            <SheetTrigger onClick={openAdd} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline">
+              <Plus className="size-3.5" aria-hidden="true" />
+              Add certification
+            </SheetTrigger>
+          }
+        />
 
         {items.length > 0 ? (
           <div className="mt-3 divide-y divide-navy/8">

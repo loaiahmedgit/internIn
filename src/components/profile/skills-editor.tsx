@@ -6,6 +6,7 @@ import { BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SkillsCombobox } from "@/components/profile/skills-combobox";
+import { PROFILE_SECTION_CLASS, ProfileSectionHeading } from "@/components/profile/profile-section";
 import { updateStudentSkillsAction } from "@/lib/opportunities/student-profile-sections-actions";
 
 /** Skills manages itself now — the old giant Edit Profile sheet no longer
@@ -38,14 +39,13 @@ export function SkillsEditor({ skills }: { skills: string[] }) {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <section aria-labelledby="skills-heading" className="rounded-2xl border border-black/[0.05] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_6px_16px_-4px_rgba(16,24,40,0.08)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="size-4 text-teal-ink" aria-hidden="true" />
-            <h2 id="skills-heading" className="text-base font-semibold text-navy">Skills</h2>
-          </div>
-          <SheetTrigger onClick={openEdit} className="text-sm font-medium text-teal-ink hover:underline">Edit</SheetTrigger>
-        </div>
+      <section aria-labelledby="skills-heading" className={PROFILE_SECTION_CLASS}>
+        <ProfileSectionHeading
+          icon={BarChart3}
+          title="Skills"
+          headingId="skills-heading"
+          action={<SheetTrigger onClick={openEdit} className="text-sm font-medium text-teal-ink hover:underline">Edit</SheetTrigger>}
+        />
         {skills.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {skills.map((skill) => (

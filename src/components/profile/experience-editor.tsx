@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { MonthYearSelect } from "@/components/profile/month-year-select";
+import { PROFILE_SECTION_CLASS, ProfileSectionHeading } from "@/components/profile/profile-section";
 import { LocationCombobox } from "@/components/opportunities/location-combobox";
 import { MUNICIPALITY_OPTIONS } from "@/lib/qatar-municipalities";
 import { deleteExperienceAction, upsertExperienceAction } from "@/lib/opportunities/student-profile-sections-actions";
@@ -100,17 +101,17 @@ export function ExperienceEditor({ items }: { items: ExperienceItem[] }) {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <section id="experience" className="scroll-mt-24 rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Briefcase className="size-4 text-teal-ink" aria-hidden="true" />
-            <h2 className="text-base font-semibold text-navy">Experience</h2>
-          </div>
-          <SheetTrigger onClick={openAdd} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline">
-            <Plus className="size-3.5" aria-hidden="true" />
-            Add experience
-          </SheetTrigger>
-        </div>
+      <section id="experience" className={`scroll-mt-24 ${PROFILE_SECTION_CLASS}`}>
+        <ProfileSectionHeading
+          icon={Briefcase}
+          title="Experience"
+          action={
+            <SheetTrigger onClick={openAdd} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline">
+              <Plus className="size-3.5" aria-hidden="true" />
+              Add experience
+            </SheetTrigger>
+          }
+        />
 
         {items.length > 0 ? (
           <div className="mt-3 divide-y divide-navy/8">

@@ -6,6 +6,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { PROFILE_SECTION_CLASS, ProfileSectionHeading } from "@/components/profile/profile-section";
 import { updateStudentPreferencesAction } from "@/lib/opportunities/student-profile-sections-actions";
 import { FIELD_OPTIONS, OPPORTUNITY_TYPE_OPTIONS } from "@/lib/opportunity-taxonomy";
 
@@ -85,14 +86,13 @@ export function PreferencesEditor({ interests, opportunityTypes }: { interests: 
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <section id="preferences" aria-labelledby="preferences-heading" className="scroll-mt-24 rounded-2xl border border-black/[0.05] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_6px_16px_-4px_rgba(16,24,40,0.08)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <SlidersHorizontal className="size-4 text-teal-ink" aria-hidden="true" />
-            <h2 id="preferences-heading" className="text-base font-semibold text-navy">Preferences</h2>
-          </div>
-          <SheetTrigger onClick={openEdit} className="text-sm font-medium text-teal-ink hover:underline">Edit</SheetTrigger>
-        </div>
+      <section id="preferences" aria-labelledby="preferences-heading" className={`scroll-mt-24 ${PROFILE_SECTION_CLASS}`}>
+        <ProfileSectionHeading
+          icon={SlidersHorizontal}
+          title="Preferences"
+          headingId="preferences-heading"
+          action={<SheetTrigger onClick={openEdit} className="text-sm font-medium text-teal-ink hover:underline">Edit</SheetTrigger>}
+        />
         {interests.length > 0 || opportunityTypes.length > 0 ? (
           <div className="mt-3 space-y-3">
             {interests.length > 0 && (

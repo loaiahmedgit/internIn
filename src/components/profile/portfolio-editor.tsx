@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { PROFILE_SECTION_CLASS, ProfileSectionHeading } from "@/components/profile/profile-section";
 import { createClient } from "@/lib/supabase/client";
 import {
   deletePortfolioItemAction,
@@ -147,17 +148,17 @@ export function PortfolioEditor({ items }: { items: PortfolioItem[] }) {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <section id="portfolio" className="scroll-mt-24 rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <ImageIcon className="size-4 text-teal-ink" aria-hidden="true" />
-            <h2 className="text-base font-semibold text-navy">Portfolio</h2>
-          </div>
-          <SheetTrigger onClick={openAdd} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline">
-            <Plus className="size-3.5" aria-hidden="true" />
-            Add work
-          </SheetTrigger>
-        </div>
+      <section id="portfolio" className={`scroll-mt-24 ${PROFILE_SECTION_CLASS}`}>
+        <ProfileSectionHeading
+          icon={ImageIcon}
+          title="Portfolio"
+          action={
+            <SheetTrigger onClick={openAdd} className="flex items-center gap-1 text-sm font-medium text-teal-ink hover:underline">
+              <Plus className="size-3.5" aria-hidden="true" />
+              Add work
+            </SheetTrigger>
+          }
+        />
 
         {items.length > 0 ? (
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
