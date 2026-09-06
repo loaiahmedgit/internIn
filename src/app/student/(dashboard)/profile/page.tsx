@@ -201,7 +201,13 @@ export default async function StudentProfilePage() {
       <div className="mx-auto w-[calc(100%-48px)] max-w-[1300px] py-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-5">
           {/* --- Left rail ------------------------------------------------ */}
-          <div className="contents lg:flex lg:w-[258px] lg:shrink-0 lg:flex-col lg:gap-3 lg:sticky lg:top-6 lg:self-start">
+          {/* Sticky on desktop only — top-24 (96px) clears the 72px sticky
+              navbar (header's md:h-[4.5rem]) + ~24px breathing room. The
+              max-height/overflow-y pair only ever engages if the rail's own
+              content genuinely exceeds the remaining viewport height; when
+              it fits (the normal case), overflow-y-auto shows no scrollbar
+              at all — never forced. */}
+          <div className="contents lg:flex lg:w-[258px] lg:shrink-0 lg:flex-col lg:gap-3 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7.5rem)] lg:self-start lg:overflow-y-auto">
             {/* Identity + section nav — ONE continuous card. */}
             <div className={`${cardClass} order-2 overflow-hidden lg:order-1`}>
               <div className="hidden p-5 text-center lg:block">
