@@ -10,7 +10,7 @@ import {
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import type { EvidenceSummary } from "@/lib/company/evidence-summary";
 import type {
   ChallengeResourceType,
@@ -20,6 +20,7 @@ import type {
   SubmissionInputMode,
   SubmissionRequirement,
 } from "@/lib/challenges/submission-model";
+import type { EvidenceLevel } from "@/lib/ai/schemas";
 
 /**
  * Cross-cutting conventions (see docs/ and the approved Phase 1 plan):
@@ -87,6 +88,18 @@ export const roleEvidenceTypeEnum = pgEnum("role_evidence_type", [
   "safety_constraint",
 ]);
 export const roleMappingRelationEnum = pgEnum("role_mapping_relation", ["exact", "narrower", "broader", "related"]);
+/** A challenge's own credential setting — see docs/12-verified-challenge-credentials.md.
+ * `off`: no credential ever issued. `internin_verified`: internIn may issue
+ * a credential once eligibility is met (default for NEW challenges — see
+ * the migration's ADD COLUMN default vs. existing-row backfill, which
+ * deliberately differ). `company_endorsed`: same eligibility, plus the
+ * resulting credential is allowed to show company co-branding. */
+export const credentialPolicyEnum = pgEnum("credential_policy", ["off", "internin_verified", "company_endorsed"]);
+/** A `challenge_credentials` row is only ever created once the derived
+ * eligibility state actually reaches `pending_human_confirmation` or
+ * `issued` — earlier states (not_eligible/pending_evaluation/eligible) are
+ * computed live and never persisted, see `src/lib/credentials/eligibility.ts`. */
+export const credentialStatusEnum = pgEnum("credential_status", ["pending_human_confirmation", "issued", "revoked"]);
 
 // ---------------------------------------------------------------------------
 // Local occupation and role intelligence
@@ -363,6 +376,12 @@ export const companies = pgTable("companies", {
   officeLocations: text("office_locations"),
   contactEmail: text("contact_email"),
   evidenceAiEnabled: boolean("evidence_ai_enabled").notNull().default(true),
+  /** Pre-fill only, copied onto a `challenges` row at creation time — never
+   * read live at eligibility/issuance time. See docs/12 §"New columns on
+   * companies". Changing this after the fact does not retroactively touch
+   * any existing challenge's own policy. */
+  defaultCredentialPolicy: credentialPolicyEnum("default_credential_policy").notNull().default("internin_verified"),
+  defaultRequireHumanConfirmation: boolean("default_require_human_confirmation").notNull().default(false),
   ...timestamps,
 });
 
@@ -449,6 +468,19 @@ export const challenges = pgTable(
       .references(() => opportunities.id, { onDelete: "cascade" }),
     status: challengeStatusEnum("status").notNull().default("draft"),
     currentVersionId: uuid("current_version_id"),
+    // Credential policy — operational config, lives here (not on
+    // challenge_versions) so a company can flip it without minting a new
+    // immutable version. See docs/12-verified-challenge-credentials.md.
+    // The column-level default below (`internin_verified`) is what NEW rows
+    // get; the migration explicitly backfills existing rows to `off` first
+    // — see 0023's own comment for why those two must differ.
+    credentialPolicy: credentialPolicyEnum("credential_policy").notNull().default("internin_verified"),
+    requireHumanConfirmation: boolean("require_human_confirmation").notNull().default(false),
+    /** Only meaningful when credentialPolicy is `company_endorsed`. */
+    showCompanyLogo: boolean("show_company_logo").notNull().default(false),
+    /** Reserved for the future Integrity Engine (Phase 8) — always null and
+     * never enforced today; a standard credential never requires proctoring. */
+    requiredIntegrityMode: text("required_integrity_mode"),
     ...timestamps,
   },
   (t) => [index("challenges_opportunity_idx").on(t.opportunityId)],
@@ -640,6 +672,84 @@ export const candidateEvidence = pgTable("candidate_evidence", {
   evidenceSummary: jsonb("evidence_summary").$type<EvidenceSummary | null>(),
   ...timestamps,
 });
+
+/**
+ * One row = one credential that has actually reached
+ * `pending_human_confirmation` or `issued` — see credentialStatusEnum's own
+ * comment for why earlier states (not_eligible/pending_evaluation/eligible)
+ * never get a row. See docs/12-verified-challenge-credentials.md for the
+ * full architecture and docs/12's endorsement-model correction for why
+ * `company_endorsed`/`companyEndorsedAt` are live, mutable facts here
+ * (withdrawable) rather than something frozen only in `policySnapshot`.
+ *
+ * `policySnapshot` is the immutable historical record of what governed
+ * issuance; `companyEndorsed` is the current, possibly-since-withdrawn
+ * live fact — they can disagree on purpose (e.g. issued under
+ * company_endorsed, later withdrawn: policySnapshot still says
+ * company_endorsed, companyEndorsed is now false). `status` (issued/
+ * revoked) and `companyEndorsed` are independent axes — revoking the base
+ * credential and withdrawing endorsement are two different actions that
+ * never imply each other.
+ */
+export const challengeCredentials = pgTable(
+  "challenge_credentials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "restrict" }),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => submissions.id, { onDelete: "restrict" }),
+    /** Pins the exact rubric content this credential was evaluated against — never re-derived from the live challenge. */
+    challengeVersionId: uuid("challenge_version_id")
+      .notNull()
+      .references(() => challengeVersions.id, { onDelete: "restrict" }),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "restrict" }),
+    status: credentialStatusEnum("status").notNull(),
+    /** Immutable historical record of the policy that governed this specific issuance attempt — never read for live display. */
+    policySnapshot: jsonb("policy_snapshot").$type<{
+      policy: "internin_verified" | "company_endorsed";
+      requireHumanConfirmation: boolean;
+      showCompanyLogo: boolean;
+    }>().notNull(),
+    /** Live, mutable fact — true once endorsed, flips back to false on withdrawal. See this table's own comment. */
+    companyEndorsed: boolean("company_endorsed").notNull().default(false),
+    companyEndorsedAt: timestamp("company_endorsed_at", { withTimezone: true }),
+    endorsementWithdrawnAt: timestamp("endorsement_withdrawn_at", { withTimezone: true }),
+    endorsementWithdrawalReason: text("endorsement_withdrawal_reason"),
+    displayTitle: text("display_title").notNull(),
+    companyDisplayName: text("company_display_name").notNull(),
+    skillsSnapshot: jsonb("skills_snapshot").$type<string[]>().notNull().default([]),
+    /** [{criterion, level}] only — never the rationale/evidenceQuote, which stay private in candidate_evidence. */
+    rubricSnapshot: jsonb("rubric_snapshot").$type<{ criterion: string; level: EvidenceLevel }[]>().notNull().default([]),
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+    /** Human-shareable identifier, e.g. INTERNIN-CH-7F4K2P — the only public lookup key, never the row's own uuid. */
+    verificationCode: text("verification_code").notNull().unique(),
+    isPubliclyShared: boolean("is_publicly_shared").notNull().default(false),
+    publiclySharedAt: timestamp("publicly_shared_at", { withTimezone: true }),
+    issuedAt: timestamp("issued_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedByUserId: uuid("revoked_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    revocationReasonInternal: text("revocation_reason_internal"),
+    revocationReasonPublic: text("revocation_reason_public"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    ...timestamps,
+  },
+  (t) => [
+    index("challenge_credentials_student_idx").on(t.studentId),
+    index("challenge_credentials_company_idx").on(t.companyId),
+    index("challenge_credentials_application_idx").on(t.applicationId),
+    // Enforces "one canonical active credential per submission" (§23 of the
+    // architecture doc) — a revoked row doesn't block a fresh issuance.
+    uniqueIndex("challenge_credentials_submission_active_uidx").on(t.submissionId).where(sql`revoked_at is null`),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Internship offer & program
