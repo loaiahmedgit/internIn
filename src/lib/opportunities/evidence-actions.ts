@@ -4,6 +4,7 @@ import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { compareCandidatesAction } from "@/lib/ai/actions";
 import { evaluateCandidateEvidence } from "@/lib/company/evidence-evaluation";
+import { issueCredentialForSubmission } from "@/lib/credentials/issuance";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -103,6 +104,17 @@ export async function generateCandidateEvidenceAction(submissionId: string) {
     eventType: "evidence_generated",
     actorUserId: user.id,
   });
+
+  // Best-effort — the natural real trigger for "evaluation just completed"
+  // (docs/12 §9/§18). Never lets a credential-issuance hiccup affect the
+  // evidence generation this action already succeeded at, same pattern as
+  // sendNotificationEvent's own internal try/catch (src/lib/inngest/client.ts).
+  try {
+    await issueCredentialForSubmission(submission.id, user.id);
+  } catch (error) {
+    console.error(`[credentials] issuance attempt failed for submission ${submission.id} — evidence generation already succeeded and is not affected:`, error);
+  }
+
   revalidatePath(`/company/candidates/${application.id}`);
   revalidatePath(`/company/submissions/${submission.id}`);
   return evidence.id as string;

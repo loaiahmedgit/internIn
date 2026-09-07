@@ -65,6 +65,16 @@ export async function issueCredentialForSubmission(submissionId: string, actorUs
         policySnapshot,
         companyEndorsed: status === "issued" && isEndorsedPolicy,
         companyEndorsedAt: status === "issued" && isEndorsedPolicy ? now : null,
+        // v1 privacy model (Phase 4B, locked decision): "unlisted by link" —
+        // the random verification_code is the only gate, no separate
+        // opt-in toggle exists yet. Set true at creation so the row is
+        // resolvable via /verify/[code] as soon as it's actually issued
+        // (the public lookup itself still checks status !== 'pending_human_confirmation'
+        // — a not-yet-issued row is never publicly resolvable regardless of
+        // this flag). Kept as a real column, not hardcoded true at read
+        // time, so a future "make private" toggle has something to flip.
+        isPubliclyShared: true,
+        publiclySharedAt: now,
         displayTitle: context.challengeVersion.title,
         companyDisplayName: context.companyDisplayName,
         skillsSnapshot: context.challengeVersion.skills,

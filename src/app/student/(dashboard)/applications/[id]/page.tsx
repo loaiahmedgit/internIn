@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BarChart3, ChevronRight, Clock3, FileText, FolderOpen, Lightbulb, ListChecks } from "lucide-react";
+import { BarChart3, ChevronRight, Clock3, FileText, FolderOpen, Lightbulb, ListChecks, ShieldCheck } from "lucide-react";
 import { eq, and, desc, asc, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
@@ -13,6 +13,8 @@ import { StartChallengeButton } from "@/components/opportunities/start-challenge
 import { ChallengeNotes } from "@/components/opportunities/challenge-notes";
 import { RubricInline, RubricList } from "@/components/opportunities/rubric-list";
 import { deriveGuidanceBullets, firstSentence, summarizeSubmissionRequirements, summarizeTaskTitles } from "@/lib/challenges/summaries";
+import { loadCredentialContext, toEligibilityInput } from "@/lib/credentials/credential-data";
+import { computeCredentialEligibility } from "@/lib/credentials/eligibility";
 
 const WORK_MODE_LABEL: Record<"remote" | "onsite" | "hybrid", string> = {
   remote: "Remote",
@@ -50,6 +52,7 @@ export default async function ApplicationWorkspacePage({
     .select({
       id: schema.applications.id,
       opportunityId: schema.applications.opportunityId,
+      status: schema.applications.status,
       challengeStartedAt: schema.applications.challengeStartedAt,
       role: schema.opportunities.role,
       location: schema.opportunities.location,
@@ -72,6 +75,31 @@ export default async function ApplicationWorkspacePage({
     db.select().from(schema.challenges).where(eq(schema.challenges.opportunityId, application.opportunityId)).limit(1),
     db.select().from(schema.submissions).where(eq(schema.submissions.applicationId, application.id)).orderBy(desc(schema.submissions.submittedAt)).limit(1),
   ]);
+
+  // Post-challenge credential state (docs/12 §18/§19) — read-only, no
+  // write on this GET (issuance itself is triggered elsewhere, at
+  // generateCandidateEvidenceAction). Independent of application.status by
+  // construction: a declined/withdrawn application still shows an issued
+  // credential normally (§17), just with slightly different framing copy.
+  let credentialPanel: { kind: "pending" | "awaiting_confirmation" | "issued"; credentialId?: string; demonstratedCriteria?: string[] } | null = null;
+  if (latestSubmission) {
+    const credentialContext = await loadCredentialContext(latestSubmission.id);
+    if (credentialContext) {
+      const eligibility = computeCredentialEligibility(toEligibilityInput(credentialContext));
+      if (eligibility.state === "pending_evaluation") credentialPanel = { kind: "pending" };
+      else if (eligibility.state === "pending_human_confirmation") credentialPanel = { kind: "awaiting_confirmation" };
+      else if (eligibility.state === "issued") {
+        credentialPanel = {
+          kind: "issued",
+          credentialId: eligibility.existingCredentialId,
+          demonstratedCriteria: eligibility.demonstratedCriteria.map((c) => c.criterion),
+        };
+      }
+      // not_eligible / eligible (transient, never persisted) / revoked —
+      // no panel at all, per instruction: never a misleading empty state.
+    }
+  }
+  const isNonSelected = application.status === "declined" || application.status === "withdrawn";
 
   const program =
     offer?.status === "accepted"
@@ -469,6 +497,34 @@ export default async function ApplicationWorkspacePage({
                   artifacts={submissionArtifactRows}
                   deliverables={currentVersion.submissionRequirements.map((r) => r.label)}
                 />
+              </section>
+            )}
+
+            {credentialPanel && (
+              <section className="rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="size-4 text-teal-ink" aria-hidden="true" />
+                  <h2 className="text-base font-semibold text-navy">Challenge credential</h2>
+                </div>
+                {credentialPanel.kind === "pending" && <p className="mt-1.5 text-sm text-navy/64">Your work is being evaluated.</p>}
+                {credentialPanel.kind === "awaiting_confirmation" && <p className="mt-1.5 text-sm text-navy/64">Your challenge credential is awaiting confirmation.</p>}
+                {credentialPanel.kind === "issued" && (
+                  <>
+                    <p className="mt-1.5 text-sm text-navy/64">
+                      {isNonSelected ? "Your challenge credential remains part of your verified work." : "You earned a Verified Challenge Credential."}
+                    </p>
+                    {credentialPanel.demonstratedCriteria && credentialPanel.demonstratedCriteria.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {credentialPanel.demonstratedCriteria.slice(0, 4).map((criterion) => (
+                          <span key={criterion} className="rounded-full border border-navy/10 bg-[#fafcfc] px-2 py-0.5 text-[11px] text-navy/65">{criterion}</span>
+                        ))}
+                      </div>
+                    )}
+                    <Link href={`/student/credentials/${credentialPanel.credentialId}`} className="mt-2 inline-block text-sm font-medium text-teal-ink hover:underline">
+                      View credential →
+                    </Link>
+                  </>
+                )}
               </section>
             )}
           </div>
