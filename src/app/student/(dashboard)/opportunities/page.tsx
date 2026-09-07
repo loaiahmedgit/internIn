@@ -44,7 +44,18 @@ export default async function StudentOpportunitiesPage({
     getSavedOpportunityIds(user.id),
   ]);
 
-  const locations = Array.from(new Set(opportunities.map((o) => o.location))).sort();
+  // Strips a trailing ", Qatar" and trims — a plain substring removal (not
+  // the Postgres TRIM(TRAILING ...) character-set gotcha from the profile
+  // migration incident), so "Doha" and "Doha, Qatar" canonicalize to the
+  // same value instead of listing as two separate, confusing filter options.
+  const canonicalLocation = (raw: string) => raw.trim().replace(/,\s*Qatar$/i, "").trim();
+  const locations = Array.from(
+    opportunities.reduce((byKey, o) => {
+      const key = canonicalLocation(o.location).toLowerCase();
+      if (!byKey.has(key)) byKey.set(key, canonicalLocation(o.location));
+      return byKey;
+    }, new Map<string, string>()).values(),
+  ).sort();
   // Case-insensitive dedupe (keeps the first-seen casing) so "3 months" and
   // "3 Months" don't show up as two separate, confusing filter options.
   const durations = Array.from(
@@ -57,12 +68,15 @@ export default async function StudentOpportunitiesPage({
   const categories = Array.from(new Set(opportunities.map((o) => o.department).filter((d): d is string => Boolean(d)))).sort();
   const filtered = opportunities.filter((o) => {
     if (q && !`${o.role} ${o.companyName} ${o.skills.join(" ")}`.toLowerCase().includes(q)) return false;
-    if (location && o.location !== location) return false;
+    if (location && canonicalLocation(o.location).toLowerCase() !== location.toLowerCase()) return false;
     if (category && o.department !== category) return false;
     if (duration && o.duration !== duration) return false;
     if (workMode && o.workMode !== workMode) return false;
+    // Contiguous, gap-free buckets — every non-negative hoursPerWeek value
+    // matches exactly one bucket (the old "11to20" left hoursPerWeek === 10
+    // matching neither "under10" nor itself).
     if (hoursBucket === "under10" && o.hoursPerWeek >= 10) return false;
-    if (hoursBucket === "11to20" && (o.hoursPerWeek < 11 || o.hoursPerWeek > 20)) return false;
+    if (hoursBucket === "10to20" && (o.hoursPerWeek < 10 || o.hoursPerWeek > 20)) return false;
     if (hoursBucket === "21to30" && (o.hoursPerWeek < 21 || o.hoursPerWeek > 30)) return false;
     if (hoursBucket === "over30" && o.hoursPerWeek <= 30) return false;
     if (savedOnly && !savedIds.has(o.id)) return false;
@@ -179,7 +193,7 @@ export default async function StudentOpportunitiesPage({
           <select id="opportunity-hours" name="hours" defaultValue={hoursBucket} className="h-9 rounded-full border border-navy/10 bg-white px-3 text-sm text-navy/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40">
             <option value="">Any hours/week</option>
             <option value="under10">Up to 10h/week</option>
-            <option value="11to20">11–20h/week</option>
+            <option value="10to20">10–20h/week</option>
             <option value="21to30">21–30h/week</option>
             <option value="over30">30h/week+</option>
           </select>

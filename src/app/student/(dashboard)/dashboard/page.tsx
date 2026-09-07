@@ -11,7 +11,8 @@ import { getProfileCompletion } from "@/lib/profile-completion";
 import { HomeOpportunityCard } from "@/components/student/home-opportunity-card";
 import { NewThisWeekCard } from "@/components/student/new-this-week-card";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, CheckCircle2, Circle } from "lucide-react";
+import { SURFACE_CARD_CLASS } from "@/lib/ui-surface";
+import { ArrowRight } from "lucide-react";
 
 /** Display-only capitalization for a first name — never touches the stored value. */
 function toDisplayName(name: string): string {
@@ -101,11 +102,26 @@ export default async function StudentDashboardPage() {
   );
 
   const profileCompletion = getProfileCompletion(profile);
-  const profileSteps = [
-    { key: "skills", label: "Add skills", done: (profile?.skills.length ?? 0) > 0 },
-    { key: "cv", label: "Add CV", done: Boolean(profile?.cvFileKey || profile?.cvUrl) },
-    { key: "interests", label: "Add interests", done: (profile?.interests.length ?? 0) > 0 },
+  // Same source of truth as the ring — no separate hardcoded checklist. CV
+  // can never appear here since getProfileCompletion's own CHECKS never
+  // includes it (intentionally: internIn isn't CV-first). Order favors the
+  // fields that build a strong profile without traditional employment
+  // history, per product priority — not the order CHECKS happens to run in.
+  const MISSING_CHIP_PRIORITY = [
+    "About me",
+    "Skills",
+    "Education stage",
+    "University or school",
+    "Major or field of study",
+    "Portfolio",
+    "Experience",
+    "Location",
+    "Interests",
   ];
+  const profileSteps = [...profileCompletion.missing]
+    .sort((a, b) => MISSING_CHIP_PRIORITY.indexOf(a) - MISSING_CHIP_PRIORITY.indexOf(b))
+    .slice(0, 3)
+    .map((label) => ({ key: label, label }));
 
   const appliedOpportunityIds = new Set(applications.map((a) => a.opportunityId));
   const notApplied = opportunities.filter((o) => !appliedOpportunityIds.has(o.id));
@@ -168,7 +184,7 @@ export default async function StudentDashboardPage() {
           vertically centered in the card; the illustration is absolutely
           anchored to the bottom-right so it shares the text block's visual
           center instead of floating in its own half. */}
-      <section className="relative overflow-hidden rounded-2xl border border-black/[0.04] bg-white px-6 py-6 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:px-9 lg:h-[224px] lg:px-10">
+      <section className={`relative overflow-hidden px-6 py-6 sm:px-9 lg:h-[224px] lg:px-10 ${SURFACE_CARD_CLASS}`}>
         <div className="relative z-[1] flex h-full max-w-lg flex-col justify-center lg:max-w-[52%]">
           <p className="text-base font-semibold text-teal-ink">Hi {firstName}</p>
           <h1 className="mt-1.5 text-balance text-2xl font-bold tracking-[-0.03em] text-navy sm:text-[1.875rem] sm:leading-[1.15]">
@@ -194,7 +210,7 @@ export default async function StudentDashboardPage() {
       {/* Level up your profile */}
       {profileCompletion.percent < 100 && (
         <section aria-labelledby="profile-nudge-heading" className="mt-8">
-          <div className="flex flex-col gap-5 rounded-2xl border border-black/[0.04] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className={`flex flex-col gap-5 px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between ${SURFACE_CARD_CLASS}`}>
             <div className="flex min-w-0 items-center gap-4">
               <svg viewBox="0 0 52 52" className="size-12 shrink-0 -rotate-90" aria-hidden="true">
                 <circle cx="26" cy="26" r={PROFILE_RING_RADIUS} className="fill-none stroke-navy/8" strokeWidth="4" />
@@ -214,23 +230,15 @@ export default async function StudentDashboardPage() {
                   <span className="tabular-nums text-teal-ink">{profileCompletion.percent}%</span>
                   Level up your profile
                 </p>
-                <p className="mt-0.5 max-w-sm text-sm leading-5 text-navy/58">Add skills, CV and interests to get better matches and stand out to companies.</p>
+                <p className="mt-0.5 max-w-sm text-sm leading-5 text-navy/58">Add a few more details to get better matches and stand out to companies.</p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {profileSteps.map((step, index) => (
-                <div key={step.key} className="flex items-center gap-2">
-                  <span className={`flex items-center gap-1.5 text-sm font-medium ${step.done ? "text-navy" : "text-navy/45"}`}>
-                    {step.done ? (
-                      <CheckCircle2 className="size-4 fill-teal text-white" aria-hidden="true" />
-                    ) : (
-                      <Circle className="size-4 text-navy/25" aria-hidden="true" />
-                    )}
-                    {step.label}
-                  </span>
-                  {index < profileSteps.length - 1 && <span className="text-navy/25" aria-hidden="true">›</span>}
-                </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {profileSteps.map((step) => (
+                <span key={step.key} className="rounded-full bg-navy/5 px-2.5 py-1 text-xs font-medium text-navy/68">
+                  {step.label}
+                </span>
               ))}
             </div>
 
@@ -278,7 +286,7 @@ export default async function StudentDashboardPage() {
       {visibleContinueItems.length > 0 && (
         <section aria-labelledby="continue-heading" className="mt-9">
           <h2 id="continue-heading" className="text-lg font-semibold tracking-[-0.02em] text-navy">Continue where you left off</h2>
-          <div className="mt-4 divide-y divide-navy/8 overflow-hidden rounded-2xl border border-black/[0.04] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)]">
+          <div className={`mt-4 divide-y divide-navy/8 overflow-hidden ${SURFACE_CARD_CLASS}`}>
             {visibleContinueItems.map((item) => (
               <div key={item.key} className="flex items-center justify-between gap-4 px-5 py-3.5">
                 <div className="flex min-w-0 items-center gap-3">
