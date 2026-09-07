@@ -15,21 +15,38 @@ function notesStorageKey(applicationId: string) {
  * reviewer" field (which IS submitted with the application).
  */
 export function ChallengeNotes({ applicationId }: { applicationId: string }) {
-  const [value, setValue] = useState(() => {
-    if (typeof window === "undefined") return "";
-    try {
-      return localStorage.getItem(notesStorageKey(applicationId)) ?? "";
-    } catch {
-      return "";
-    }
-  });
+  // Real bug fixed here (same pattern as ChallengeSubmissionForm's own
+  // documented fix): a lazy initializer branching on `typeof window` reads
+  // localStorage during the CLIENT's first render but not the server's —
+  // that's a hydration mismatch (both `value` and the `expanded` state that
+  // derives from it). Render the same empty/collapsed state on both, then
+  // restore after mount.
+  const [value, setValue] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
-  // Collapsed by default so an unused scratch pad never lengthens the
-  // sidebar — a student who already jotted something down (non-empty on
-  // first render) sees it expanded so the note isn't hidden away.
-  const [expanded, setExpanded] = useState(() => value.trim().length > 0);
 
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(notesStorageKey(applicationId)) ?? "";
+        setValue(saved);
+        // Collapsed by default so an unused scratch pad never lengthens the
+        // sidebar — a student who already jotted something down sees it
+        // expanded so the note isn't hidden away.
+        if (saved.trim().length > 0) setExpanded(true);
+      } catch {
+        // A corrupt/unreadable note just means starting fresh — never fatal.
+      } finally {
+        setHydrated(true);
+      }
+    }, 0);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
     const timeout = setTimeout(() => {
       try {
         localStorage.setItem(notesStorageKey(applicationId), value);
@@ -39,7 +56,7 @@ export function ChallengeNotes({ applicationId }: { applicationId: string }) {
       }
     }, 500);
     return () => clearTimeout(timeout);
-  }, [applicationId, value]);
+  }, [applicationId, value, hydrated]);
 
   return (
     <div>
