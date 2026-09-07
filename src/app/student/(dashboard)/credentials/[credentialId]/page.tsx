@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeCheck, Ban, ChevronLeft } from "lucide-react";
+import { BadgeCheck, Ban, ChevronLeft, Download } from "lucide-react";
 import { requireCurrentStudent } from "@/lib/auth";
 import { getOwnedCredentialDetail } from "@/lib/credentials/student-credential-data";
 import { getSiteUrl } from "@/lib/site-url";
 import { CopyVerificationLinkButton } from "@/components/credentials/copy-verification-link-button";
+import { AddToLinkedInDialog } from "@/components/credentials/add-to-linkedin-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -85,8 +86,32 @@ export default async function StudentCredentialDetailPage({ params }: { params: 
           </dl>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-2 border-t border-navy/8 pt-5">
-          <CopyVerificationLinkButton url={verificationUrl} />
+        <div className="mt-6 border-t border-navy/8 pt-5">
+          <div className="flex flex-wrap gap-2">
+            <CopyVerificationLinkButton url={verificationUrl} />
+            {/* Download/LinkedIn only for a currently-valid credential — the
+                verification link stays the authority either way (§21/§23):
+                a revoked credential must never produce a fresh
+                valid-looking PDF or be offered for new sharing. */}
+            {isValid && credential.issuedAt && (
+              <>
+                <a
+                  href={`/student/credentials/${credential.id}/pdf`}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-navy/12 bg-white px-3.5 text-sm font-medium text-navy transition-colors hover:border-teal/25 hover:text-teal-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+                >
+                  <Download className="size-3.5" aria-hidden="true" />
+                  Download PDF
+                </a>
+                <AddToLinkedInDialog
+                  credentialName={`Verified Challenge Credential — ${credential.displayTitle}`}
+                  issueDateLabel={monthYear.format(credential.issuedAt)}
+                  credentialId={credential.verificationCode}
+                  credentialUrl={verificationUrl}
+                />
+              </>
+            )}
+          </div>
+          {!isValid && <p className="mt-3 text-xs text-navy/50">This credential has been revoked. It is no longer downloadable or shareable to new profiles.</p>}
         </div>
       </div>
     </div>

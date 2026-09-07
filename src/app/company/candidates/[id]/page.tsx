@@ -4,6 +4,9 @@ import { getCurrentUser, getCurrentCompanyMembership } from "@/lib/auth";
 import { getCandidateDetail } from "@/lib/company/candidate-detail-data";
 import { candidateInsights } from "@/lib/company/candidate-insights";
 import { AiEvidenceSummary } from "@/components/company/ai-evidence-summary";
+import { CredentialReviewPanel } from "@/components/company/credential-review-panel";
+import { loadCredentialContext, toEligibilityInput } from "@/lib/credentials/credential-data";
+import { computeCredentialEligibility } from "@/lib/credentials/eligibility";
 import { stageKeyOf, STAGE_LABEL, STAGE_CLASS } from "@/lib/company/candidate-stage";
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { CandidateActionsPanel } from "@/components/company/candidate-actions-panel";
@@ -80,6 +83,22 @@ export default async function CandidateProfilePage({
 
   const candidate = await getCandidateDetail(id, membership.company.id);
   if (!candidate) notFound();
+
+  // Read-only — no write on this GET (issuance itself happens elsewhere,
+  // right after evidence generation). getCandidateDetail already scoped
+  // this submission to membership.company.id above, so no separate
+  // ownership re-check is needed here.
+  const credentialContext = candidate.submission ? await loadCredentialContext(candidate.submission.id) : null;
+  const credentialEligibility = credentialContext ? computeCredentialEligibility(toEligibilityInput(credentialContext)) : null;
+  // The existing-row short-circuit in computeCredentialEligibility always
+  // returns an empty demonstratedCriteria (it's a state lookup, not a
+  // re-evaluation) — but the reviewer's confirm dialog needs the real
+  // list before confirming. Recompute once more, forcing existingCredential
+  // to null, exactly like confirmPendingCredential's own re-check does.
+  const credentialDemonstratedCriteria =
+    credentialEligibility?.state === "pending_human_confirmation" && credentialContext
+      ? computeCredentialEligibility({ ...toEligibilityInput(credentialContext), existingCredential: null }).demonstratedCriteria.map((c) => c.criterion)
+      : (credentialEligibility?.demonstratedCriteria.map((c) => c.criterion) ?? []);
 
   const stage = stageKeyOf({ status: candidate.status, hasSubmission: !!candidate.submission });
   const insights = candidateInsights(candidate);
@@ -452,6 +471,16 @@ export default async function CandidateProfilePage({
           )}
 
           <AiEvidenceSummary candidate={candidate} enabled={membership.company.evidenceAiEnabled} />
+
+          {credentialEligibility && (
+            <CredentialReviewPanel
+              policyOff={credentialContext!.challenge.credentialPolicy === "off"}
+              state={credentialEligibility.state}
+              companyEndorsed={credentialContext!.existingActiveCredential?.companyEndorsed ?? false}
+              credentialId={credentialEligibility.existingCredentialId}
+              demonstratedCriteria={credentialDemonstratedCriteria}
+            />
+          )}
 
           <section aria-labelledby="candidate-decision-actions" className="rounded-xl border border-navy/10 bg-white p-5">
             <h2 id="candidate-decision-actions" className="text-xs font-semibold uppercase tracking-wide text-navy/45">

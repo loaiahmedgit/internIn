@@ -1,6 +1,7 @@
 "use server";
 
 import { getDb, schema } from "@/db";
+import { revalidatePath } from "next/cache";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { canManagePublication, type WorkspacePermission } from "@/lib/company/permissions";
 import { sendNotificationEvent } from "@/lib/inngest/client";
@@ -249,9 +250,23 @@ export async function saveChallengeVersionAction(
     .limit(1);
 
   if (!challengeRow) {
+    // Initialize from the company's current credential defaults (docs/12,
+    // Phase 4C §5) — a plain copy at creation time, never a live reference.
+    // Changing the company default afterward must never mutate this or any
+    // other already-created challenge; nothing here re-reads it later.
+    const [company] = await db
+      .select({ defaultCredentialPolicy: schema.companies.defaultCredentialPolicy, defaultRequireHumanConfirmation: schema.companies.defaultRequireHumanConfirmation })
+      .from(schema.companies)
+      .where(eq(schema.companies.id, companyId))
+      .limit(1);
     [challengeRow] = await db
       .insert(schema.challenges)
-      .values({ opportunityId: validatedOpportunityId, status: validatedChallenge.status })
+      .values({
+        opportunityId: validatedOpportunityId,
+        status: validatedChallenge.status,
+        credentialPolicy: company?.defaultCredentialPolicy ?? "internin_verified",
+        requireHumanConfirmation: company?.defaultRequireHumanConfirmation ?? false,
+      })
       .returning();
   }
 
@@ -876,3 +891,56 @@ export async function assistInternshipCopyAction(input: {
 // removed when the assistant moved to a streaming UI-message backend — see
 // src/app/api/assistant/route.ts, which calls buildInternshipFacts/
 // buildCompanyHiringFacts directly instead of going through a Server Action.
+
+const ChallengeCredentialPolicySchema = z.object({
+  opportunityId: IdSchema,
+  credentialPolicy: z.enum(["off", "internin_verified", "company_endorsed"]),
+  requireHumanConfirmation: z.boolean(),
+  showCompanyLogo: z.boolean(),
+});
+
+/**
+ * The definitive per-challenge credential policy (Phase 4C §2). Company-
+ * wide defaults (companies.default_credential_policy) only ever apply at
+ * challenge CREATION time (see saveChallengeVersionAction above) — this
+ * action is the only way an existing challenge's own policy changes, and
+ * changing the company default afterward never touches it.
+ */
+export async function updateChallengeCredentialPolicyAction(input: {
+  opportunityId: string;
+  credentialPolicy: "off" | "internin_verified" | "company_endorsed";
+  requireHumanConfirmation: boolean;
+  showCompanyLogo: boolean;
+}) {
+  const parsed = ChallengeCredentialPolicySchema.parse(input);
+  const { companyId, userId } = await getCompanyIdForCurrentUser();
+  await assertOwnsOpportunity(parsed.opportunityId, companyId);
+  const db = getDb();
+
+  const [challengeRow] = await db.select({ id: schema.challenges.id }).from(schema.challenges).where(eq(schema.challenges.opportunityId, parsed.opportunityId)).limit(1);
+  if (!challengeRow) throw new Error("No challenge exists for this opportunity yet.");
+
+  await db
+    .update(schema.challenges)
+    .set({
+      credentialPolicy: parsed.credentialPolicy,
+      requireHumanConfirmation: parsed.requireHumanConfirmation,
+      // A logo only ever makes sense alongside real endorsement — never let
+      // a stray true value visually imply endorsement on a plain
+      // internin_verified (or off) credential (Phase 4C §4).
+      showCompanyLogo: parsed.credentialPolicy === "company_endorsed" ? parsed.showCompanyLogo : false,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.challenges.id, challengeRow.id));
+
+  await db.insert(schema.eventLog).values({
+    entityType: "challenge",
+    entityId: challengeRow.id,
+    eventType: "credential_policy_updated",
+    actorUserId: userId,
+    metadata: { credentialPolicy: parsed.credentialPolicy, requireHumanConfirmation: parsed.requireHumanConfirmation },
+  });
+
+  revalidatePath(`/company/opportunities/${parsed.opportunityId}`);
+  return { success: true as const };
+}

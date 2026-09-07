@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { ChallengeCredentialRow } from "./credential-data";
 
@@ -8,10 +8,11 @@ const DEMONSTRATED_LEVELS = new Set(["strong", "solid"]);
 export interface CredentialSummary {
   id: string;
   submissionId: string;
+  status: "issued" | "revoked";
   displayTitle: string;
   companyDisplayName: string;
   companyEndorsed: boolean;
-  issuedAt: Date;
+  issuedAt: Date | null;
   demonstratedCriteria: string[];
 }
 
@@ -20,9 +21,15 @@ export interface CredentialSummary {
  * needs, in ONE flat query — no joins, no per-item follow-up query, and
  * no signed artifact URL ever generated here (the whole point of the
  * snapshot design: every display field already lives on the row itself).
- * Only `issued` credentials — a revoked one is intentionally excluded
- * from this active-achievement list (still resolvable directly by anyone
- * who has its link, just not advertised here; docs/12 §9).
+ *
+ * Includes BOTH `issued` and `revoked` credentials on purpose — a
+ * revoked one is never advertised as active proof (the caller renders it
+ * muted, "Credential revoked"), but it must still be excluded from the
+ * page's older generic "evaluated challenge" fallback card, or a revoked
+ * credential would silently reappear looking like ordinary valid Verified
+ * Work. `pending_human_confirmation` is deliberately still excluded —
+ * that state has its own panel on the application page (docs/12 §18),
+ * never the Profile's permanent-achievement list.
  */
 export async function getStudentCredentialSummaries(studentId: string): Promise<CredentialSummary[]> {
   const db = getDb();
@@ -30,23 +37,26 @@ export async function getStudentCredentialSummaries(studentId: string): Promise<
     .select({
       id: schema.challengeCredentials.id,
       submissionId: schema.challengeCredentials.submissionId,
+      status: schema.challengeCredentials.status,
       displayTitle: schema.challengeCredentials.displayTitle,
       companyDisplayName: schema.challengeCredentials.companyDisplayName,
       companyEndorsed: schema.challengeCredentials.companyEndorsed,
       issuedAt: schema.challengeCredentials.issuedAt,
+      revokedAt: schema.challengeCredentials.revokedAt,
       rubricSnapshot: schema.challengeCredentials.rubricSnapshot,
     })
     .from(schema.challengeCredentials)
-    .where(and(eq(schema.challengeCredentials.studentId, studentId), eq(schema.challengeCredentials.status, "issued")))
+    .where(and(eq(schema.challengeCredentials.studentId, studentId), inArray(schema.challengeCredentials.status, ["issued", "revoked"])))
     .orderBy(desc(schema.challengeCredentials.issuedAt));
 
   return rows.map((row) => ({
     id: row.id,
     submissionId: row.submissionId,
+    status: row.status as "issued" | "revoked",
     displayTitle: row.displayTitle,
     companyDisplayName: row.companyDisplayName,
     companyEndorsed: row.companyEndorsed,
-    issuedAt: row.issuedAt!,
+    issuedAt: row.issuedAt,
     demonstratedCriteria: row.rubricSnapshot.filter((entry) => DEMONSTRATED_LEVELS.has(entry.level)).map((entry) => entry.criterion),
   }));
 }

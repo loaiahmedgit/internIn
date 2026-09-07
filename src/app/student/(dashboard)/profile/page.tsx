@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Award,
+  Ban,
   Briefcase,
   CheckCircle2,
   GraduationCap,
@@ -57,6 +58,8 @@ type EvidenceItem = {
   /** credential kind only — the richer, evidence-grounded chips shown instead of `skills`. */
   demonstratedCriteria?: string[];
   companyEndorsed?: boolean;
+  /** credential kind only — a revoked credential renders muted, never as active proof (never omit this branch). */
+  credentialStatus?: "issued" | "revoked";
 };
 
 const NAV_ITEMS = [
@@ -167,9 +170,10 @@ export default async function StudentProfilePage() {
   const versionById = new Map(versionRows.map((v) => [v.id, v]));
   const applicationById = new Map(applicationRows.map((a) => [a.id, a]));
 
-  // A submission with an actual issued credential gets the richer credential
+  // A submission with a credential (issued OR revoked) gets the credential
   // card instead of the plain "evaluated" one below — never both for the
-  // same underlying work.
+  // same underlying work, and a revoked credential must never fall back
+  // into looking like an ordinary valid generic verified item.
   const credentialedSubmissionIds = new Set(credentialSummaries.map((c) => c.submissionId));
 
   const evidence: EvidenceItem[] = [
@@ -190,6 +194,7 @@ export default async function StudentProfilePage() {
       skills: [],
       demonstratedCriteria: c.demonstratedCriteria,
       companyEndorsed: c.companyEndorsed,
+      credentialStatus: c.status,
       date: c.issuedAt,
       href: `/student/credentials/${c.id}`,
     })),
@@ -387,38 +392,54 @@ export default async function StudentProfilePage() {
                 />
                 {evidence.length > 0 ? (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {evidence.map((item) => (
-                      <div key={item.key} className="rounded-xl border border-navy/8 bg-[#fafcfc] p-4">
-                        <div className="flex items-start gap-2">
-                          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-navy">{item.title}</p>
-                            <p className="mt-0.5 text-xs text-navy/55">
-                              {item.kind === "internship" ? "Internship" : item.kind === "credential" ? "Challenge credential" : "Company challenge"}
-                              {item.companyName ? ` · ${item.companyName}` : ""}
+                    {evidence.map((item) => {
+                      const isRevoked = item.credentialStatus === "revoked";
+                      return (
+                        <div key={item.key} className={`rounded-xl border p-4 ${isRevoked ? "border-navy/6 bg-navy/[0.02]" : "border-navy/8 bg-[#fafcfc]"}`}>
+                          <div className="flex items-start gap-2">
+                            {isRevoked ? (
+                              <Ban className="mt-0.5 size-4 shrink-0 text-navy/35" aria-hidden="true" />
+                            ) : (
+                              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+                            )}
+                            <div className="min-w-0">
+                              <p className={`text-sm font-semibold ${isRevoked ? "text-navy/55" : "text-navy"}`}>{item.title}</p>
+                              <p className="mt-0.5 text-xs text-navy/45">
+                                {item.kind === "internship" ? "Internship" : item.kind === "credential" ? "Challenge credential" : "Company challenge"}
+                                {item.companyName ? ` · ${item.companyName}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                          {/* A revoked credential never shows endorsement or demonstrated
+                              chips — those read as active proof, which this deliberately is not. */}
+                          {!isRevoked && item.kind === "credential" && item.companyEndorsed && (
+                            <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-medium text-teal-ink">Company Endorsed</span>
+                          )}
+                          {!isRevoked && item.kind === "credential" && item.demonstratedCriteria && item.demonstratedCriteria.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {item.demonstratedCriteria.slice(0, 3).map((criterion) => (
+                                <span key={criterion} className="rounded-full border border-navy/10 bg-white px-2 py-0.5 text-[11px] text-navy/65">{criterion}</span>
+                              ))}
+                            </div>
+                          )}
+                          {item.date && <p className="mt-2 text-xs text-navy/40">{monthYear.format(item.date)}</p>}
+                          {isRevoked ? (
+                            <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-navy/45">
+                              <Ban className="size-3" aria-hidden="true" />
+                              Credential revoked
                             </p>
-                          </div>
+                          ) : (
+                            <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-teal-ink">
+                              <ShieldCheck className="size-3" aria-hidden="true" />
+                              Verified by internIn
+                            </p>
+                          )}
+                          <Link href={item.href} className={`mt-1 inline-block text-xs font-medium hover:underline ${isRevoked ? "text-navy/50" : "text-teal-ink"}`}>
+                            {item.kind === "credential" ? "View credential →" : "View evidence →"}
+                          </Link>
                         </div>
-                        {item.kind === "credential" && item.companyEndorsed && (
-                          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-medium text-teal-ink">Company Endorsed</span>
-                        )}
-                        {item.kind === "credential" && item.demonstratedCriteria && item.demonstratedCriteria.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {item.demonstratedCriteria.slice(0, 3).map((criterion) => (
-                              <span key={criterion} className="rounded-full border border-navy/10 bg-white px-2 py-0.5 text-[11px] text-navy/65">{criterion}</span>
-                            ))}
-                          </div>
-                        )}
-                        {item.date && <p className="mt-2 text-xs text-navy/45">{monthYear.format(item.date)}</p>}
-                        <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-teal-ink">
-                          <ShieldCheck className="size-3" aria-hidden="true" />
-                          Verified by internIn
-                        </p>
-                        <Link href={item.href} className="mt-1 inline-block text-xs font-medium text-teal-ink hover:underline">
-                          {item.kind === "credential" ? "View credential →" : "View evidence →"}
-                        </Link>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="mt-2">

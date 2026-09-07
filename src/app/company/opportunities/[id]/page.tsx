@@ -9,6 +9,7 @@ import { EVENT_LABEL } from "@/lib/company/internship-facts";
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { InternshipStatusBadge, ChallengeStatusBadge } from "@/components/company/status-badges";
 import { CandidateTableRow } from "@/components/company/candidate-table-row";
+import { ChallengeCredentialSettings } from "@/components/company/challenge-credential-settings";
 import { AskInternshipPanel } from "@/components/opportunities/ask-internship-panel";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -419,7 +420,16 @@ export default async function OpportunityDetailPage({
                 </ul>
               </div>
             </section>
-          ) : (
+          ) : null}
+          {hasChallenge && (
+            <div className="mt-5">
+              <ChallengeCredentialSettings
+                opportunityId={id}
+                initial={{ credentialPolicy: challenge!.credentialPolicy, requireHumanConfirmation: challenge!.requireHumanConfirmation, showCompanyLogo: challenge!.showCompanyLogo }}
+              />
+            </div>
+          )}
+          {!hasChallenge && (
             <section className="flex flex-col items-center rounded-xl border border-dashed border-navy/15 bg-white p-10 text-center">
               <FileText className="size-8 text-navy/25" aria-hidden="true" />
               <p className="mt-3 text-sm font-medium text-navy">No challenge yet</p>

@@ -41,6 +41,8 @@ export function SettingsForm({
     officeLocations: string | null;
     contactEmail: string | null;
     evidenceAiEnabled: boolean;
+    defaultCredentialPolicy: "off" | "internin_verified" | "company_endorsed";
+    defaultRequireHumanConfirmation: boolean;
   };
   member: { submissionNotifications: boolean; offerNotifications: boolean };
 }) {
@@ -262,6 +264,31 @@ export function SettingsForm({
                     Archived candidates remain available for history and export.
                     No automatic deletion or retention period is configured.
                   </p>
+                </div>
+
+                <div className="mt-8 border-t border-navy/8 pt-6">
+                  <h3 className="font-medium text-navy">Challenge credentials</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-navy/60">
+                    Defaults applied when you create a new challenge. Changing this later never changes challenges you&apos;ve already created — each keeps its own setting.
+                  </p>
+                  <label className="mt-4 block text-sm font-medium text-navy">
+                    Default challenge credential
+                    <select
+                      name="defaultCredentialPolicy"
+                      defaultValue={company.defaultCredentialPolicy === "off" ? "off" : "internin_verified"}
+                      disabled={!editable}
+                      className={inputClass}
+                    >
+                      <option value="internin_verified">internIn Verified</option>
+                      <option value="off">No credential</option>
+                    </select>
+                  </label>
+                  {checkbox(
+                    "defaultRequireHumanConfirmation",
+                    "Require reviewer confirmation before issuance",
+                    "If enabled, qualifying work waits for an authorized reviewer before the credential is issued. This does not affect hiring decisions.",
+                    company.defaultRequireHumanConfirmation,
+                  )}
                 </div>
               </div>
             )}

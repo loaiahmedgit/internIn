@@ -54,10 +54,17 @@ export async function saveCompanySettings(
         .set({ logoUrl: logoUrl || null, updatedAt: new Date() })
         .where(eq(schema.companies.id, membership.companyId));
     } else if (tab === "privacy") {
+      // Company-wide default only — never "company_endorsed" here (locked
+      // decision: endorsement stays an explicit per-challenge choice, never
+      // a company-wide default). An unexpected form value falls back to
+      // the safe default rather than trusting raw input.
+      const defaultCredentialPolicy = form.get("defaultCredentialPolicy") === "off" ? "off" : "internin_verified";
       await db
         .update(schema.companies)
         .set({
           evidenceAiEnabled: form.get("evidenceAiEnabled") === "on",
+          defaultCredentialPolicy,
+          defaultRequireHumanConfirmation: form.get("defaultRequireHumanConfirmation") === "on",
           updatedAt: new Date(),
         })
         .where(eq(schema.companies.id, membership.companyId));

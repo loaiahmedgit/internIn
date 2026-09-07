@@ -63,6 +63,14 @@ describe("getStudentCredentialSummaries", () => {
     await getStudentCredentialSummaries("student-1");
     expect(mocks.fromCallCount).toBe(1); // one .from() call total, regardless of row count
   });
+
+  it("includes revoked credentials too, with status set — required so the Profile page can exclude their submission from the older generic fallback card (a revoked credential must never silently reappear as ordinary valid Verified Work; full page-level rendering behavior is confirmed in this phase's real browser QA)", async () => {
+    mocks.selectResults = [[issuedRow({ id: "credential-revoked", submissionId: "submission-2", status: "revoked" })]];
+    const summaries = await getStudentCredentialSummaries("student-1");
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0].status).toBe("revoked");
+    expect(summaries[0].submissionId).toBe("submission-2");
+  });
 });
 
 describe("getOwnedCredentialDetail", () => {
