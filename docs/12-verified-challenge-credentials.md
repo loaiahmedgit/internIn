@@ -150,19 +150,22 @@ No numeric threshold, no rubric-weight exposure, no "confidence level minimum" d
 Reads only `submissions`, `candidate_evidence.evidenceSummary` (real `RubricMetric[]` + `confidence`), and the challenge's policy columns. No new AI call, no new evaluation pipeline — eligibility is a pure function over evaluation output that already exists.
 
 ```
-function computeEligibility(submission, evidenceSummary, policy):
+function computeEligibility(submission, evidenceSummary, policy, rubric, requirements, submittedArtifactLabels):
   if policy.credentialPolicy == 'off': return NOT_ELIGIBLE
-  if submission.status != 'submitted': return NOT_ELIGIBLE          # only real value today; 'reviewed' also qualifies once reached
+  if submission.status not in ['submitted', 'reviewed']: return NOT_ELIGIBLE
   if evidenceSummary == null: return PENDING_EVALUATION
   if evidenceSummary.metrics is empty or evidenceSummary.confidence == undefined: return NOT_ELIGIBLE   # evaluation ran but produced nothing usable — never fabricate eligibility from an empty result
-  demonstrated = metrics.filter(m => m.level in ['strong','solid'])
-  weak         = metrics.filter(m => m.level in ['insufficient','not_demonstrated'])
-  if evidenceSummary.confidence in ['medium','high'] and demonstrated.length > weak.length and demonstrated.length >= 1:
+  unresolvedRequired = requiredSubmittedLabels.filter(label => evidenceSummary.unavailable has an entry starting with "<label>:")
+  if unresolvedRequired is not empty: return NOT_ELIGIBLE
+  if evidenceSummary.confidence not in ['medium', 'high']: return NOT_ELIGIBLE
+  demonstrated = metrics.filter(m => m.level in ['strong', 'solid'])
+  coverage = weightedCoverage(demonstrated, metrics, rubric.weight)   # real RubricCriterion.weight when criterion text matches; equal-weight fallback otherwise
+  if coverage >= 0.70 and demonstrated.length >= 1:
     return policy.requireHumanConfirmation ? PENDING_HUMAN_CONFIRMATION : ELIGIBLE
   return NOT_ELIGIBLE
 ```
 
-This is a **default rule, explicitly named as a default**, not a hidden constant — see open question in §30. It is count-based over qualitative levels ("more demonstrated than weak, at least one real demonstration, evaluator wasn't low-confidence"), never a percentage or a single number a screenshot could misrepresent. If the evidence pipeline fails (the OpenRouter failures seen all session), `evidenceSummary` is simply never populated — eligibility stays `PENDING_EVALUATION` honestly, exactly like the company UI already does today. **Nothing is issued on an evaluation failure.**
+**Locked (Phase 4A closure, product-owner decision):** the coverage bar is **70%**, not the 50% originally proposed here — a Verified Challenge Credential must represent meaningful demonstrated capability, and 50% was judged too weak for a "verified" claim. This is implemented as `MINIMUM_DEMONSTRATED_COVERAGE = 0.7` in `src/lib/credentials/eligibility.ts`, never surfaced publicly — the public/student-facing UX shows only the demonstrated-criteria list, never this number or any score (§8, §10). The "no unresolved required evidence" check runs before the coverage check, using the real `SubmissionRequirement.required` flag joined against `evidenceSummary.unavailable`'s own string convention — no per-criterion field was invented for this. No required/"critical criteria" concept exists in the rubric schema, so none is fabricated here — coverage is the only gate, applied to every evaluated criterion equally (weighted by real `weight` when available). If the evidence pipeline fails (the OpenRouter failures seen all session), `evidenceSummary` is simply never populated — eligibility stays `PENDING_EVALUATION` honestly, exactly like the company UI already does today. **Nothing is issued on an evaluation failure.**
 
 A company re-running evaluation (already a real action in the product) recomputes this live — since no row exists pre-issuance, re-evaluation just changes what the derived state reads next time, no stale row to reconcile.
 
@@ -386,7 +389,7 @@ Rationale for this order: data model and eligibility must exist before anything 
 ## 30. Open questions for product-owner decision
 
 1. **Default policy value.** This doc defaults `challenges.credential_policy` to `internin_verified` (opt-out) rather than `off` (opt-in), on the reading that "default system must work without company endorsement" implies credentials should be ambient, not something every company has to remember to turn on. This is a real product call, not an engineering detail — confirm before migration.
-2. **Eligibility rule parameters.** §6's rule ("more demonstrated-or-better criteria than weak ones, confidence medium+, at least one real demonstration") is proposed as the v1 default. The exact bar is a product decision that affects how easy/hard a credential is to earn — confirm the rule, not just the mechanism, before implementation.
+2. ~~**Eligibility rule parameters.**~~ **Resolved, Phase 4A closure:** weighted demonstrated-rubric-coverage threshold locked at **70%** (raised from the original 50% proposal) — see §6.
 3. **Who can revoke `internin_verified` (non-endorsed) credentials.** Proposed: internIn admin only, not the company. Confirm — a company being able to unilaterally revoke a credential it didn't endorse would undercut principle 4 (credential independence from the company's own hiring feelings).
 4. **Public student profile gating.** §10 links to "the student's public profile if it's public" — this assumes a public/private profile-visibility concept exists or will exist; today `student_profiles` has no visibility flag. If profile-level public visibility isn't planned soon, the credential page should stand fully alone (no profile link) rather than block on that — confirm which.
 5. **LinkedIn.** Confirmed no clean deep-link integration exists (§14) — confirm the copy-link-plus-instructions fallback is acceptable for v1, since a real "Add to Profile" button requires a LinkedIn partnership outside this codebase's control.

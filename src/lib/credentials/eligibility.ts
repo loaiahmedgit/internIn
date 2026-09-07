@@ -18,6 +18,16 @@ import type { CredentialEligibilityResult, CredentialPolicyValue } from "./types
  * support a required/"critical criteria" flag, so none is fabricated here.
  */
 
+/**
+ * Locked product-owner decision (Phase 4A closure): a Verified Challenge
+ * Credential must represent meaningful demonstrated capability — weighted
+ * coverage of demonstrated (strong/solid) rubric criteria must reach 70%
+ * of the evaluated rubric weight, not 50%. This number is never surfaced
+ * publicly — the public/student-facing UX only ever shows the demonstrated
+ * criteria list (§8 of docs/12), never a score or this threshold.
+ */
+const MINIMUM_DEMONSTRATED_COVERAGE = 0.7;
+
 export interface EligibilityInput {
   credentialPolicy: CredentialPolicyValue;
   requireHumanConfirmation: boolean;
@@ -110,14 +120,7 @@ export function computeCredentialEligibility(input: EligibilityInput): Credentia
   const demonstratedCriteria = metrics.filter((m) => isDemonstrated(m.level)).map((m) => ({ criterion: m.criterion, level: m.level }));
   const coverage = weightedDemonstratedCoverage(metrics, input.rubric);
   const sufficientConfidence = input.evidenceSummary.confidence === "medium" || input.evidenceSummary.confidence === "high";
-  // Default v1 rule (flagged for product-owner confirmation in docs/12 §30):
-  // weighted coverage of demonstrated criteria must exceed half the
-  // evaluated rubric weight, with at least one real demonstration — this
-  // IS the "use real weights where useful" rule, so a raw unweighted count
-  // comparison (demonstrated vs. weak) is deliberately not layered on top
-  // of it; that would let an unweighted minority criterion veto a
-  // genuinely well-covered, heavily-weighted rubric.
-  const sufficientCoverage = coverage >= 0.5 && demonstratedCriteria.length >= 1;
+  const sufficientCoverage = coverage >= MINIMUM_DEMONSTRATED_COVERAGE && demonstratedCriteria.length >= 1;
 
   if (unresolvedRequiredArtifacts.length > 0) {
     return {

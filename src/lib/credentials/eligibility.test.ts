@@ -156,12 +156,51 @@ describe("computeCredentialEligibility", () => {
   it("uses real rubric weights when criterion text matches", () => {
     // Customer reasoning carries 90% of the weight and is demonstrated;
     // Practicality (10%) is weak — an unweighted count (1 of 2) would
-    // fail the >50% bar, but the real weighted coverage (90%) passes.
+    // fail the >=70% bar, but the real weighted coverage (90%) passes.
     const result = computeCredentialEligibility(
       baseInput({
         rubric: [
           { criterion: "Customer reasoning", weight: 90 },
           { criterion: "Practicality", weight: 10 },
+        ],
+        evidenceSummary: evidence({
+          confidence: "high",
+          metrics: [
+            { criterion: "Customer reasoning", level: "strong", rationale: "r" },
+            { criterion: "Practicality", level: "insufficient", rationale: "r" },
+          ],
+        }),
+      }),
+    );
+    expect(result.state).toBe("eligible");
+  });
+
+  it("70% threshold: 60% weighted coverage — would have passed the old 50% rule, correctly fails now", () => {
+    const result = computeCredentialEligibility(
+      baseInput({
+        rubric: [
+          { criterion: "Customer reasoning", weight: 60 },
+          { criterion: "Practicality", weight: 40 },
+        ],
+        evidenceSummary: evidence({
+          confidence: "high",
+          metrics: [
+            { criterion: "Customer reasoning", level: "strong", rationale: "r" },
+            { criterion: "Practicality", level: "insufficient", rationale: "r" },
+          ],
+        }),
+      }),
+    );
+    expect(result.state).toBe("not_eligible");
+    expect(result.eligible).toBe(false);
+  });
+
+  it("70% threshold: exactly 70% weighted coverage is sufficient (boundary is inclusive)", () => {
+    const result = computeCredentialEligibility(
+      baseInput({
+        rubric: [
+          { criterion: "Customer reasoning", weight: 70 },
+          { criterion: "Practicality", weight: 30 },
         ],
         evidenceSummary: evidence({
           confidence: "high",
