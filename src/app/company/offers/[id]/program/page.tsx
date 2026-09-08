@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { eq, asc, inArray, desc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { requireCurrentCompanyMember } from "@/lib/auth";
+import { requireProgramViewer } from "@/lib/opportunities/program-actions";
+import { SupervisorAssignmentPanel } from "@/components/opportunities/supervisor-assignment-panel";
 import { InternshipTaskList } from "@/components/opportunities/internship-task-list";
 import { AddFeedbackForm } from "@/components/opportunities/add-feedback-form";
 import { CompleteProgramButton } from "@/components/opportunities/complete-program-button";
@@ -12,24 +13,18 @@ export default async function InternshipProgramPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { membership } = await requireCurrentCompanyMember("program_supervisor");
   const db = getDb();
 
-  const [row] = await db
-    .select({
-      program: schema.internshipPrograms,
-      opportunityCompanyId: schema.opportunities.companyId,
-    })
-    .from(schema.internshipPrograms)
-    .innerJoin(schema.internshipOffers, eq(schema.internshipPrograms.offerId, schema.internshipOffers.id))
-    .innerJoin(schema.applications, eq(schema.internshipOffers.applicationId, schema.applications.id))
-    .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
-    .where(eq(schema.internshipPrograms.offerId, id))
-    .limit(1);
+  // offerId -> programId first: requireProgramViewer enforces per-program
+  // assignment and needs the real program id. An offer with no program at
+  // all is a genuine 404 (nothing to view yet — the wizard handles that
+  // case); once a program exists, requireProgramViewer's own errors
+  // (cross-company or unassigned) surface normally rather than being
+  // hidden behind a misleading 404.
+  const [programRow] = await db.select({ id: schema.internshipPrograms.id }).from(schema.internshipPrograms).where(eq(schema.internshipPrograms.offerId, id)).limit(1);
+  if (!programRow) notFound();
 
-  if (!row || row.opportunityCompanyId !== membership.companyId) notFound();
-
-  const { program } = row;
+  const { program } = await requireProgramViewer(programRow.id);
 
   const weeks = await db
     .select()
@@ -71,6 +66,8 @@ export default async function InternshipProgramPage({
         {program.durationWeeks} weeks · {program.hoursPerWeek}h/week ·{" "}
         <span className="capitalize">{program.status}</span>
       </p>
+
+      <SupervisorAssignmentPanel programId={program.id} />
 
       <div className="mt-8 space-y-3">
         {weeks.map((w) => (

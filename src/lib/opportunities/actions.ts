@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { canManagePublication, type WorkspacePermission } from "@/lib/company/permissions";
 import { sendNotificationEvent } from "@/lib/inngest/client";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import {
   ChallengeSchema,
@@ -828,12 +828,21 @@ export async function createInternshipProgramAction(offerId: string, program: In
   }
 
   const db = getDb();
+  // Idempotent (Phase 6A §7): offer_id is unique on internship_programs, so
+  // a retried/double-submitted create must return the existing program
+  // rather than throwing a confusing duplicate error or racing the unique
+  // constraint. internship_offers.id is also unique per application, so
+  // "one accepted student -> one program" holds per offer, while a second
+  // accepted student on the SAME opportunity gets their own offer id and
+  // therefore their own program (Phase 6A §17 — no capacity=1 assumption).
   const [existingProgram] = await db
     .select({ id: schema.internshipPrograms.id })
     .from(schema.internshipPrograms)
     .where(eq(schema.internshipPrograms.offerId, validatedOfferId))
     .limit(1);
-  if (existingProgram) throw new Error("A program already exists for this offer.");
+  if (existingProgram) return existingProgram.id as string;
+
+  const [membership] = await db.select().from(schema.companyMembers).where(and(eq(schema.companyMembers.companyId, companyId), eq(schema.companyMembers.userId, userId))).limit(1);
 
   const [programRow] = await db
     .insert(schema.internshipPrograms)
@@ -855,6 +864,15 @@ export async function createInternshipProgramAction(offerId: string, program: In
       objectives: w.objectives,
     })),
   );
+
+  // The creator becomes the program's first (primary) supervisor — never
+  // leave a brand-new program with literally nobody able to act on it,
+  // and never require HR to pretend to be the supervisor separately
+  // (Phase 6A §8). Reassigning/adding co-supervisors afterward is a
+  // normal supervisor action, not special-cased here.
+  if (membership) {
+    await db.insert(schema.programSupervisorAssignments).values({ programId: programRow.id, companyMemberId: membership.id, isPrimary: true, assignedByUserId: userId });
+  }
 
   await db.insert(schema.eventLog).values({
     entityType: "internship_program",

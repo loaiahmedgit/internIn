@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
 import { StudentPageHeader } from "@/components/dashboard/student-page-header";
@@ -65,7 +65,18 @@ export default async function StudentInternshipsPage() {
         .orderBy(desc(schema.supervisorFeedback.createdAt))
         .limit(1);
 
-      return { offer, program, currentWeek, currentWeekTasks, feedback };
+      // Phase 6A §23 — the student's own supervisor, honestly absent
+      // ("Needs supervisor" on the company side) rather than guessed when
+      // nobody's assigned yet.
+      const [supervisor] = await db
+        .select({ name: schema.users.fullName })
+        .from(schema.programSupervisorAssignments)
+        .innerJoin(schema.companyMembers, eq(schema.companyMembers.id, schema.programSupervisorAssignments.companyMemberId))
+        .innerJoin(schema.users, eq(schema.users.id, schema.companyMembers.userId))
+        .where(and(eq(schema.programSupervisorAssignments.programId, program.id), eq(schema.programSupervisorAssignments.isPrimary, true)))
+        .limit(1);
+
+      return { offer, program, currentWeek, currentWeekTasks, feedback, supervisorName: supervisor?.name };
     }),
   );
 
@@ -111,7 +122,7 @@ export default async function StudentInternshipsPage() {
           </div>
         )}
 
-        {activePrograms.map(({ offer, program, currentWeek, currentWeekTasks, feedback }) => (
+        {activePrograms.map(({ offer, program, currentWeek, currentWeekTasks, feedback, supervisorName }) => (
           <div key={offer.applicationId} className="rounded-xl border border-navy/10 bg-white p-6">
             <div className="flex items-center gap-4">
               <CompanyAvatar name={offer.companyName} />
@@ -120,6 +131,10 @@ export default async function StudentInternshipsPage() {
                 <h2 className="mt-0.5 text-lg font-semibold text-navy">{offer.role}</h2>
               </div>
             </div>
+
+            {program && (
+              <p className="mt-2 text-xs text-navy/50">Supervisor: {supervisorName ?? "Not yet assigned"}</p>
+            )}
 
             {program && currentWeek ? (
               <>

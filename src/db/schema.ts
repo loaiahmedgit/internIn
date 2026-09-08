@@ -828,6 +828,44 @@ export const supervisorFeedback = pgTable(
   (t) => [index("supervisor_feedback_program_idx").on(t.programId)],
 );
 
+/**
+ * Which company members actually supervise a given program — the missing
+ * piece that made `program_supervisor` a company-wide permission act like a
+ * company-wide role (Phase 6A audit: any member holding it could act on
+ * ANY program in the company, not just ones they're assigned to). A row
+ * here scopes that permission to a specific program; workspace_admin still
+ * bypasses this for READ (broader HR/admin visibility is intentional — see
+ * permissions.ts), never for supervisor WRITE actions unless explicitly
+ * decided otherwise (Phase 6A §4). References company_members.id, not
+ * users.id directly — a user can be a member of more than one company (see
+ * companyMembers' own composite unique index), so the membership row is
+ * the only unambiguous "this person, at this company" identity to assign.
+ * isPrimary: exactly one student-facing supervisor per program for v1
+ * display (Phase 6A §2) — enforced by a partial unique index in the
+ * migration (Drizzle's table-level index builder has no WHERE clause, so
+ * that constraint lives in SQL, same as other DB-level guarantees in this
+ * schema that aren't fully expressible here).
+ */
+export const programSupervisorAssignments = pgTable(
+  "program_supervisor_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    programId: uuid("program_id")
+      .notNull()
+      .references(() => internshipPrograms.id, { onDelete: "cascade" }),
+    companyMemberId: uuid("company_member_id")
+      .notNull()
+      .references(() => companyMembers.id, { onDelete: "cascade" }),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    assignedByUserId: uuid("assigned_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("program_supervisor_assignments_program_member_uidx").on(t.programId, t.companyMemberId),
+    index("program_supervisor_assignments_member_idx").on(t.companyMemberId),
+  ],
+);
+
 export const verifiedExperience = pgTable("verified_experience", {
   id: uuid("id").primaryKey().defaultRandom(),
   programId: uuid("program_id")

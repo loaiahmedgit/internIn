@@ -2,11 +2,36 @@
 
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
+import { hasPermission } from "@/lib/company/permissions";
 import { sendNotificationEvent } from "@/lib/inngest/client";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, asc, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 const IdSchema = z.string().uuid();
+
+/**
+ * Phase 6A hardening — the real gap: `program_supervisor` was a
+ * company-wide permission, so any holder could act on ANY program in the
+ * company, not just ones they're assigned to. This is the one canonical
+ * check for "can this member supervise THIS specific program" —
+ * workspace_admin bypasses it (explicit, deliberate HR/admin override,
+ * matching permissions.ts's own documented design and this repo's
+ * existing hasPermission short-circuit); every other program_supervisor
+ * holder needs a real program_supervisor_assignments row for this exact
+ * program. There is no read/write split in the product yet, so this one
+ * check backs both viewing a program page and performing a supervisor
+ * action on it — see requireProgramViewer/requireProgramSupervisor below.
+ */
+export async function assertAssignedOrAdmin(programId: string, membership: { id: string; role: string; permissions: string[] | null }) {
+  if (hasPermission(membership, "workspace_admin")) return;
+  const db = getDb();
+  const [assignment] = await db
+    .select({ id: schema.programSupervisorAssignments.id })
+    .from(schema.programSupervisorAssignments)
+    .where(and(eq(schema.programSupervisorAssignments.programId, programId), eq(schema.programSupervisorAssignments.companyMemberId, membership.id)))
+    .limit(1);
+  if (!assignment) throw new Error("You're not assigned as a supervisor for this program. Ask a workspace administrator to assign you.");
+}
 
 /**
  * Every task/feedback write below re-derives company ownership by walking
@@ -31,7 +56,7 @@ async function assertOwnsWeek(weekId: string, companyId: string) {
 async function assertOwnsTask(taskId: string, companyId: string) {
   const db = getDb();
   const [row] = await db
-    .select({ task: schema.internshipTasks, opportunityCompanyId: schema.opportunities.companyId })
+    .select({ task: schema.internshipTasks, programId: schema.internshipWeeks.programId, opportunityCompanyId: schema.opportunities.companyId })
     .from(schema.internshipTasks)
     .innerJoin(schema.internshipWeeks, eq(schema.internshipTasks.weekId, schema.internshipWeeks.id))
     .innerJoin(schema.internshipPrograms, eq(schema.internshipWeeks.programId, schema.internshipPrograms.id))
@@ -41,7 +66,7 @@ async function assertOwnsTask(taskId: string, companyId: string) {
     .where(eq(schema.internshipTasks.id, taskId))
     .limit(1);
   if (!row || row.opportunityCompanyId !== companyId) throw new Error("Not authorized for this task.");
-  return row.task;
+  return { ...row.task, programId: row.programId };
 }
 
 async function assertOwnsProgram(programId: string, companyId: string) {
@@ -68,6 +93,24 @@ async function assertOwnsProgram(programId: string, companyId: string) {
   return row;
 }
 
+/**
+ * Same rule as assertAssignedOrAdmin, exported for the program pages to
+ * call directly — viewing a program page and acting as its supervisor
+ * require identical access in v1 (no separate broader "read-only HR
+ * overview" exists in the product yet, per §14's own "do not overabstract
+ * if the repo already has an established pattern"). Both names resolve to
+ * one implementation on purpose, not two independently maintained ones —
+ * named separately so a future phase can loosen read without touching
+ * every write call site.
+ */
+export async function requireProgramViewer(programId: string) {
+  const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
+  const row = await assertOwnsProgram(programId, membership.companyId);
+  await assertAssignedOrAdmin(programId, membership);
+  return { user, membership, ...row };
+}
+export const requireProgramSupervisor = requireProgramViewer;
+
 const TaskTitleSchema = z.string().trim().min(1).max(160);
 const TaskDescriptionSchema = z.string().trim().max(2000);
 const TaskStatusSchema = z.enum(["pending", "in_progress", "done"]);
@@ -79,6 +122,7 @@ export async function addInternshipTaskAction(weekId: string, title: string, des
   const validatedDescription = description ? TaskDescriptionSchema.parse(description) : undefined;
   const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
   const week = await assertOwnsWeek(validatedWeekId, membership.companyId);
+  await assertAssignedOrAdmin(week.programId, membership);
 
   const [task] = await getDb()
     .insert(schema.internshipTasks)
@@ -100,6 +144,7 @@ export async function updateInternshipTaskStatusAction(taskId: string, status: "
   const validatedStatus = TaskStatusSchema.parse(status);
   const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
   const task = await assertOwnsTask(validatedTaskId, membership.companyId);
+  await assertAssignedOrAdmin(task.programId, membership);
 
   const db = getDb();
   await db
@@ -125,6 +170,7 @@ export async function addSupervisorFeedbackAction(programId: string, feedback: s
     validatedProgramId,
     membership.companyId,
   );
+  await assertAssignedOrAdmin(program.id, membership);
   if (validatedWeekId) await assertOwnsWeek(validatedWeekId, membership.companyId);
 
   const db = getDb();
@@ -165,6 +211,7 @@ export async function completeInternshipProgramAction(programId: string) {
   const validatedProgramId = IdSchema.parse(programId);
   const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
   const { program, opportunitySkills } = await assertOwnsProgram(validatedProgramId, membership.companyId);
+  await assertAssignedOrAdmin(program.id, membership);
   if (program.status === "completed") throw new Error("This program is already completed.");
 
   const db = getDb();
@@ -207,4 +254,147 @@ export async function completeInternshipProgramAction(programId: string) {
   });
 
   return record.id as string;
+}
+
+/**
+ * Real company members eligible to supervise this program — real
+ * membership rows holding program_supervisor, never an invented list —
+ * plus who's already assigned. Backs the assign-supervisor selector; the
+ * caller must already be able to view the program (workspace_admin or an
+ * existing assignee), same as every other program read here.
+ */
+export async function getEligibleProgramSupervisorsAction(programId: string) {
+  const validatedProgramId = IdSchema.parse(programId);
+  const { membership } = await requireProgramViewer(validatedProgramId);
+  const db = getDb();
+
+  const memberRows = await db
+    .select({
+      id: schema.companyMembers.id,
+      role: schema.companyMembers.role,
+      permissions: schema.companyMembers.permissions,
+      name: schema.users.fullName,
+      email: schema.users.email,
+    })
+    .from(schema.companyMembers)
+    .innerJoin(schema.users, eq(schema.users.id, schema.companyMembers.userId))
+    .where(eq(schema.companyMembers.companyId, membership.companyId));
+  // Every member, name/email only — client cross-references this against
+  // `assigned` for display and `eligible` to build the add-supervisor
+  // options (never selectable: cross-company, no permission, per §10).
+  const members = memberRows.map((m) => ({ id: m.id, name: m.name, email: m.email, eligible: hasPermission(m, "program_supervisor") }));
+
+  const assigned = await db
+    .select({ companyMemberId: schema.programSupervisorAssignments.companyMemberId, isPrimary: schema.programSupervisorAssignments.isPrimary })
+    .from(schema.programSupervisorAssignments)
+    .where(eq(schema.programSupervisorAssignments.programId, validatedProgramId));
+
+  return { members, assigned };
+}
+
+const CompanyMemberSelectShape = { id: schema.companyMembers.id, role: schema.companyMembers.role, permissions: schema.companyMembers.permissions, companyId: schema.companyMembers.companyId };
+
+/**
+ * Assigns (or updates) one company member as a supervisor for this
+ * program — idempotent (an existing row is updated, never duplicated;
+ * the unique index backs this too). Who may change assignments: an
+ * existing assignee, or workspace_admin — same rule as every supervisor
+ * action here (§3/§21), so nobody can hand themselves access to a program
+ * they were never on.
+ */
+export async function assignProgramSupervisorAction(programId: string, companyMemberId: string, makePrimary = false) {
+  const validatedProgramId = IdSchema.parse(programId);
+  const validatedMemberId = IdSchema.parse(companyMemberId);
+  const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
+  const { program } = await assertOwnsProgram(validatedProgramId, membership.companyId);
+  await assertAssignedOrAdmin(program.id, membership);
+
+  const db = getDb();
+  const [targetMember] = await db.select(CompanyMemberSelectShape).from(schema.companyMembers).where(eq(schema.companyMembers.id, validatedMemberId)).limit(1);
+  if (!targetMember || targetMember.companyId !== membership.companyId) throw new Error("That member isn't part of this company.");
+  if (!hasPermission(targetMember, "program_supervisor")) throw new Error("That member doesn't have Program Supervisor access.");
+
+  const [existing] = await db
+    .select({ id: schema.programSupervisorAssignments.id })
+    .from(schema.programSupervisorAssignments)
+    .where(and(eq(schema.programSupervisorAssignments.programId, program.id), eq(schema.programSupervisorAssignments.companyMemberId, validatedMemberId)))
+    .limit(1);
+
+  if (makePrimary) {
+    // At most one primary per program (partial unique index) — clear any
+    // existing primary in the same transaction as setting the new one.
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.programSupervisorAssignments)
+        .set({ isPrimary: false })
+        .where(and(eq(schema.programSupervisorAssignments.programId, program.id), eq(schema.programSupervisorAssignments.isPrimary, true)));
+      if (existing) {
+        await tx.update(schema.programSupervisorAssignments).set({ isPrimary: true }).where(eq(schema.programSupervisorAssignments.id, existing.id));
+      } else {
+        await tx.insert(schema.programSupervisorAssignments).values({ programId: program.id, companyMemberId: validatedMemberId, isPrimary: true, assignedByUserId: user.id });
+      }
+    });
+  } else if (!existing) {
+    await db.insert(schema.programSupervisorAssignments).values({ programId: program.id, companyMemberId: validatedMemberId, assignedByUserId: user.id });
+  }
+
+  await db.insert(schema.eventLog).values({
+    entityType: "internship_program",
+    entityId: program.id,
+    eventType: existing ? "program_supervisor_reassigned" : "program_supervisor_assigned",
+    actorUserId: user.id,
+    metadata: { companyMemberId: validatedMemberId, isPrimary: makePrimary },
+  });
+}
+
+/**
+ * Removes one supervisor's access to this program — the program itself,
+ * its tasks/weeks/feedback/history, and the student's membership are
+ * never touched (§22). If that leaves the program with no assignee at
+ * all, it honestly becomes "Needs supervisor" (page-level display) rather
+ * than a fake auto-replacement.
+ */
+export async function removeProgramSupervisorAction(programId: string, companyMemberId: string) {
+  const validatedProgramId = IdSchema.parse(programId);
+  const validatedMemberId = IdSchema.parse(companyMemberId);
+  const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
+  const { program } = await assertOwnsProgram(validatedProgramId, membership.companyId);
+  await assertAssignedOrAdmin(program.id, membership);
+
+  const db = getDb();
+  const [removed] = await db
+    .select({ isPrimary: schema.programSupervisorAssignments.isPrimary })
+    .from(schema.programSupervisorAssignments)
+    .where(and(eq(schema.programSupervisorAssignments.programId, program.id), eq(schema.programSupervisorAssignments.companyMemberId, validatedMemberId)))
+    .limit(1);
+
+  await db
+    .delete(schema.programSupervisorAssignments)
+    .where(and(eq(schema.programSupervisorAssignments.programId, program.id), eq(schema.programSupervisorAssignments.companyMemberId, validatedMemberId)));
+
+  // Reproduced live during Phase 6A QA: removing the primary left a real,
+  // still-assigned co-supervisor un-promoted — student-facing display
+  // (which reads isPrimary only) wrongly said "Not yet assigned" even
+  // though someone genuinely still had full access. If a co-supervisor
+  // remains, one of them becomes primary; if none remain, this is the
+  // real "Needs supervisor" case (§22) and nothing is promoted.
+  if (removed?.isPrimary) {
+    const [nextPrimary] = await db
+      .select({ id: schema.programSupervisorAssignments.id })
+      .from(schema.programSupervisorAssignments)
+      .where(eq(schema.programSupervisorAssignments.programId, program.id))
+      .orderBy(asc(schema.programSupervisorAssignments.createdAt))
+      .limit(1);
+    if (nextPrimary) {
+      await db.update(schema.programSupervisorAssignments).set({ isPrimary: true }).where(eq(schema.programSupervisorAssignments.id, nextPrimary.id));
+    }
+  }
+
+  await db.insert(schema.eventLog).values({
+    entityType: "internship_program",
+    entityId: program.id,
+    eventType: "program_supervisor_removed",
+    actorUserId: user.id,
+    metadata: { companyMemberId: validatedMemberId },
+  });
 }
