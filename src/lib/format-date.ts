@@ -30,6 +30,20 @@ export function formatRecentDate(date: Date, now = new Date(), timeZone = "Asia/
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(date);
 }
 
+/** "Sep 30 / 23 days left" for dense table cells (Internships list) — the
+ * full "Aug 30, 2026" from formatDeadline is too wide for a table column
+ * and drops the one thing a recruiter scanning the list actually needs:
+ * urgency. Same calendar-day approach as formatRecentDate so "Today"
+ * lands exactly at local midnight, not a 24h countdown. */
+export function formatDeadlineCompact(date: Date, now = new Date(), timeZone = "Asia/Qatar"): string {
+  const label = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(date);
+  const daysLeft = Math.round((calendarDayInTimeZone(date, timeZone) - calendarDayInTimeZone(now, timeZone)) / 86400000);
+  if (daysLeft < 0) return `${label} / Past due`;
+  if (daysLeft === 0) return `${label} / Today`;
+  if (daysLeft === 1) return `${label} / 1 day left`;
+  return `${label} / ${daysLeft} days left`;
+}
+
 /** "Saved 2 days ago" / "Saved 1 week ago" style relative label for a saved-item timestamp. */
 export function formatSavedAgo(date: Date, now = new Date()): string {
   const days = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 86400000));

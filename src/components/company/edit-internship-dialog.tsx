@@ -148,7 +148,7 @@ export function EditInternshipDialog({
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="edit-slots">Slots</Label>
+                <Label htmlFor="edit-slots">Openings</Label>
                 <Input
                   id="edit-slots"
                   type="number"

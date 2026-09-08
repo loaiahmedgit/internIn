@@ -19,6 +19,8 @@ export const EVENT_LABEL: Record<string, string> = {
   internship_offer_withdrawn: "An offer was withdrawn",
   offer_accepted: "An offer was accepted",
   offer_declined: "An offer was declined",
+  credential_policy_updated: "Challenge credential settings updated",
+  opportunity_deleted: "Internship deleted",
 };
 
 /**

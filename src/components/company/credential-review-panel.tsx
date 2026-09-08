@@ -53,8 +53,33 @@ export function CredentialReviewPanel({
   const [withdrawReason, setWithdrawReason] = useState("");
   const [reportReason, setReportReason] = useState("");
 
-  const label = policyOff ? "Credential unavailable" : state === "issued" && companyEndorsed ? "Issued · Company endorsed" : STATE_LABEL[state];
-  const Icon = policyOff ? ShieldQuestion : STATE_ICON[state];
+  // Optimistic local mirror of the server-derived props. router.refresh()
+  // triggers a real RSC refetch, but gives no signal this component can
+  // await — a click right after an action landing while that refetch is
+  // still in flight would otherwise show stale state (reproduced: this is
+  // real, not a test artifact). Actions that change state below update
+  // these directly so the UI reflects success immediately and reliably,
+  // never requiring a hard reload; the effects re-sync once the real
+  // refreshed props do arrive, so the server value always wins eventually.
+  // Derived-state-from-props, adjusted during render (React's own
+  // documented pattern) rather than in a useEffect — an effect's setState
+  // would fire one render late every time, which is exactly the cascading
+  // re-render eslint's react-hooks/set-state-in-effect rule flags.
+  const [prevState, setPrevState] = useState(state);
+  const [localState, setLocalState] = useState(state);
+  if (state !== prevState) {
+    setPrevState(state);
+    setLocalState(state);
+  }
+  const [prevCompanyEndorsed, setPrevCompanyEndorsed] = useState(companyEndorsed);
+  const [localCompanyEndorsed, setLocalCompanyEndorsed] = useState(companyEndorsed);
+  if (companyEndorsed !== prevCompanyEndorsed) {
+    setPrevCompanyEndorsed(companyEndorsed);
+    setLocalCompanyEndorsed(companyEndorsed);
+  }
+
+  const label = policyOff ? "Credential unavailable" : localState === "issued" && localCompanyEndorsed ? "Issued · Company endorsed" : STATE_LABEL[localState];
+  const Icon = policyOff ? ShieldQuestion : STATE_ICON[localState];
 
   function run(action: () => Promise<unknown>, onDone: () => void) {
     setError(null);
@@ -85,7 +110,7 @@ export function CredentialReviewPanel({
         </p>
       )}
 
-      {!policyOff && state === "pending_human_confirmation" && credentialId && (
+      {!policyOff && localState === "pending_human_confirmation" && credentialId && (
         <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <DialogTrigger render={<Button size="sm" className="mt-3 bg-teal-ink text-white hover:bg-teal-ink/90" />}>Confirm credential</DialogTrigger>
           <DialogContent>
@@ -106,7 +131,15 @@ export function CredentialReviewPanel({
             <DialogFooter>
               <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={pending}>Cancel</Button>
               <Button
-                onClick={() => run(() => confirmChallengeCredentialAction(credentialId), () => setConfirmOpen(false))}
+                onClick={() =>
+                  run(
+                    () => confirmChallengeCredentialAction(credentialId),
+                    () => {
+                      setConfirmOpen(false);
+                      setLocalState("issued");
+                    },
+                  )
+                }
                 disabled={pending}
                 className="bg-teal-ink text-white hover:bg-teal-ink/90"
               >
@@ -117,7 +150,7 @@ export function CredentialReviewPanel({
         </Dialog>
       )}
 
-      {!policyOff && state === "issued" && companyEndorsed && credentialId && (
+      {!policyOff && localState === "issued" && localCompanyEndorsed && credentialId && (
         <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
           <DialogTrigger render={<Button size="sm" variant="outline" className="mt-3" />}>Withdraw endorsement</DialogTrigger>
           <DialogContent>
@@ -132,7 +165,15 @@ export function CredentialReviewPanel({
             <DialogFooter>
               <Button variant="outline" onClick={() => setWithdrawOpen(false)} disabled={pending}>Cancel</Button>
               <Button
-                onClick={() => run(() => withdrawCredentialEndorsementAction({ credentialId, reason: withdrawReason }), () => setWithdrawOpen(false))}
+                onClick={() =>
+                  run(
+                    () => withdrawCredentialEndorsementAction({ credentialId, reason: withdrawReason }),
+                    () => {
+                      setWithdrawOpen(false);
+                      setLocalCompanyEndorsed(false);
+                    },
+                  )
+                }
                 disabled={pending || !withdrawReason.trim()}
                 className="bg-red-700 text-white hover:bg-red-800"
               >
@@ -146,7 +187,7 @@ export function CredentialReviewPanel({
       {/* Not a revoke — an internIn review signal only. This repo has no
           internIn-admin console yet, so a company can flag a concern but
           cannot itself revoke a base credential (docs/12, Phase 4A §16). */}
-      {!policyOff && state === "issued" && credentialId && (
+      {!policyOff && localState === "issued" && credentialId && (
         <Dialog open={reportOpen} onOpenChange={setReportOpen}>
           <DialogTrigger render={<Button size="sm" variant="outline" className="mt-2 ml-2" />}>Report credential issue</DialogTrigger>
           <DialogContent>

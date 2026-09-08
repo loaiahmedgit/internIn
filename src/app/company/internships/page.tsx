@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser, getCurrentCompanyMembership } from "@/lib/auth";
+import { hasPermission } from "@/lib/company/permissions";
 import { getHiringInternships } from "@/lib/company/internships-data";
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { InternshipRowActions } from "@/components/company/internship-row-actions";
-import { formatDeadline } from "@/lib/format-date";
+import { formatDeadlineCompact } from "@/lib/format-date";
 import { Sparkles, SearchX, ChevronRight } from "lucide-react";
 
 const WORK_MODE_LABEL: Record<string, string> = { remote: "Remote", onsite: "On-site", hybrid: "Hybrid" };
@@ -21,7 +22,7 @@ const WORK_MODE_LABEL: Record<string, string> = { remote: "Remote", onsite: "On-
 // column to content and drift the two apart.
 const MODE_COLUMN_CLASS = "w-24 text-center";
 const APPLICANTS_COLUMN_CLASS = "w-28 text-center";
-const DEADLINE_COLUMN_CLASS = "w-32 text-center";
+const DEADLINE_COLUMN_CLASS = "w-40 text-center";
 
 /**
  * Wording local to this page only — Home still shows "Published" via the
@@ -57,16 +58,23 @@ export default async function CompanyInternshipsPage({
   if (!user) redirect("/signin");
   const params = await searchParams;
 
-  const membership = await getCurrentCompanyMembership();
-  if (!membership.ok) {
+  const membershipResult = await getCurrentCompanyMembership();
+  if (!membershipResult.ok) {
     return (
       <CompanyPageContainer>
         <p className="text-center text-navy/60">This account isn&apos;t linked to a company yet.</p>
       </CompanyPageContainer>
     );
   }
+  // Row links lead into the opportunity detail page, which requires
+  // hiring_reviewer — gate the list the same way so a member without
+  // that permission never sees rows that then error out on click.
+  if (!hasPermission(membershipResult.membership, "hiring_reviewer")) {
+    throw new Error("You do not have access to this workspace feature. Ask a workspace administrator.");
+  }
+  const membership = membershipResult.membership;
 
-  const data = await getHiringInternships(membership.membership.companyId);
+  const data = await getHiringInternships(membership.companyId);
   const q = typeof params.q === "string" ? params.q.trim().toLowerCase() : "";
   const tab: TabKey = TABS.some((t) => t.key === params.tab) ? (params.tab as TabKey) : "all";
   const sort = params.sort === "oldest" ? "oldest" : "newest";
@@ -192,9 +200,21 @@ export default async function CompanyInternshipsPage({
                       <TableCell className={`${MODE_COLUMN_CLASS} text-navy/65`}>
                         {row.workMode ? WORK_MODE_LABEL[row.workMode] : "—"}
                       </TableCell>
-                      <TableCell className={`${APPLICANTS_COLUMN_CLASS} tabular-nums text-navy/65`}>{row.applicantCount}</TableCell>
+                      <TableCell className={`${APPLICANTS_COLUMN_CLASS} tabular-nums`}>
+                        {row.applicantCount > 0 ? (
+                          <Link
+                            href={`/company/candidates?opportunity=${encodeURIComponent(row.opportunityId)}`}
+                            prefetch={false}
+                            className="text-navy/65 hover:text-teal-ink hover:underline"
+                          >
+                            {row.applicantCount}
+                          </Link>
+                        ) : (
+                          <span className="text-navy/65">{row.applicantCount}</span>
+                        )}
+                      </TableCell>
                       <TableCell className={`${DEADLINE_COLUMN_CLASS} text-navy/65`}>
-                        {row.applicationDeadline ? formatDeadline(row.applicationDeadline) : "—"}
+                        {row.applicationDeadline ? formatDeadlineCompact(row.applicationDeadline) : "—"}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={INTERNSHIP_STATUS_CLASS[row.status]}>

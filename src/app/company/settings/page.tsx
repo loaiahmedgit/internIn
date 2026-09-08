@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
-import { Settings, Palette, Users, Bell, ShieldCheck } from "lucide-react";
+import { Settings, Palette, Users, Bell, ShieldCheck, Briefcase } from "lucide-react";
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { hasPermission } from "@/lib/company/permissions";
@@ -35,6 +35,12 @@ const tabs = [
     title: "Notifications",
     icon: Bell,
     description: "Choose which hiring updates you receive by email.",
+  },
+  {
+    id: "hiring",
+    title: "Hiring defaults",
+    icon: Briefcase,
+    description: "Defaults applied when you create a new challenge — each challenge keeps its own setting afterward.",
   },
   {
     id: "privacy",

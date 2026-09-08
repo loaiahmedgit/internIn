@@ -7,7 +7,9 @@ import type { InternshipFormInput } from "@/lib/opportunities/actions";
 
 export default async function EditOpportunityPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { membership } = await requireCurrentCompanyMember();
+  // saveInternshipAction requires hiring_access — match it here so a
+  // hiring_reviewer-only member never reaches a form they can't save.
+  const { membership } = await requireCurrentCompanyMember("hiring_access");
   const db = getDb();
 
   const [opportunity] = await db

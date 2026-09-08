@@ -15,6 +15,27 @@ import { ArrowRight, ArrowLeft, Sparkles, X, Plus } from "lucide-react";
 
 type Step = "describe-role" | "review-internship" | "describe-work" | "challenge";
 
+/** Minimum viable Challenge per ChallengeSchema — obvious "replace me"
+ * placeholder text in every required field, so a company can reach
+ * ChallengeBuilder and fill in the real thing with zero AI calls. */
+function buildBlankChallenge(role: string): Challenge {
+  return {
+    title: `${role} challenge`,
+    scenario: "Describe the scenario the candidate will work through — replace this placeholder with real context about the task.",
+    estimatedMinutes: 60,
+    estimatedDurationLabel: "45-75 minutes",
+    skills: [],
+    tasks: [{ id: "task-1", title: "First task", description: "Describe what the candidate needs to do." }],
+    deliverables: ["Describe what the candidate must submit."],
+    files: [],
+    rubric: [{ criterion: "Quality of work", description: "Describe what a strong submission looks like.", weight: 100 }],
+    submissionRequirements: [
+      { id: "submission-1", label: "Written response", inputMode: "text", artifactKind: "text_response", required: true },
+    ],
+    status: "draft",
+  };
+}
+
 const EXAMPLE_PROMPTS = [
   "We need a university student who can clean sales data, use basic SQL and explain insights clearly.",
   "Looking for a marketing intern to help with campaign analysis and competitor research.",
@@ -84,6 +105,32 @@ export function CreateInternshipWizard({
       setStep("challenge");
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Generated, but couldn't save it to the database.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /**
+   * Manual path — the challenge-creation flow must never hard-depend on the
+   * AI provider being up (Phase 5 §8; reproduced this session: an
+   * OpenRouter outage left "Generate Challenge" as the only way in, with no
+   * way to reach ChallengeBuilder at all). Seeds the minimum a real
+   * challenge needs (ChallengeSchema requires >=1 task/deliverable/rubric
+   * row/submission requirement to save at all) as obvious placeholder text,
+   * saved as "human_edited" — no model call — then hands off straight to
+   * ChallengeBuilder, where every field is a normal editable input.
+   */
+  async function handleStartManualChallenge() {
+    if (!internship || !opportunityId) return;
+    setSaveError(null);
+    setLoading(true);
+    try {
+      const template = buildBlankChallenge(internship.role);
+      await saveChallengeVersionAction(opportunityId, template, "human_edited");
+      setChallenge(template);
+      setStep("challenge");
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Couldn't start the challenge.");
     } finally {
       setLoading(false);
     }
@@ -181,7 +228,7 @@ export function CreateInternshipWizard({
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Slots">
+              <Field label="Openings">
                 <Input
                   type="number"
                   value={internship.slots}
@@ -259,16 +306,24 @@ export function CreateInternshipWizard({
                   <ArrowLeft className="mr-1.5 size-4" /> Back
                 </Button>
               )}
-              <Button
-                onClick={handleGenerateChallenge}
-                disabled={!workDescription.trim()}
-                size="lg"
-                className="bg-teal text-white hover:bg-teal/90"
-              >
-                <Sparkles className="mr-1.5 size-4" /> Generate Challenge
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handleStartManualChallenge}>
+                  Start from scratch
+                </Button>
+                <Button
+                  onClick={handleGenerateChallenge}
+                  disabled={!workDescription.trim()}
+                  size="lg"
+                  className="bg-teal text-white hover:bg-teal/90"
+                >
+                  <Sparkles className="mr-1.5 size-4" /> Generate Challenge
+                </Button>
+              </div>
             </div>
           )}
+          <p className="mt-3 text-xs text-navy/45">
+            &quot;Start from scratch&quot; skips AI entirely — you&apos;ll write every field yourself in the challenge editor.
+          </p>
         </div>
       )}
 

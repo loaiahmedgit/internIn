@@ -203,33 +203,35 @@ export default async function CompanyAnalyticsPage({
           title="Source performance"
           subtitle="Only recorded sources; conversion to accepted offer"
         >
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-navy/10 text-navy/65">
-                <th className="pb-3 text-left font-medium">Source</th>
-                <th className="pb-3 text-right font-medium">Applicants</th>
-                <th className="pb-3 text-right font-medium">Conversion</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sources.map(({ source, metrics }) => (
-                <tr
-                  key={source}
-                  className="border-b border-navy/8 last:border-0"
-                >
-                  <td className="py-3 text-navy">
-                    {sourceLabels[source] ?? source}
-                  </td>
-                  <td className="text-right text-navy tabular-nums">
-                    {metrics.applicants}
-                  </td>
-                  <td className="text-right text-teal-ink tabular-nums">
-                    {percent(metrics.accepted, metrics.applicants)}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-navy/10 text-navy/65">
+                  <th className="pb-3 text-left font-medium">Source</th>
+                  <th className="pb-3 text-right font-medium">Applicants</th>
+                  <th className="pb-3 text-right font-medium">Conversion</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {sources.map(({ source, metrics }) => (
+                  <tr
+                    key={source}
+                    className="border-b border-navy/8 last:border-0"
+                  >
+                    <td className="py-3 text-navy">
+                      {sourceLabels[source] ?? source}
+                    </td>
+                    <td className="text-right text-navy tabular-nums">
+                      {metrics.applicants}
+                    </td>
+                    <td className="text-right text-teal-ink tabular-nums">
+                      {percent(metrics.accepted, metrics.applicants)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {!sources.length && (
             <p className="mt-4 text-sm text-navy/60">
               No applications in this period.

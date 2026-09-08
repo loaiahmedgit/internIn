@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import { CandidateComparisonView } from "@/components/opportunities/candidate-comparison-view";
@@ -31,40 +31,44 @@ export default async function CompareCandidatesPage({
     .innerJoin(schema.users, eq(schema.applications.studentId, schema.users.id))
     .where(eq(schema.applications.opportunityId, opportunity.id));
 
-  const candidates = await Promise.all(
-    applications.map(async (a) => {
-      const [submission] = await db
-        .select()
+  const applicationIds = applications.map((a) => a.applicationId);
+
+  const submissions = applicationIds.length
+    ? await db
+        .select({ id: schema.submissions.id, applicationId: schema.submissions.applicationId })
         .from(schema.submissions)
-        .where(eq(schema.submissions.applicationId, a.applicationId))
+        .where(inArray(schema.submissions.applicationId, applicationIds))
         .orderBy(desc(schema.submissions.submittedAt))
-        .limit(1);
-      if (!submission) return null;
+    : [];
+  const latestSubmissionByApplication = new Map<string, (typeof submissions)[number]>();
+  for (const s of submissions) {
+    if (!latestSubmissionByApplication.has(s.applicationId)) latestSubmissionByApplication.set(s.applicationId, s);
+  }
+  const submissionIds = [...latestSubmissionByApplication.values()].map((s) => s.id);
 
-      const [evidence] = await db
-        .select()
-        .from(schema.candidateEvidence)
-        .where(eq(schema.candidateEvidence.submissionId, submission.id))
-        .limit(1);
-      if (!evidence) return null;
+  const evidenceRows = submissionIds.length
+    ? await db.select({ submissionId: schema.candidateEvidence.submissionId }).from(schema.candidateEvidence).where(inArray(schema.candidateEvidence.submissionId, submissionIds))
+    : [];
+  const submissionIdsWithEvidence = new Set(evidenceRows.map((e) => e.submissionId));
 
-      const [offer] = await db
-        .select({ id: schema.internshipOffers.id })
-        .from(schema.internshipOffers)
-        .where(eq(schema.internshipOffers.applicationId, a.applicationId))
-        .limit(1);
+  const offers = applicationIds.length
+    ? await db.select({ applicationId: schema.internshipOffers.applicationId }).from(schema.internshipOffers).where(inArray(schema.internshipOffers.applicationId, applicationIds))
+    : [];
+  const applicationIdsWithOffer = new Set(offers.map((o) => o.applicationId));
 
-      return {
+  const evaluatedCandidates = applications.flatMap((a) => {
+    const submission = latestSubmissionByApplication.get(a.applicationId);
+    if (!submission || !submissionIdsWithEvidence.has(submission.id)) return [];
+    return [
+      {
         applicationId: a.applicationId,
         applicationStatus: a.applicationStatus,
         studentName: a.studentName,
         submissionId: submission.id,
-        alreadyInvited: !!offer,
-      };
-    }),
-  );
-
-  const evaluatedCandidates = candidates.filter((c): c is NonNullable<typeof c> => c !== null);
+        alreadyInvited: applicationIdsWithOffer.has(a.applicationId),
+      },
+    ];
+  });
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-16">

@@ -100,7 +100,7 @@ export default async function CandidateProfilePage({
       ? computeCredentialEligibility({ ...toEligibilityInput(credentialContext), existingCredential: null }).demonstratedCriteria.map((c) => c.criterion)
       : (credentialEligibility?.demonstratedCriteria.map((c) => c.criterion) ?? []);
 
-  const stage = stageKeyOf({ status: candidate.status, hasSubmission: !!candidate.submission });
+  const stage = stageKeyOf({ status: candidate.status, hasSubmission: !!candidate.submission, offer: candidate.offer });
   const insights = candidateInsights(candidate);
   // Legacy artifacts only ever populate pre-P0 historical submissions —
   // once real submissionArtifacts rows exist, those are the source of truth
@@ -493,7 +493,7 @@ export default async function CandidateProfilePage({
                 submissionId={candidate.submission?.id ?? null}
                 status={candidate.status}
                 offerStatus={candidate.offer?.status ?? null}
-                hasEvidence={true}
+                hasEvidence={!!candidate.evidence}
               />
             </div>
           </section>

@@ -95,12 +95,21 @@ export default async function OpportunityDetailPage({
   }));
   const metrics = hiringMetrics(hiringApps);
 
-  const { rows: allCandidates } = await getCompanyCandidates(membership.companyId);
+  // getCompanyCandidates fetches every candidate across the whole company —
+  // only the Candidates tab renders scopedCandidates/previewCandidates, so
+  // every other tab (Overview, Listing, Challenge, Activity) skips the
+  // fetch entirely instead of paying for it on every page load.
+  const { rows: allCandidates } = tab === "candidates" ? await getCompanyCandidates(membership.companyId) : { rows: [] };
   const scopedCandidates = allCandidates.filter((r) => r.opportunityId === id).sort((a, b) => b.appliedAt.getTime() - a.appliedAt.getTime());
   const previewCandidates = scopedCandidates.slice(0, 10);
 
   const offerIds = offers.map((o) => o.id);
-  const activityEntityIds = [id, ...appIds, ...offerIds];
+  // credential_policy_updated is logged against the challenge row itself
+  // (entityType "challenge", entityId challenge.id — opportunities/
+  // actions.ts), not the opportunity — reproduced live during Phase 5 QA:
+  // changing a challenge's credential policy produced zero Activity entry
+  // without this.
+  const activityEntityIds = [id, ...appIds, ...offerIds, ...(challenge ? [challenge.id] : [])];
   const activity = activityEntityIds.length
     ? await db
         .select({ id: schema.eventLog.id, eventType: schema.eventLog.eventType, createdAt: schema.eventLog.createdAt })
