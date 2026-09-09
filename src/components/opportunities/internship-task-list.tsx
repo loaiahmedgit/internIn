@@ -6,17 +6,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { addInternshipTaskAction, updateInternshipTaskStatusAction } from "@/lib/opportunities/program-actions";
 
-type Task = { id: string; title: string; description: string | null; status: "pending" | "in_progress" | "done" };
+// "blocked" is a real status since Phase 6B (the intern sets it on their
+// own task view — see student-task-item.tsx) — this company-side cycle
+// button only ever moves between pending/in_progress/done itself, but the
+// type and label map must stay exhaustive for any row a company member
+// might see, including one a student has marked blocked.
+type Task = { id: string; title: string; description: string | null; status: "pending" | "in_progress" | "blocked" | "done" };
 
 const NEXT_STATUS: Record<Task["status"], Task["status"]> = {
   pending: "in_progress",
   in_progress: "done",
+  blocked: "in_progress",
   done: "pending",
 };
 
 const STATUS_LABEL: Record<Task["status"], string> = {
   pending: "Pending",
   in_progress: "In progress",
+  blocked: "Blocked",
   done: "Done",
 };
 

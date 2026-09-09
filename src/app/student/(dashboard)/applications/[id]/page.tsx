@@ -288,7 +288,12 @@ export default async function ApplicationWorkspacePage({
 
       {program && (
         <div className="mt-6">
-          <h2 className="text-lg font-semibold text-navy">Your internship program</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-navy">Your internship program</h2>
+            <Link href={`/student/internships/${program.id}`} className="shrink-0 text-sm font-medium text-teal-ink hover:underline">
+              Open workspace
+            </Link>
+          </div>
           <p className="mt-1 text-sm text-navy/68">
             {program.durationWeeks} weeks · {program.hoursPerWeek}h/week
           </p>

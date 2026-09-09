@@ -72,7 +72,9 @@ export const submissionStatusEnum = pgEnum("submission_status", ["submitted", "r
 export const offerStatusEnum = pgEnum("offer_status", ["pending", "accepted", "declined"]);
 export const placementFeeStatusEnum = pgEnum("placement_fee_status", ["unpaid", "stubbed_paid", "paid"]);
 export const programStatusEnum = pgEnum("program_status", ["draft", "active", "completed"]);
-export const internshipTaskStatusEnum = pgEnum("internship_task_status", ["pending", "in_progress", "done"]);
+// "blocked" added Phase 6B — a real student-reportable state ("I'm blocked
+// because..."), not previously representable.
+export const internshipTaskStatusEnum = pgEnum("internship_task_status", ["pending", "in_progress", "blocked", "done"]);
 export const roleKnowledgeSourceEnum = pgEnum("role_knowledge_source", ["onet", "esco", "internin_curated"]);
 export const roleProfileKindEnum = pgEnum("role_profile_kind", ["source_occupation", "internship_overlay"]);
 export const roleEvidenceTypeEnum = pgEnum("role_evidence_type", [
@@ -806,6 +808,12 @@ export const internshipTasks = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     status: internshipTaskStatusEnum("status").notNull().default("pending"),
+    /** Set only while status is "blocked" — the intern's own words, cleared automatically whenever status moves away from blocked (see updateStudentTaskStatusAction). Phase 6B §10. */
+    blockerNote: text("blocker_note"),
+    /** A short work update the intern writes about this task — Phase 6B §11's "short work update" evidence type. Not a file — reusing the challenge-submission storage architecture for a lightweight per-task note was explicitly out of scope. */
+    evidenceNote: text("evidence_note"),
+    /** A real external URL (repo, doc, deployed link) the intern points to as evidence — Phase 6B §11's "URL / repository / document" types. */
+    evidenceUrl: text("evidence_url"),
     ...timestamps,
   },
   (t) => [index("internship_tasks_week_idx").on(t.weekId)],

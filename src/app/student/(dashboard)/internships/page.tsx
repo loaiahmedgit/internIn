@@ -182,7 +182,7 @@ export default async function StudentInternshipsPage() {
             )}
 
             <Link
-              href={`/student/applications/${offer.applicationId}`}
+              href={program ? `/student/internships/${program.id}` : `/student/applications/${offer.applicationId}`}
               className="mt-5 inline-flex rounded-lg border border-teal/30 px-4 py-2 text-sm font-medium text-teal-ink transition-colors hover:bg-teal/5"
             >
               Open full workspace

@@ -21,7 +21,7 @@ export interface ProgramWeekInput {
 
 export interface ProgramTaskInput {
   weekId: string;
-  status: "pending" | "in_progress" | "done";
+  status: "pending" | "in_progress" | "blocked" | "done";
 }
 
 export interface ProgramProgress {
@@ -29,6 +29,8 @@ export interface ProgramProgress {
   currentWeekTitle: string;
   tasksDone: number;
   tasksTotal: number;
+  /** Real count of tasks currently in "blocked" status — Phase 6B §10, never inferred. */
+  blockedCount: number;
   /** expectedWeekNumber - (highestCompletedWeekNumber + 1), clamped to >= 0 */
   gapWeeks: number;
   severity: Exclude<ProgramSeverity, "completed">;
@@ -48,6 +50,7 @@ export function computeProgramProgress(
 
   const tasksTotal = tasks.length;
   const tasksDone = tasks.filter((t) => t.status === "done").length;
+  const blockedCount = tasks.filter((t) => t.status === "blocked").length;
 
   let highestCompletedWeekNumber = 0;
   for (const week of sortedWeeks) {
@@ -76,6 +79,7 @@ export function computeProgramProgress(
     currentWeekTitle: currentWeek?.title ?? "",
     tasksDone,
     tasksTotal,
+    blockedCount,
     gapWeeks,
     severity,
   };

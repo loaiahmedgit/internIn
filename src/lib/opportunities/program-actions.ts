@@ -113,7 +113,7 @@ export const requireProgramSupervisor = requireProgramViewer;
 
 const TaskTitleSchema = z.string().trim().min(1).max(160);
 const TaskDescriptionSchema = z.string().trim().max(2000);
-const TaskStatusSchema = z.enum(["pending", "in_progress", "done"]);
+const TaskStatusSchema = z.enum(["pending", "in_progress", "blocked", "done"]);
 const FeedbackSchema = z.string().trim().min(1).max(4000);
 
 export async function addInternshipTaskAction(weekId: string, title: string, description?: string) {
@@ -139,7 +139,7 @@ export async function addInternshipTaskAction(weekId: string, title: string, des
   return task.id as string;
 }
 
-export async function updateInternshipTaskStatusAction(taskId: string, status: "pending" | "in_progress" | "done") {
+export async function updateInternshipTaskStatusAction(taskId: string, status: "pending" | "in_progress" | "blocked" | "done") {
   const validatedTaskId = IdSchema.parse(taskId);
   const validatedStatus = TaskStatusSchema.parse(status);
   const { user, membership } = await requireCurrentCompanyMember("program_supervisor");
