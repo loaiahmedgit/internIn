@@ -52,6 +52,13 @@ describe("recommendRoleFromProfiles", () => {
     expect(result.clarificationQuestion).toMatch(/Should I use Backend Developer Intern/i);
   });
 
+  it("asks about a title conflict with concrete duties, tools and outcomes even when domain extraction is unknown", () => {
+    const result = recommendRoleFromProfiles(need({ explicitRoleTitle: "Graphic Design Intern", activities: ["write backend APIs in Node.js"], problems: ["need backend APIs"], desiredOutcomes: ["backend APIs implemented"], systemsOrTools: ["Node.js"], domainSignals: [], domainClarity: "ambiguous" }), ROLE_INTELLIGENCE_FIXTURES);
+    expect(result.recommendedRole?.title).toBe("Graphic Design Intern");
+    expect(result.clarificationNeeded).toBe(true);
+    expect(result.alternatives[0]?.title).toBe("Backend Developer Intern");
+  });
+
   it("ranks ERP implementation above adjacent finance and operations roles from work evidence", () => {
     const result = recommendRoleFromProfiles(
       need({

@@ -1,3 +1,4 @@
+import type { ApplicationEntryEvidence } from "@/lib/opportunities/application-entry";
 import { eq, or, and, inArray, asc, desc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCompanyMember } from "@/lib/auth";
@@ -11,6 +12,7 @@ export interface CandidateDetail {
   studentEmail: string;
   status: "applied" | "shortlisted" | "invited" | "declined" | "withdrawn";
   appliedAt: Date;
+  entryEvidence?: ApplicationEntryEvidence | null;
   challengeStartedAt?: Date | null;
   opportunityId: string;
   role: string;
@@ -85,6 +87,7 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
   const [row] = await db
     .select({
       applicationId: schema.applications.id,
+      entryEvidence: schema.applications.entryEvidence,
       studentId: schema.applications.studentId,
       status: schema.applications.status,
       appliedAt: schema.applications.createdAt,
@@ -208,6 +211,7 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
 
   return {
     applicationId: row.applicationId,
+    entryEvidence: row.entryEvidence,
     studentId: row.studentId,
     studentName: row.studentName,
     studentEmail: row.studentEmail,

@@ -375,8 +375,8 @@ export default async function OpportunityDetailPage({
                   <dd className="text-navy">{opportunity.hoursPerWeek}</dd>
                   <dt className="text-navy/50">Application deadline</dt>
                   <dd className="text-navy">{opportunity.applicationDeadline ? formatDeadline(opportunity.applicationDeadline) : "No deadline set"}</dd>
-                  <dt className="text-navy/50">Requires CV</dt>
-                  <dd className="text-navy">{opportunity.requireCv ? "Yes" : "No"}</dd>
+                  <dt className="text-navy/50">CV</dt>
+                  <dd className="text-navy">Optional supporting context</dd>
                 </dl>
               </div>
               {opportunity.skills.length > 0 && (
@@ -405,6 +405,7 @@ export default async function OpportunityDetailPage({
                 <ChallengeStatusBadge status={challenge!.status} />
               </div>
               <p className="mt-2 text-sm whitespace-pre-wrap text-navy/75">{challengeVersion!.scenario}</p>
+              <Link href={`/company/opportunities/${id}/setup/challenge`} className="mt-3 inline-block text-sm font-medium text-teal-ink underline">Edit assessment</Link>
               <div className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">Expected duration</p>

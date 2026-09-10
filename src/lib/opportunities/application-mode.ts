@@ -16,14 +16,14 @@ export const APPLICATION_MODE_LABEL: Record<ApplicationMode, string> = {
 };
 
 export const APPLICATION_MODE_COMPANY_DESCRIPTION: Record<ApplicationMode, string> = {
-  quick_apply: "Apply with their internIn profile.",
-  optional_challenge: "Students can apply immediately and optionally complete a realistic Challenge to add demonstrated evidence.",
-  challenge_required: "Students must complete the Challenge before their application can progress to shortlist or offer.",
+  quick_apply: "Apply with their internIn profile and brief work responses.",
+  optional_challenge: "Students apply with their profile and brief work responses, then optionally complete a realistic Challenge to add demonstrated evidence.",
+  challenge_required: "Students apply with their profile and brief work responses, and must submit the Challenge before their application can progress to shortlist or offer.",
 };
 
 /** Student-facing, shown on Explore before applying. */
 export const APPLICATION_MODE_STUDENT_DESCRIPTION: Record<ApplicationMode, string> = {
-  quick_apply: "Apply with your internIn profile — no Challenge for this internship.",
-  optional_challenge: "You can apply now. Completing the Challenge adds demonstrated evidence.",
-  challenge_required: "Apply now, then complete the Challenge before your application can progress.",
+  quick_apply: "Apply with your internIn profile and brief work responses. No additional Challenge.",
+  optional_challenge: "Apply with your profile and brief work responses. The optional Challenge adds evidence.",
+  challenge_required: "Apply with your profile and brief work responses, then complete the Challenge before your application can progress.",
 };

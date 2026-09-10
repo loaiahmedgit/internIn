@@ -1,3 +1,5 @@
+import { extractRoleReality } from "@/lib/ai/challenge-architect";
+import { nextArchitectQuestions } from "@/lib/challenges/architect";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText, type UIMessageStreamWriter } from "ai";
@@ -98,6 +100,7 @@ async function runDraftChallenge(
     roleHint?: string;
     workNeed?: WorkNeedProfile | null;
     progressLabel?: string;
+    architectContinuation?: "architect_challenge" | "architect_internship";
   },
 ): Promise<{ draft: ChallengeDraft; context: EmployerContext } | null> {
   const {
@@ -121,6 +124,21 @@ async function runDraftChallenge(
   let context: EmployerContext;
   try {
     context = await buildEmployerContext({ originalRequest, transcript, answers: answers ?? null, roleHint, workNeed });
+    const roleReality = await extractRoleReality(`${originalRequest}\n${transcript}\nEmployer answers: ${JSON.stringify(answers ?? [])}`.slice(-6000), existingDraft?.roleReality ?? undefined);
+    for (const answer of answers ?? []) {
+      const field = answer.slot === "expected_before_joining" ? "expectedBeforeJoining" : answer.slot === "will_teach" ? "willTeach" : answer.slot === "responsibilities" ? "actualWork" : null;
+      if (field && answer.answer?.trim()) roleReality[field] = answer.answer.trim().slice(0, 700);
+    }
+    const critical = nextArchitectQuestions(roleReality, 4).filter(({ field }) => ["actualWork", "expectedBeforeJoining", "willTeach"].includes(field));
+    if (critical.length) {
+      writer.write({ type: "data-questionnaire", id: `architect:${turnId}`, data: {
+        intro: "A few details will help keep this fair for an intern.",
+        questions: critical.map(({ field, question }) => ({ id: field, slot: field === "actualWork" ? "responsibilities" : field === "expectedBeforeJoining" ? "expected_before_joining" : "will_teach", prompt: question, type: "freeform", required: true })),
+        continuation: params.architectContinuation ?? "architect_challenge", roleSummary: roleHint ?? context.role,
+      } });
+      return null;
+    }
+    context = { ...context, roleReality };
     const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction });
     draft = attachDraftIdentity(generated, existingDraft);
   } catch (error) {
@@ -164,6 +182,7 @@ async function runCreateInternshipDraft(
     existingDraft: null,
     announce: false,
     progressLabel: "Preparing your internship draft…",
+    architectContinuation: "architect_internship",
   });
   if (!result) return; // error part already written
   const { draft, context } = result;
@@ -239,6 +258,13 @@ export async function POST(req: Request) {
       const questionnaireSubmission = latestQuestionnaireSubmission(messages);
       if (questionnaireSubmission) {
         const { answers, continuation, roleSummary } = questionnaireSubmission;
+        if (continuation === "architect_internship" || continuation === "architect_challenge") {
+          const allAnswers = messages.flatMap((message) => message.role === "user" ? message.metadata?.questionnaireAnswers ?? [] : []);
+          const params = { requestId, t0, turnId, originalRequest: roleSummary, transcript: transcriptOf(messages), answers: allAnswers, roleHint: roleSummary };
+          if (continuation === "architect_internship") await runCreateInternshipDraft(writer, params);
+          else await runDraftChallenge(writer, { ...params, existingDraft: latestChallengeDraft(messages) });
+          return;
+        }
         if (continuation === "offer_next_action") {
           writer.write({
             type: "data-actionOffer",
@@ -252,32 +278,7 @@ export async function POST(req: Request) {
           return;
         }
 
-        const generationId = crypto.randomUUID();
-        const originalRequest = roleSummary;
-        console.log(`[assistant] requestId=${requestId} generationId=${generationId} trigger=questionnaire generation start at +${Date.now() - t0}ms`);
-
-        writer.write({ type: "data-progress", id: "progress", data: { label: "Designing your challenge…" } });
-        let draft;
-        try {
-          // NOT transcriptOf(messages) here: the questionnaire's own
-          // structured answers already carry everything EmployerContext
-          // needs. Sending the full, ever-growing conversation transcript
-          // on top of them was pure re-derivation.
-          const context = await buildEmployerContext({ originalRequest, transcript: originalRequest, answers, roleHint: roleSummary });
-          console.log(`[assistant] requestId=${requestId} generationId=${generationId} T1 employerContext ready at +${Date.now() - t0}ms`);
-          const existingDraft = latestChallengeDraft(messages);
-          const generated = await generateChallengeDraftObject({ context, existingDraft, revisionInstruction: existingDraft ? "Incorporate the employer's latest answers." : undefined });
-          console.log(`[assistant] requestId=${requestId} generationId=${generationId} T4 draft object validated at +${Date.now() - t0}ms`);
-          draft = attachDraftIdentity(generated, existingDraft);
-        } catch (error) {
-          console.error(`[assistant] requestId=${requestId} generationId=${generationId} generation failed at +${Date.now() - t0}ms:`, error instanceof Error ? error.message : error);
-          writer.write({ type: "data-generationError", id: `error:${turnId}`, data: { message: "We couldn't finish generating the challenge. Your answers are saved — try again." } });
-          return;
-        }
-
-        writer.write({ type: "data-challengeDraft", id: `challengeDraft:${turnId}`, data: draft });
-        console.log(`[assistant] requestId=${requestId} generationId=${generationId} T5 draft written to client at +${Date.now() - t0}ms draftId=${draft.id} taskCount=${draft.tasks.length}`);
-        writePlainText(writer, `intro:${turnId}`, "Challenge draft ready\n\nHere's a draft challenge based on your request.");
+        await runDraftChallenge(writer, { requestId, t0, turnId, originalRequest: roleSummary, transcript: transcriptOf(messages), answers: messages.flatMap((message) => message.role === "user" ? message.metadata?.questionnaireAnswers ?? [] : []), roleHint: roleSummary, existingDraft: latestChallengeDraft(messages) });
         return;
       }
 
@@ -659,6 +660,8 @@ function challengeDraftFromStoredVersion(role: string, challengeId: string, vers
     version: version.versionNumber,
     status: "draft",
     role,
+    roleReality: version.roleReality,
+    assessmentPlan: version.assessmentPlan,
     title: version.title,
     scenario: version.scenario,
     skills: version.skills.length ? version.skills : [role],

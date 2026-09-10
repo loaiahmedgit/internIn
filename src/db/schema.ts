@@ -1,3 +1,5 @@
+import type { AssessmentPlan, RoleReality } from "@/lib/challenges/architect";
+import type { EligibilityRequirement, ApplicationEntryEvidence } from "@/lib/opportunities/application-entry";
 import {
   pgTable,
   pgEnum,
@@ -450,8 +452,9 @@ export const opportunities = pgTable(
     whatYouWillLearn: text("what_you_will_learn"),
     requirements: jsonb("requirements").$type<string[]>().notNull().default([]),
     niceToHave: jsonb("nice_to_have").$type<string[]>().notNull().default([]),
-    /** Whether a CV/resume is required to apply. Defaults true — matches every opportunity created before this setting existed. */
-    requireCv: boolean("require_cv").notNull().default(true),
+    /** Legacy metadata only. CV is optional supporting context in every mode. */
+    requireCv: boolean("require_cv").notNull().default(false),
+    eligibilityRequirements: jsonb("eligibility_requirements").$type<EligibilityRequirement[]>().notNull().default([]),
     applicationQuestions: jsonb("application_questions").$type<string[]>().notNull().default([]),
     duration: text("duration").notNull(),
     hoursPerWeek: integer("hours_per_week").notNull(),
@@ -523,6 +526,9 @@ export const challengeVersions = pgTable(
     title: text("title").notNull(),
     scenario: text("scenario").notNull(),
     estimatedMinutes: integer("estimated_minutes").notNull(),
+    architectPolicyVersion: integer("architect_policy_version").notNull().default(0),
+    roleReality: jsonb("role_reality").$type<RoleReality | null>(),
+    assessmentPlan: jsonb("assessment_plan").$type<AssessmentPlan | null>(),
     /** Human duration range ("4–6 hours") — the canonical display value
      * everywhere a challenge's length is shown; estimatedMinutes is only a
      * numeric fallback for code that predates this column. Null for
@@ -624,6 +630,8 @@ export const applications = pgTable(
     status: applicationStatusEnum("status").notNull().default("applied"),
     /** Set only when the student explicitly clicks "Start challenge" — never on page view. Distinguishes "to do" from "in progress" without inventing a completion percentage. */
     challengeStartedAt: timestamp("challenge_started_at", { withTimezone: true }),
+    assignedChallengeVersionId: uuid("assigned_challenge_version_id").references(() => challengeVersions.id, { onDelete: "restrict" }),
+    entryEvidence: jsonb("entry_evidence").$type<ApplicationEntryEvidence | null>(),
     /** Real, detectable-only signal ("direct" | "referral" | "company_website") — see src/lib/opportunities/application-source.ts. Null for applications from before this column existed. */
     source: text("source"),
     ...timestamps,
@@ -652,7 +660,7 @@ export const submissions = pgTable(
     submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
     ...timestamps,
   },
-  (t) => [index("submissions_application_idx").on(t.applicationId)],
+  (t) => [uniqueIndex("submissions_application_uidx").on(t.applicationId)],
 );
 
 /**

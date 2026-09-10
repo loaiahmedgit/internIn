@@ -8,6 +8,7 @@ import { z } from "zod";
 import { classifyApplicationSource } from "@/lib/opportunities/application-source";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SUBMISSION_ARTIFACT_KINDS, SUBMISSION_INPUT_MODES } from "@/lib/challenges/submission-model";
+import { baselineQuestions, captureBaselineEvidence, evaluateEligibility } from "./application-entry";
 import { MUNICIPALITY_OPTIONS } from "@/lib/qatar-municipalities";
 
 async function getCompanyContext(opportunityId: string) {
@@ -31,8 +32,33 @@ async function getCompanyContext(opportunityId: string) {
  * itself, never trusts a client-supplied id alone.
  */
 
-export async function applyToOpportunityAction(opportunityId: string, referrer?: string) {
+async function readEligibility(opportunity: typeof schema.opportunities.$inferSelect, studentId: string) {
+  if (!opportunity.eligibilityRequirements?.length) return [];
+  const db = getDb();
+  const [[profile], education, certifications] = await Promise.all([
+    db.select({ major: schema.studentProfiles.major }).from(schema.studentProfiles).where(eq(schema.studentProfiles.userId, studentId)).limit(1),
+    db.select({ fieldOfStudy: schema.studentEducation.fieldOfStudy, level: schema.studentEducation.level }).from(schema.studentEducation).where(eq(schema.studentEducation.studentId, studentId)),
+    db.select({ name: schema.studentCertifications.name, expiryDate: schema.studentCertifications.expiryDate }).from(schema.studentCertifications).where(eq(schema.studentCertifications.studentId, studentId)),
+  ]);
+  return evaluateEligibility(opportunity.eligibilityRequirements, { major: profile?.major, education, certifications });
+}
+
+export async function getApplicationEntryAction(opportunityId: string) {
   const { user } = await requireCurrentStudent();
+  const id = z.string().uuid().parse(opportunityId);
+  const db = getDb();
+  const [existing] = await db.select({ id: schema.applications.id }).from(schema.applications)
+    .where(and(eq(schema.applications.opportunityId, id), eq(schema.applications.studentId, user.id))).limit(1);
+  if (existing) return { applicationId: existing.id, questions: [], eligibility: [], revision: "" };
+  const [opportunity] = await db.select().from(schema.opportunities).where(eq(schema.opportunities.id, id)).limit(1);
+  if (!opportunity || opportunity.status !== "published") throw new Error("This opportunity isn't open for applications.");
+  const eligibility = await readEligibility(opportunity, user.id);
+  return { applicationId: null, questions: eligibility.every((item) => item.met) ? baselineQuestions(opportunity.role, opportunity.applicationQuestions) : [], eligibility, revision: opportunity.updatedAt.toISOString() };
+}
+
+export async function applyToOpportunityAction(opportunityId: string, referrer?: string, entry?: { answers: string[]; revision: string }) {
+  const { user } = await requireCurrentStudent();
+  opportunityId = z.string().uuid().parse(opportunityId);
   const db = getDb();
 
   const [row] = await db
@@ -41,9 +67,6 @@ export async function applyToOpportunityAction(opportunityId: string, referrer?:
     .innerJoin(schema.companies, eq(schema.opportunities.companyId, schema.companies.id))
     .where(eq(schema.opportunities.id, opportunityId))
     .limit(1);
-  if (!row || row.opportunity.status !== "published") {
-    throw new Error("This opportunity isn't open for applications.");
-  }
 
   const [existing] = await db
     .select()
@@ -53,6 +76,15 @@ export async function applyToOpportunityAction(opportunityId: string, referrer?:
     )
     .limit(1);
   if (existing) return existing.id as string;
+  if (!row || row.opportunity.status !== "published") {
+    throw new Error("This opportunity isn't open for applications.");
+  }
+
+  const eligibility = await readEligibility(row.opportunity, user.id);
+  const unmet = eligibility.filter((item) => !item.met);
+  if (unmet.length) throw new Error(`Update your profile to meet these explicit prerequisites: ${unmet.map((item) => item.requirement).join("; ")}.`);
+  if (!entry || entry.revision !== row.opportunity.updatedAt.toISOString()) throw new Error("Review the current work questions before applying.");
+  const answers = captureBaselineEvidence(baselineQuestions(row.opportunity.role, row.opportunity.applicationQuestions), entry.answers);
 
   const source = classifyApplicationSource({
     referrer,
@@ -60,19 +92,37 @@ export async function applyToOpportunityAction(opportunityId: string, referrer?:
     companyWebsite: row.companyWebsite,
   });
 
-  const [application] = await db
-    .insert(schema.applications)
-    .values({ opportunityId, studentId: user.id, status: "applied", source })
-    .returning();
+  // The DB unique index decides the winner of simultaneous apply requests.
+  // Keep creation and its audit event atomic; a retry returns the same ID and
+  // never creates another application or duplicate creation event.
+  return db.transaction(async (tx) => {
+    const [current] = await tx.select({ updatedAt: schema.opportunities.updatedAt, status: schema.opportunities.status }).from(schema.opportunities)
+      .where(eq(schema.opportunities.id, opportunityId)).limit(1).for("share");
+    if (!current || current.status !== "published" || current.updatedAt.toISOString() !== entry.revision) throw new Error("This opportunity changed. Review its current requirements before applying.");
+    const [application] = await tx
+      .insert(schema.applications)
+      .values({ opportunityId, studentId: user.id, status: "applied", source, entryEvidence: { answers, eligibility } })
+      .onConflictDoNothing({ target: [schema.applications.opportunityId, schema.applications.studentId] })
+      .returning({ id: schema.applications.id });
 
-  await db.insert(schema.eventLog).values({
-    entityType: "application",
-    entityId: application.id,
-    eventType: "application_created",
-    actorUserId: user.id,
+    if (!application) {
+      const [canonical] = await tx
+        .select({ id: schema.applications.id })
+        .from(schema.applications)
+        .where(and(eq(schema.applications.opportunityId, opportunityId), eq(schema.applications.studentId, user.id)))
+        .limit(1);
+      if (!canonical) throw new Error("Couldn't confirm your application. Please try again.");
+      return canonical.id;
+    }
+
+    await tx.insert(schema.eventLog).values({
+      entityType: "application",
+      entityId: application.id,
+      eventType: "application_created",
+      actorUserId: user.id,
+    });
+    return application.id;
   });
-
-  return application.id as string;
 }
 
 const OpportunityIdSchema = z.string().uuid();
@@ -202,15 +252,24 @@ export async function extractCvAction(path: string) {
  */
 export async function startChallengeAction(applicationId: string) {
   const { user } = await requireCurrentStudent();
+  const id = z.string().uuid().parse(applicationId);
   const db = getDb();
-  const application = await assertOwnsApplication(applicationId, user.id);
-
-  if (!application.challengeStartedAt) {
-    await db
-      .update(schema.applications)
-      .set({ challengeStartedAt: new Date() })
-      .where(eq(schema.applications.id, applicationId));
-  }
+  return db.transaction(async (tx) => {
+    const [application] = await tx.select().from(schema.applications)
+      .where(and(eq(schema.applications.id, id), eq(schema.applications.studentId, user.id))).limit(1).for("update");
+    if (!application) throw new Error("Not authorized for this application.");
+    if (application.assignedChallengeVersionId) return application.assignedChallengeVersionId;
+    if (application.status === "withdrawn" || application.status === "declined") throw new Error("This application is no longer active.");
+    const [opportunity] = await tx.select({ applicationMode: schema.opportunities.applicationMode }).from(schema.opportunities).where(eq(schema.opportunities.id, application.opportunityId)).limit(1);
+    if (!opportunity || opportunity.applicationMode === "quick_apply") throw new Error("This application does not have an additional Challenge.");
+    const [challenge] = await tx.select().from(schema.challenges).where(eq(schema.challenges.opportunityId, application.opportunityId)).limit(1);
+    if (!challenge || challenge.status !== "published" || !challenge.currentVersionId) throw new Error("This Challenge isn't available to start.");
+    const [submitted] = await tx.select({ versionId: schema.submissions.challengeVersionId }).from(schema.submissions).where(eq(schema.submissions.applicationId, id)).limit(1);
+    const versionId = submitted?.versionId ?? challenge.currentVersionId;
+    await tx.update(schema.applications).set({ assignedChallengeVersionId: versionId, challengeStartedAt: application.challengeStartedAt ?? new Date() }).where(eq(schema.applications.id, id));
+    await tx.insert(schema.eventLog).values({ entityType: "application", entityId: id, eventType: "challenge_assigned", actorUserId: user.id, metadata: { versionId } });
+    return versionId;
+  });
 }
 
 const SubmissionArtifactInputSchema = z
@@ -297,7 +356,7 @@ export async function submitChallengeAction(input: z.infer<typeof SubmitChalleng
   const db = getDb();
   const application = await assertOwnsApplication(validated.applicationId, user.id);
 
-  if (!application.challengeStartedAt) {
+  if (!application.challengeStartedAt || !application.assignedChallengeVersionId) {
     throw new Error("Start the challenge before submitting.");
   }
 
@@ -306,22 +365,11 @@ export async function submitChallengeAction(input: z.infer<typeof SubmitChalleng
     .from(schema.submissions)
     .where(eq(schema.submissions.applicationId, application.id))
     .limit(1);
-  if (existingSubmission) throw new Error("You've already submitted this challenge.");
+  if (existingSubmission) return existingSubmission.id;
 
-  const [challengeRow] = await db
-    .select()
-    .from(schema.challenges)
-    .where(eq(schema.challenges.opportunityId, application.opportunityId))
-    .limit(1);
-  if (!challengeRow || challengeRow.status !== "published" || !challengeRow.currentVersionId) {
-    throw new Error("This challenge isn't published yet.");
-  }
-  const [version] = await db
-    .select()
-    .from(schema.challengeVersions)
-    .where(eq(schema.challengeVersions.id, challengeRow.currentVersionId))
-    .limit(1);
-  if (!version) throw new Error("This challenge's current version could not be found.");
+  const [version] = await db.select().from(schema.challengeVersions)
+    .where(eq(schema.challengeVersions.id, application.assignedChallengeVersionId)).limit(1);
+  if (!version) throw new Error("Your assigned Challenge version could not be found.");
 
   // One real listing of everything this application has actually uploaded —
   // every file-artifact check below is verified against THIS, not the
@@ -414,27 +462,24 @@ export async function submitChallengeAction(input: z.infer<typeof SubmitChalleng
     }
   }
 
-  const [submission] = await db
-    .insert(schema.submissions)
-    .values({
+  const submission = await db.transaction(async (tx) => {
+    const [created] = await tx.insert(schema.submissions).values({
       applicationId: application.id,
-      challengeVersionId: challengeRow.currentVersionId,
+      challengeVersionId: version.id,
       notes: validated.notes ?? "",
       status: "submitted",
-    })
-    .returning();
-
-  if (verifiedRows.length > 0) {
-    await db.insert(schema.submissionArtifacts).values(verifiedRows.map((row) => ({ ...row, submissionId: submission.id })));
-  }
-
-  await db.insert(schema.eventLog).values({
-    entityType: "submission",
-    entityId: submission.id,
-    eventType: "submission_received",
-    actorUserId: user.id,
+    }).onConflictDoNothing({ target: schema.submissions.applicationId }).returning();
+    if (!created) {
+      const [canonical] = await tx.select({ id: schema.submissions.id }).from(schema.submissions).where(eq(schema.submissions.applicationId, application.id)).limit(1);
+      if (!canonical) throw new Error("Could not confirm your submission. Please try again.");
+      return { id: canonical.id, created: false };
+    }
+    if (verifiedRows.length) await tx.insert(schema.submissionArtifacts).values(verifiedRows.map((row) => ({ ...row, submissionId: created.id })));
+    await tx.insert(schema.eventLog).values({ entityType: "submission", entityId: created.id, eventType: "submission_received", actorUserId: user.id });
+    return { id: created.id, created: true };
   });
 
+  if (!submission.created) return submission.id;
   const { role, companyEmails } = await getCompanyContext(application.opportunityId);
   if (companyEmails.length > 0) {
     await sendNotificationEvent({

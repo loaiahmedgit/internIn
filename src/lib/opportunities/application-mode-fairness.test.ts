@@ -1,3 +1,4 @@
+import { emptyRoleReality } from "@/lib/challenges/architect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -98,6 +99,9 @@ function currentVersionRow(overrides: Record<string, unknown> = {}) {
     title: "Real challenge",
     scenario: "A real scenario.",
     estimatedMinutes: 60,
+    architectPolicyVersion: 1,
+    roleReality: { ...emptyRoleReality(), actualWork: "Review fictional documents", expectedBeforeJoining: "Documentation", willTeach: "Internal procedures" },
+    assessmentPlan: { expectedBeforeJoining: ["Documentation"], willTeach: ["Internal procedures"], foundations: [{ foundation: "Documentation", pattern: "review", importance: "required", candidateAction: "Review supplied records", taskTitles: ["Task"], evidence: "Written review", humanReview: "Review accuracy", proposedDeterministicCheck: null }], cannotEstablish: ["Overall suitability"], practicalVerificationRequired: [], activeMinutes: Number(overrides.estimatedMinutes ?? 60), completionWindowHours: null },
     safeguardPolicyVersion: 2,
     assessmentBasis: "synthetic",
     productionWorkRisk: "none",

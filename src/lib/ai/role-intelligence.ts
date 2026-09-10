@@ -513,6 +513,12 @@ export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleK
         .map((candidate) => scoreProfile(need, candidate, weights))
         .filter((candidate) => candidate.eligible)
         .sort((left, right) => right.score - left.score)[0];
+      // Three independent channels can expose a title/work conflict even
+      // when extraction leaves the broader domain unknown. This asks the
+      // employer; it never silently changes their role.
+      const corroboratedWorkConflict = Boolean(strongestAlternative &&
+        strongestAlternative.activityCoverage >= 0.3 && strongestAlternative.toolCoverage >= 0.75 &&
+        strongestAlternative.contextCoverage >= 0.45 && explicitScore.activityCoverage < 0.16 && explicitScore.toolCoverage < 0.35);
       const conflictEvidence = strongestAlternative && need.domainSignals.length > 0
         ? strongestAlternative.domainCoverage >= 0.25 && explicitScore.domainCoverage < 0.16
         : Boolean(
@@ -523,8 +529,8 @@ export function recommendRoleFromProfiles(need: WorkNeedProfile, profiles: RoleK
 
       if (
         strongestAlternative &&
-        conflictEvidence &&
-        strongestAlternative.score >= 0.4 &&
+        (conflictEvidence || corroboratedWorkConflict) &&
+        (strongestAlternative.score >= 0.4 || corroboratedWorkConflict) &&
         strongestAlternative.activityCoverage >= 0.3 &&
         strongestAlternative.score - explicitScore.score >= 0.15
       ) {

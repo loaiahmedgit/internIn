@@ -3,7 +3,6 @@
 import { eq, and } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCurrentStudent } from "@/lib/auth";
-import { getChallengeState } from "./challenge-state";
 import type { OpportunityDetail } from "@/components/student/explore-detail-panel";
 
 const NEW_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
@@ -36,6 +35,7 @@ export async function loadOpportunityDetail(opportunityId: string, studentUserId
       requirements: schema.opportunities.requirements,
       whatYouWillLearn: schema.opportunities.whatYouWillLearn,
       createdAt: schema.opportunities.createdAt,
+      applicationMode: schema.opportunities.applicationMode,
       companyName: schema.companies.name,
       companyVerified: schema.companies.verified,
       companyIndustry: schema.companies.industry,
@@ -53,7 +53,7 @@ export async function loadOpportunityDetail(opportunityId: string, studentUserId
   const [saved, application, challengeRow] = await Promise.all([
     db.select({ id: schema.savedOpportunities.opportunityId }).from(schema.savedOpportunities).where(and(eq(schema.savedOpportunities.opportunityId, opportunityId), eq(schema.savedOpportunities.studentId, studentUserId))).limit(1),
     db
-      .select({ id: schema.applications.id, challengeStartedAt: schema.applications.challengeStartedAt })
+      .select({ id: schema.applications.id, challengeStartedAt: schema.applications.challengeStartedAt, assignedChallengeVersionId: schema.applications.assignedChallengeVersionId })
       .from(schema.applications)
       .where(and(eq(schema.applications.opportunityId, opportunityId), eq(schema.applications.studentId, studentUserId)))
       .limit(1),
@@ -69,14 +69,14 @@ export async function loadOpportunityDetail(opportunityId: string, studentUserId
   let challenge: OpportunityDetail["challenge"];
   let resources: OpportunityDetail["resources"] = [];
   let deliverables: string[] = [];
-  let submissionHasEvidence: boolean | undefined;
 
-  if (challengeRow?.status === "published" && challengeRow.currentVersionId) {
-    const currentVersionId = challengeRow.currentVersionId;
+  if (row.applicationMode !== "quick_apply" && (application[0]?.assignedChallengeVersionId || (challengeRow?.status === "published" && challengeRow.currentVersionId))) {
+    const [submitted] = hasApplied ? await db.select({ versionId: schema.submissions.challengeVersionId }).from(schema.submissions).where(eq(schema.submissions.applicationId, application[0].id)).limit(1) : [];
+    const currentVersionId = submitted?.versionId ?? application[0]?.assignedChallengeVersionId ?? challengeRow!.currentVersionId!;
     // `version`/`resources` both depend only on currentVersionId (not on
     // each other); `submission` depends only on application[0].id — all
     // three run together instead of three serial round trips.
-    const [[version], resourceRows, [submission]] = await Promise.all([
+    const [[version], resourceRows] = await Promise.all([
       db
         .select({
           title: schema.challengeVersions.title,
@@ -99,9 +99,6 @@ export async function loadOpportunityDetail(opportunityId: string, studentUserId
         })
         .from(schema.challengeResources)
         .where(eq(schema.challengeResources.challengeVersionId, currentVersionId)),
-      hasApplied
-        ? db.select({ id: schema.submissions.id }).from(schema.submissions).where(eq(schema.submissions.applicationId, application[0].id)).limit(1)
-        : Promise.resolve([]),
     ]);
     if (version) {
       challenge = {
@@ -115,17 +112,8 @@ export async function loadOpportunityDetail(opportunityId: string, studentUserId
       resources = resourceRows;
     }
 
-    if (hasApplied) {
-      if (submission) {
-        const [evidence] = await db.select({ submissionId: schema.candidateEvidence.submissionId }).from(schema.candidateEvidence).where(eq(schema.candidateEvidence.submissionId, submission.id)).limit(1);
-        submissionHasEvidence = Boolean(evidence);
-      }
-    }
   }
 
-  const challengeState = application.length
-    ? getChallengeState({ challengePublished: Boolean(challenge), application: application[0], submission: submissionHasEvidence === undefined ? undefined : { hasEvidence: submissionHasEvidence } })
-    : undefined;
 
   return {
     id: row.id,
@@ -153,7 +141,7 @@ export async function loadOpportunityDetail(opportunityId: string, studentUserId
     application: application.length
       ? {
           id: application[0].id,
-          ctaLabel: challengeState?.kind === "to_do" ? "Start challenge" : challengeState?.kind === "in_progress" ? "Continue challenge" : "Open application",
+          ctaLabel: "View application",
         }
       : undefined,
   };

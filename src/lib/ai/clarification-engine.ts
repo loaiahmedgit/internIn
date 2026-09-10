@@ -118,6 +118,13 @@ function buildQuestion(slot: InformationSlot, profile: RoleProfile): Clarificati
         required: false,
       };
 
+    case "expected_before_joining":
+      return { id: slot, slot, prompt: "What should this student already be able to do before joining?", type: "freeform", required: true };
+    case "will_teach":
+      return { id: slot, slot, prompt: "What will your team teach them during the internship?", type: "freeform", required: true };
+    case "realistic_example":
+      return { id: slot, slot, prompt: "Describe one small, realistic piece of work a new intern would handle.", type: "freeform", required: false };
+
     case "special_company_context":
       return {
         id: slot,
@@ -135,7 +142,7 @@ function buildQuestion(slot: InformationSlot, profile: RoleProfile): Clarificati
 /** Slots whose question text and choices are universal — hardcoded in
  * buildQuestion above, never pulled from a RoleProfile. Safe to ask even
  * when the role itself is too ambiguous to have matched a real profile. */
-const PROFILE_INDEPENDENT_SLOTS: readonly InformationSlot[] = ["role_domain", "candidate_level", "access_level", "restrictions", "special_company_context"];
+const PROFILE_INDEPENDENT_SLOTS: readonly InformationSlot[] = ["expected_before_joining", "will_teach", "realistic_example", "role_domain", "candidate_level", "access_level", "restrictions", "special_company_context"];
 
 /**
  * NEVER invents a slot the router didn't actually flag, and never enforces

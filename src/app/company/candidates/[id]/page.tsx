@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ApplicationEntrySummary } from "@/components/opportunities/application-entry-summary";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser, getCurrentCompanyMembership } from "@/lib/auth";
 import { getCandidateDetail } from "@/lib/company/candidate-detail-data";
@@ -487,6 +488,7 @@ export default async function CandidateProfilePage({
             </section>
           )}
 
+          <ApplicationEntrySummary evidence={candidate.entryEvidence} />
           <AiEvidenceSummary candidate={candidate} enabled={membership.company.evidenceAiEnabled} />
 
           {credentialEligibility && (

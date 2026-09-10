@@ -1,3 +1,4 @@
+import { assertArchitectReady } from "@/lib/challenges/architect";
 import { redirect, notFound } from "next/navigation";
 import { eq, and, desc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
@@ -25,6 +26,10 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
     .where(and(eq(schema.opportunities.id, id), eq(schema.opportunities.companyId, membership.companyId)))
     .limit(1);
   if (!opportunity) notFound();
+
+  if (opportunity.applicationMode === "quick_apply") {
+    redirect(`/company/opportunities/${id}/${opportunity.status === "draft" ? "edit" : ""}`);
+  }
 
   const internship: InternshipDraft = {
     role: opportunity.role,
@@ -62,6 +67,8 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
         scenario: version.scenario,
         estimatedMinutes: version.estimatedMinutes,
         estimatedDurationLabel: version.estimatedDurationLabel,
+        roleReality: version.roleReality,
+        assessmentPlan: version.assessmentPlan,
         assessmentBasis: version.assessmentBasis,
         productionWorkRisk: version.productionWorkRisk,
         productionWorkReason: version.productionWorkReason,
@@ -101,6 +108,7 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
         requirements={opportunity.requirements}
         niceToHave={opportunity.niceToHave}
         challengeSummary={{
+          assessmentPlanReady: (() => { try { assertArchitectReady(challenge); return true; } catch { return false; } })(),
           title: challenge.title,
           scenario: challenge.scenario,
           skills: challenge.skills,

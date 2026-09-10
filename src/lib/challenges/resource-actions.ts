@@ -42,6 +42,8 @@ async function loadChallengeResourceContext(resourceId: string) {
     .select({
       resource: schema.challengeResources,
       opportunityId: schema.challenges.opportunityId,
+      challengeStatus: schema.challenges.status,
+      currentVersionId: schema.challenges.currentVersionId,
       companyId: schema.opportunities.companyId,
     })
     .from(schema.challengeResources)
@@ -60,17 +62,20 @@ async function loadChallengeResourceContext(resourceId: string) {
 export async function getChallengeResourceDownloadUrlAction(resourceId: string) {
   const validatedId = IdSchema.parse(resourceId);
   const user = await currentAppUser();
-  const { resource, opportunityId, companyId } = await loadChallengeResourceContext(validatedId);
+  const { resource, opportunityId, companyId, challengeStatus, currentVersionId } = await loadChallengeResourceContext(validatedId);
 
   const isMember = await isCompanyMemberOf(user.id, companyId);
   if (!isMember) {
     const db = getDb();
     const [application] = await db
-      .select({ id: schema.applications.id })
+      .select({ id: schema.applications.id, assignedVersionId: schema.applications.assignedChallengeVersionId })
       .from(schema.applications)
       .where(and(eq(schema.applications.opportunityId, opportunityId), eq(schema.applications.studentId, user.id)))
       .limit(1);
     if (!application) throw new Error("Not authorized for this resource.");
+    const [submission] = await db.select({ versionId: schema.submissions.challengeVersionId }).from(schema.submissions).where(eq(schema.submissions.applicationId, application.id)).limit(1);
+    const allowedVersion = submission?.versionId ?? application.assignedVersionId ?? (challengeStatus === "published" ? currentVersionId : null);
+    if (resource.challengeVersionId !== allowedVersion) throw new Error("Not authorized for this Challenge version.");
   }
 
   if (resource.resourceType === "link") {

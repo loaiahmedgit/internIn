@@ -1,9 +1,11 @@
+import { beforeEach } from "vitest";
+import { hasConfiguredModel } from "./model";
 import { config } from "dotenv";
 config({ path: ".env.local" });
 import { describe, expect, it } from "vitest";
 import { naturalizeClarificationQuestion, looksRobotic } from "./clarification-wording";
 
-const maybe = process.env.OPENROUTER_API_KEY ? describe : describe.skip;
+const maybe = hasConfiguredModel() ? describe : describe.skip;
 
 /**
  * Live model quality evaluation across domains the implementation was NOT
@@ -80,3 +82,9 @@ maybe("clarification wording — live naturalization across domains", () => {
     60_000,
   );
 });
+
+
+beforeEach(async () => {
+  const delay = Number(process.env.GROQ_TEST_INTERVAL_MS ?? 0);
+  if (Number.isFinite(delay) && delay > 0 && delay <= 20000) await new Promise((resolve) => setTimeout(resolve, delay));
+}, 25000);

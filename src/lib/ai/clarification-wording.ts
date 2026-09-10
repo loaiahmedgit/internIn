@@ -40,7 +40,7 @@ Rules:
 /** Connector/grammar words expected to repeat in a normal English
  * question — never counted as the "same important word twice" smell. */
 const CONNECTOR_WORDS = new Set([
-  "will", "they", "mainly", "also", "or", "and", "to", "the", "a", "an", "of", "for", "with", "in", "on", "this",
+  "will", "would", "could", "should", "they", "mainly", "also", "or", "and", "to", "the", "a", "an", "of", "for", "with", "in", "on", "this",
   "that", "their", "them", "your", "you", "day", "work", "role", "person",
 ]);
 
@@ -61,6 +61,16 @@ export function looksRobotic(question: string): boolean {
   return [...counts.values()].some((count) => count >= 2);
 }
 
+export function groundedClarificationFallback(rawQuestion: string): string {
+  // When the alternative is explicitly unspecified broader work, refer to
+  // the employer's own description rather than invent concrete duties.
+  // Keep genuinely concrete A-or-B distinctions intact on provider failure.
+  if (looksRobotic(rawQuestion) && /\bor\b.*\bbroader\b/i.test(rawQuestion)) {
+    return "Should this role focus on the work you've described, or cover other responsibilities in this area?";
+  }
+  return rawQuestion;
+}
+
 /**
  * Rewrites an already-correct (but possibly mechanically assembled)
  * clarification question into natural language, preserving the exact
@@ -70,23 +80,24 @@ export function looksRobotic(question: string): boolean {
  * never returns something worse than what came in.
  */
 export async function naturalizeClarificationQuestion(rawQuestion: string): Promise<string> {
+  let previousDraft: string | null = null;
   try {
     const rewritten = await withGenerateRetries("naturalizeClarificationQuestion", NATURALIZE_ATTEMPTS, async () => {
       const { object } = await generateObject({
         model: getModel(),
         schema: NaturalClarificationSchema,
         system: NATURALIZE_SYSTEM,
-        prompt: `Rewrite this clarification question naturally, preserving the exact same distinction:\n"${rawQuestion}"`,
+        prompt: `Rewrite this clarification question naturally, preserving the exact same distinction:\n"${rawQuestion}"${previousDraft ? `\nThe previous draft repeated important words: "${previousDraft}". Replace the repeated domain words with pronouns or rephrase one clause. Keep the original contrast; do not add a new responsibility.` : ""}`,
         maxOutputTokens: 200,
         abortSignal: AbortSignal.timeout(NATURALIZE_TIMEOUT_MS),
       });
       const question = object.question.trim();
-      if (looksRobotic(question)) throw new Error("naturalized question still repeats a significant word");
+      if (looksRobotic(question)) { previousDraft = question; throw new Error("naturalized question still repeats a significant word"); }
       return question;
     });
     return rewritten;
   } catch (error) {
-    console.warn("[clarification-wording] naturalization failed or stayed repetitive; using the grounded question as-is:", error instanceof Error ? error.message : error);
-    return rawQuestion;
+    console.warn("[clarification-wording] naturalization failed or stayed repetitive; using grounded fallback wording:", error instanceof Error ? error.message : error);
+    return groundedClarificationFallback(rawQuestion);
   }
 }

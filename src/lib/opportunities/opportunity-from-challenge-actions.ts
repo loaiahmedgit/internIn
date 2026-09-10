@@ -52,7 +52,7 @@ export async function createOpportunityFromChallengeDraftAction(
     startDate: null,
     slots: 1,
     skills: validatedDraft.skills,
-    requireCv: true,
+    requireCv: false,
     applicationQuestions: [],
     // R2 — this flow always attaches a real challenge in the same step
     // (saveChallengeDraftAction below), so the balanced default fits;
@@ -173,6 +173,8 @@ export async function publishOpportunityFromReviewAction(
           .limit(1);
     if (version) {
       const approved: Challenge = ChallengeSchema.parse({
+        roleReality: version.roleReality,
+        assessmentPlan: version.assessmentPlan,
         title: version.title,
         scenario: version.scenario,
         estimatedMinutes: version.estimatedMinutes,

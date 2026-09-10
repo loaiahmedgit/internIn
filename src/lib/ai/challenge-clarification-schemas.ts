@@ -1,3 +1,4 @@
+import { RoleRealitySchema, AssessmentPlanSchema } from "@/lib/challenges/architect";
 import { z } from "zod";
 import { CHALLENGE_RESOURCE_TYPES, SUBMISSION_ARTIFACT_KINDS, SUBMISSION_INPUT_MODES } from "@/lib/challenges/submission-model";
 import { AssessmentBasisSchema, ProductionWorkRiskSchema, ResourceContentSpecSchema } from "./schemas";
@@ -55,6 +56,9 @@ const ClarificationSlotSchema = z.enum([
   "access_level",
   "restrictions",
   "special_company_context",
+  "expected_before_joining",
+  "will_teach",
+  "realistic_example",
 ]);
 
 export const ClarificationQuestionSchema = z.object({
@@ -95,6 +99,7 @@ export type ClarificationQuestionsResult = z.infer<typeof ClarificationQuestions
  * "not specified", never a guess.
  */
 export const EmployerContextSchema = z.object({
+  roleReality: RoleRealitySchema.nullable().optional(),
   originalRequest: z.string().trim().min(1).max(500),
   role: z.string().trim().min(2).max(160),
   level: optionalText(160),
@@ -215,6 +220,8 @@ export const AI_USAGE_MODE_LABEL: Record<ChallengeAiUsagePolicyMode, string> = {
  * otherwise-identical schema/prompt). Every other optional value here is a
  * primitive or an array, which never showed this failure. */
 export const ChallengeDraftGeneratedSchema = z.object({
+  roleReality: RoleRealitySchema.nullable().optional(),
+  assessmentPlan: AssessmentPlanSchema.nullable().optional(),
   role: labeledText(2, 160),
   title: labeledText(2, 180),
   scenario: labeledText(20, 3000),

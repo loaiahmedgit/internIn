@@ -219,6 +219,7 @@ export async function classifyAssistantRequest(transcript: string): Promise<Assi
   return withGenerateRetries("classifyAssistantRequest", ROUTER_ATTEMPTS, async () => {
     const { object } = await generateObject({
       model: getModel(),
+      temperature: 0,
       schema: AssistantRouterDecisionSchema,
       system: ROUTER_SYSTEM,
       prompt: `Conversation so far:\n${transcript}`,

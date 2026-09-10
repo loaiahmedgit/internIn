@@ -1,5 +1,9 @@
 "use server";
 
+import { assertArchitectReady } from "@/lib/challenges/architect";
+
+import { EligibilityRequirementsSchema } from "./application-entry";
+
 import { getDb, schema } from "@/db";
 import { revalidatePath } from "next/cache";
 import { requireCurrentCompanyMember } from "@/lib/auth";
@@ -204,6 +208,7 @@ export async function createOpportunityAction(internship: InternshipDraft, appli
     .values({
       companyId,
       role: validated.role,
+      requireCv: false,
       description: validated.description,
       duration: validated.duration,
       hoursPerWeek: validated.hoursPerWeek,
@@ -264,6 +269,7 @@ export async function saveChallengeVersionAction(
   const { companyId, userId, canPublish } = await getCompanyIdForCurrentUser();
   if (validatedSource === "approved" && !canPublish) throw new Error("Ask a Workspace Admin to grant Hiring Access before approving a challenge.");
   await assertOwnsOpportunity(validatedOpportunityId, companyId);
+  if (validatedChallenge.status === "approved") assertArchitectReady(validatedChallenge);
   const db = getDb();
 
   let [challengeRow] = await db
@@ -309,6 +315,9 @@ export async function saveChallengeVersionAction(
       title: validatedChallenge.title,
       scenario: validatedChallenge.scenario,
       estimatedMinutes: validatedChallenge.estimatedMinutes,
+      architectPolicyVersion: 1,
+      roleReality: validatedChallenge.roleReality ?? null,
+      assessmentPlan: validatedChallenge.assessmentPlan ?? null,
       estimatedDurationLabel: validatedChallenge.estimatedDurationLabel ?? null,
       safeguardPolicyVersion: NO_FREE_LABOR_POLICY_VERSION,
       assessmentBasis: validatedChallenge.assessmentBasis ?? null,
@@ -468,6 +477,7 @@ async function ensureChallengeReadyForPublish(
         options.allowLegacyAlreadyPublished === true && challengeRow.status === "published",
     },
   );
+  if (currentVersion.architectPolicyVersion >= 1 || !(options.allowLegacyAlreadyPublished && challengeRow.status === "published")) assertArchitectReady(currentVersion);
   await assertChallengeResourcesReady(challengeRow.currentVersionId);
 
   if (challengeRow.status !== "published") {
@@ -573,6 +583,10 @@ export async function duplicateOpportunityAction(opportunityId: string) {
     .values({
       companyId,
       role: `${source.role} (copy)`,
+      requireCv: false,
+      eligibilityRequirements: source.eligibilityRequirements,
+      applicationQuestions: source.applicationQuestions,
+      applicationMode: source.applicationMode,
       description: source.description,
       duration: source.duration,
       hoursPerWeek: source.hoursPerWeek,
@@ -642,7 +656,8 @@ const InternshipFormSchema = z.object({
   startDate: z.coerce.date().nullable().optional(),
   slots: z.number().int().min(1).max(100),
   skills: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
-  requireCv: z.boolean().default(true),
+  requireCv: z.boolean().default(false),
+  eligibilityRequirements: EligibilityRequirementsSchema.optional(),
   applicationQuestions: z.array(z.string().trim().min(1).max(300)).max(10).default([]),
   applicationMode: ApplicationModeSchema.default("optional_challenge"),
 });
@@ -687,7 +702,8 @@ export async function saveInternshipAction(input: {
     startDate: validated.startDate ?? null,
     slots: validated.slots,
     skills: validated.skills,
-    requireCv: validated.requireCv,
+    requireCv: false,
+    ...(validated.eligibilityRequirements !== undefined ? { eligibilityRequirements: validated.eligibilityRequirements } : {}),
     applicationQuestions: validated.applicationQuestions,
     applicationMode: validated.applicationMode,
   };

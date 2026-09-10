@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { ArchitectEditor } from "./architect-editor";
+import { assertArchitectReady } from "@/lib/challenges/architect";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +14,7 @@ import { editChallengeAction } from "@/lib/ai/actions";
 import { saveChallengeVersionAction, publishOpportunityAction } from "@/lib/opportunities/actions";
 import { CheckCircle2, Sparkles, X, Plus, FileText, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SUBMISSION_INPUT_MODES, SUBMISSION_ARTIFACT_KINDS } from "@/lib/challenges/submission-model";
 import {
   ASSESSMENT_BASIS_DESCRIPTION,
   ASSESSMENT_BASIS_LABEL,
@@ -101,6 +104,7 @@ export function ChallengeBuilder({
       return;
     }
 
+    try { assertArchitectReady(challenge); } catch (error) { setSaveError(error instanceof Error ? error.message : "Complete the assessment plan."); return; }
     setActionPending(true);
     try {
       const next: Challenge = { ...challenge, status: "approved" };
@@ -170,6 +174,7 @@ export function ChallengeBuilder({
 
   return (
     <div className="space-y-6">
+      <ArchitectEditor challenge={challenge} onChange={markEdited} />
       {/* Approval stepper */}
       {!reviewMode && (
         <div className="flex items-center gap-1.5 overflow-x-auto rounded-lg border border-gray-cool/60 bg-white p-3">
@@ -218,7 +223,7 @@ export function ChallengeBuilder({
               // ("4–6 hours") stale — clear it so this field stays the
               // one true duration instead of silently disagreeing with a
               // leftover label shown elsewhere (challenge-duration.ts).
-              onChange={(e) => markEdited({ ...challenge, estimatedMinutes: Number(e.target.value), estimatedDurationLabel: null })}
+              onChange={(e) => markEdited({ ...challenge, estimatedMinutes: Number(e.target.value), estimatedDurationLabel: null, assessmentPlan: challenge.assessmentPlan ? { ...challenge.assessmentPlan, activeMinutes: Number(e.target.value) } : null })}
               aria-label="Estimated minutes"
               className="w-14 border-b border-gray-cool bg-transparent text-center font-medium text-navy"
             />{" "}
@@ -258,12 +263,23 @@ export function ChallengeBuilder({
                 <span className="mt-1.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-gray-light text-[10px] font-semibold text-navy/50">
                   {i + 1}
                 </span>
+                <div className="min-w-0 flex-1 space-y-2">
+                <Input
+                  aria-label={`Task ${i + 1} title`}
+                  value={task.title}
+                  maxLength={160}
+                  onChange={(event) => markEdited({ ...challenge,
+                    tasks: challenge.tasks.map((item, index) => index === i ? { ...item, title: event.target.value } : item),
+                    assessmentPlan: challenge.assessmentPlan ? { ...challenge.assessmentPlan, foundations: challenge.assessmentPlan.foundations.map((foundation) => ({ ...foundation, taskTitles: foundation.taskTitles.map((title) => title === task.title ? event.target.value : title) })) } : null,
+                  })}
+                />
                 <Textarea
                   value={task.description}
                   onChange={(e) => updateTask(i, e.target.value)}
                   aria-label={`Task ${i + 1} description`}
                   className="min-h-8 flex-1 resize-none rounded border-0 p-0 text-sm text-navy shadow-none focus-visible:ring-2 focus-visible:ring-teal/50 focus-visible:px-1.5"
                 />
+                </div>
                 <Button
                   size="icon"
                   variant="ghost"
@@ -284,11 +300,12 @@ export function ChallengeBuilder({
         <div className="mt-6 grid gap-6 sm:grid-cols-2">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">Deliverables</p>
-            <ul className="mt-2 space-y-1.5 text-sm text-navy/70">
-              {challenge.deliverables.map((d) => (
-                <li key={d}>• {d}</li>
+            <div className="mt-2 space-y-2">
+              {challenge.deliverables.map((d, index) => (
+                <div key={index} className="flex gap-2"><Input aria-label={`Deliverable ${index + 1}`} value={d} onChange={(event) => markEdited({ ...challenge, deliverables: challenge.deliverables.map((item, i) => i === index ? event.target.value : item) })} /><Button type="button" variant="ghost" aria-label={`Remove deliverable ${index + 1}`} disabled={challenge.deliverables.length === 1} onClick={() => markEdited({ ...challenge, deliverables: challenge.deliverables.filter((_, i) => i !== index) })}><X className="size-4" /></Button></div>
               ))}
-            </ul>
+              <Button type="button" variant="outline" size="sm" disabled={challenge.deliverables.length >= 20} onClick={() => markEdited({ ...challenge, deliverables: [...challenge.deliverables, ""] })}>Add deliverable</Button>
+            </div>
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">Files provided</p>
@@ -311,25 +328,34 @@ export function ChallengeBuilder({
           <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">Submission requirements</p>
           <ul className="mt-2 space-y-1.5 text-sm text-navy/70">
             {challenge.submissionRequirements.map((r) => (
-              <li key={r.id} className="flex items-center gap-2">
-                <span className={r.required ? "font-medium text-navy" : "text-navy/60"}>{r.label}</span>
-                <Badge variant="secondary" className={cn("h-5 px-1.5 text-[10px]", r.required ? "bg-teal/10 text-teal" : "bg-gray-light text-navy/50")}>
-                  {r.required ? "Required" : "Optional"}
-                </Badge>
+              <li key={r.id} className="space-y-2 rounded-lg border border-gray-cool p-3">
+                <Input aria-label={`Submission ${r.id} label`} value={r.label} maxLength={160} onChange={(event) => markEdited({ ...challenge, submissionRequirements: challenge.submissionRequirements.map((item) => item.id === r.id ? { ...item, label: event.target.value } : item) })} />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="text-xs">How to submit<select className="mt-1 block h-10 w-full rounded-md border border-gray-cool bg-white px-2" value={r.inputMode} onChange={(event) => markEdited({ ...challenge, submissionRequirements: challenge.submissionRequirements.map((item) => item.id === r.id ? { ...item, inputMode: event.target.value as typeof r.inputMode, acceptedFormats: undefined, providers: undefined, minFiles: undefined, maxFiles: undefined } : item) })}>{SUBMISSION_INPUT_MODES.map((mode) => <option key={mode} value={mode}>{mode.replaceAll("_", " ")}</option>)}</select></label>
+                  <label className="text-xs">Artifact type<select className="mt-1 block h-10 w-full rounded-md border border-gray-cool bg-white px-2" value={r.artifactKind} onChange={(event) => markEdited({ ...challenge, submissionRequirements: challenge.submissionRequirements.map((item) => item.id === r.id ? { ...item, artifactKind: event.target.value as typeof r.artifactKind } : item) })}>{SUBMISSION_ARTIFACT_KINDS.map((kind) => <option key={kind} value={kind}>{kind.replaceAll("_", " ")}</option>)}</select></label>
+                </div>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={r.required} onChange={(event) => markEdited({ ...challenge, submissionRequirements: challenge.submissionRequirements.map((item) => item.id === r.id ? { ...item, required: event.target.checked } : item) })} />Required submission</label>
+                <label className="block text-xs">Instructions<Textarea value={r.instructions ?? ""} maxLength={500} onChange={(event) => markEdited({ ...challenge, submissionRequirements: challenge.submissionRequirements.map((item) => item.id === r.id ? { ...item, instructions: event.target.value } : item) })} /></label>
+                <Button type="button" variant="ghost" size="sm" disabled={challenge.submissionRequirements.length === 1} onClick={() => markEdited({ ...challenge, submissionRequirements: challenge.submissionRequirements.filter((item) => item.id !== r.id) })}>Remove submission</Button>
               </li>
             ))}
           </ul>
+          <Button type="button" variant="outline" size="sm" className="mt-2" disabled={challenge.submissionRequirements.length >= 10} onClick={() => markEdited({ ...challenge, submissionRequirements: [...challenge.submissionRequirements, { id: crypto.randomUUID(), label: "", inputMode: "text", artifactKind: "text_response", required: true }] })}>Add submission</Button>
         </div>
 
         <div className="mt-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">Rubric</p>
           <ul className="mt-2 space-y-1.5 text-sm text-navy/70">
-            {challenge.rubric.map((r) => (
-              <li key={r.criterion}>
-                <span className="font-medium text-navy">{r.criterion}:</span> {r.description}
+            {challenge.rubric.map((r, index) => (
+              <li key={index} className="space-y-2 rounded-lg border border-gray-cool p-3">
+                <Input aria-label={`Rubric ${index + 1} criterion`} value={r.criterion} maxLength={160} onChange={(event) => markEdited({ ...challenge, rubric: challenge.rubric.map((item, i) => i === index ? { ...item, criterion: event.target.value } : item) })} />
+                <Textarea aria-label={`Rubric ${index + 1} description`} value={r.description} maxLength={1500} onChange={(event) => markEdited({ ...challenge, rubric: challenge.rubric.map((item, i) => i === index ? { ...item, description: event.target.value } : item) })} />
+                <label className="block text-xs">Weight (%)<Input type="number" min={0} max={100} value={r.weight} onChange={(event) => markEdited({ ...challenge, rubric: challenge.rubric.map((item, i) => i === index ? { ...item, weight: Number(event.target.value) } : item) })} /></label>
+                <Button type="button" variant="ghost" size="sm" disabled={challenge.rubric.length === 1} onClick={() => markEdited({ ...challenge, rubric: challenge.rubric.filter((_, i) => i !== index) })}>Remove criterion</Button>
               </li>
             ))}
           </ul>
+          <Button type="button" variant="outline" size="sm" className="mt-2" disabled={challenge.rubric.length >= 20} onClick={() => markEdited({ ...challenge, rubric: [...challenge.rubric, { criterion: "", description: "", weight: 0 }] })}>Add criterion</Button>
         </div>
       </div>
 

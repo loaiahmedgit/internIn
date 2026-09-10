@@ -1,3 +1,5 @@
+import { ARCHITECT_POLICY } from "@/lib/challenges/architect";
+import { proposeAssessmentPlan } from "./challenge-architect";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getModel } from "./gemma-provider";
@@ -76,7 +78,7 @@ export async function withGenerateRetries<T, A>(label: string, attempts: readonl
   throw lastError instanceof Error ? lastError : new Error(`${label} failed.`);
 }
 
-export const CHALLENGE_POLICY = `When an employer describes an internship role (even vaguely) and wants a work challenge / assessment / task for it, you can help design one — this is core to what you do.
+export const CHALLENGE_POLICY = `${ARCHITECT_POLICY}\n\nWhen an employer describes an internship role (even vaguely) and wants a work challenge / assessment / task for it, you can help design one — this is core to what you do.
 
 A challenge is a realistic SIMULATION of the actual internship work, never a generic quiz. Depending on the profession, mix practical tasks, code, spreadsheet work, design work, file/document review, a written deliverable, or a presentation — whatever fits the real work, never one uniform task type for every role.
 
@@ -220,6 +222,7 @@ function contextBlockFrom(context: EmployerContext): string {
   if (context.responsibilities.length) lines.push(`Main responsibilities: ${context.responsibilities.join(", ")}`);
   if (context.tools.length) lines.push(`Tools/technologies: ${context.tools.join(", ")}`);
   if (context.restrictions.length) lines.push(`Restrictions: ${context.restrictions.join(", ")}`);
+  if (context.roleReality) lines.push(`Employer role context: ${JSON.stringify(context.roleReality)}`);
   if (context.additionalContext) lines.push(`Additional context: ${context.additionalContext}`);
   return lines.join("\n");
 }
@@ -260,7 +263,7 @@ export async function generateChallengeDraftObject(params: {
       const { object } = await generateObject({
         model: getModel(),
         schema: ChallengeDraftDetailsSchema,
-        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the tasks, materials, evaluation rubric, and submission requirements — not the title/scenario/skills, those come from a separate step. Keep every field concise — a sentence or two at most.\n\nEach task's "title" is ONE short, concrete, action-first sentence — this exact sentence is what the employer sees in the compact summary view (e.g. "Design a reporting schema for the provided OLTP data."), never a short label. "instructions" can add extra step-by-step detail beyond that sentence, for later editing — repeat the title there if nothing more is needed.\n\nAlways include at least 2 supporting materials (synthetic datasets, templates, or reference documents the candidate would actually receive) — a challenge with zero materials is incomplete. Each material's "name" must be a real, candidate-facing filename with a plausible extension (e.g. "customers.csv", "onboarding_checklist.pdf"), never an internal-sounding label like "Base_Model_ID". Put what it actually is in "description", not in the name. For each material, also design its real content in "contentSpec" so the platform can generate an actual file: for a spreadsheet/CSV give sheetName/columns (name+dataType)/rowCount/rowGenerationHint; for a PDF/document give a title and sections (heading+paragraphs) with real fictional content the candidate would actually read; for other structured data give a schemaDescription and a few sampleRecords. If a material is genuinely better as a real external reference than a generated file (a public template, a well-known dataset), set resourceType to "link" and give a real, working externalUrl — never a fabricated one. If a material should be an image, video, audio, or diagram that you cannot design real content for, still name and describe it honestly — the platform will flag it for the employer to upload rather than pretending it exists.\n\nsubmissionRequirements: 1-4 items describing exactly what the candidate must hand in. inputMode is "file" for one uploaded document/spreadsheet, "multiple_files" when more than one file of the same kind is expected, "text" for a written response, or "url" for a link the candidate provides (their own GitHub/GitLab repo, a Figma file, a hosted video/audio recording, a portfolio link). Set artifactKind to what it actually is. required:true for anything genuinely necessary to evaluate the work; use required:false sparingly. For a "url" requirement tied to a specific platform, set providers to that platform's real domain(s), e.g. ["github.com","gitlab.com"] for a code repository or ["figma.com"] for a design link.`,
+        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the tasks, materials, evaluation rubric, and submission requirements — not the title/scenario/skills, those come from a separate step. Keep every field concise — a sentence or two at most.\n\nEach task's "title" is ONE short, concrete, action-first sentence — this exact sentence is what the employer sees in the compact summary view (e.g. "Design a reporting schema for the provided OLTP data."), never a short label. "instructions" can add extra step-by-step detail beyond that sentence, for later editing — repeat the title there if nothing more is needed.\n\nInclude only supporting materials the candidate needs. A self-contained short written scenario may need no separate files. Longer tasks need enough internally consistent fictional data and instructions to complete the requested work. Each material's "name" must be a real, candidate-facing filename with a plausible extension (e.g. "customers.csv", "onboarding_checklist.pdf"), never an internal-sounding label like "Base_Model_ID". Put what it actually is in "description", not in the name. For each material, also design its real content in "contentSpec" so the platform can generate an actual file: for a spreadsheet/CSV give sheetName/columns (name+dataType)/rowCount/rowGenerationHint; for a PDF/document give a title and sections (heading+paragraphs) with real fictional content the candidate would actually read; for other structured data give a schemaDescription and a few sampleRecords. If a material is genuinely better as a real external reference than a generated file (a public template, a well-known dataset), set resourceType to "link" and give a real, working externalUrl — never a fabricated one. If a material should be an image, video, audio, or diagram that you cannot design real content for, still name and describe it honestly — the platform will flag it for the employer to upload rather than pretending it exists.\n\nsubmissionRequirements: 1-4 items describing exactly what the candidate must hand in. inputMode is "file" for one uploaded document/spreadsheet, "multiple_files" when more than one file of the same kind is expected, "text" for a written response, or "url" for a link the candidate provides (their own GitHub/GitLab repo, a Figma file, a hosted video/audio recording, a portfolio link). Set artifactKind to what it actually is. required:true for anything genuinely necessary to evaluate the work; use required:false sparingly. For a "url" requirement tied to a specific platform, set providers to that platform's real domain(s), e.g. ["github.com","gitlab.com"] for a code repository or ["figma.com"] for a design link.`,
         prompt: basePrompt + attempt.extraInstruction,
         temperature: attempt.temperature,
         maxOutputTokens: 3000,
@@ -270,7 +273,7 @@ export async function generateChallengeDraftObject(params: {
     }),
   ]);
 
-  return assertGeneratedChallengeSafeguards(enforceChallengeDurationPolicy(
+  const draft = assertGeneratedChallengeSafeguards(enforceChallengeDurationPolicy(
     {
       ...core,
       // Structured selections win over generated restatements. This keeps
@@ -286,6 +289,10 @@ export async function generateChallengeDraftObject(params: {
     },
     context,
   ));
+  const reality = context.roleReality;
+  if (!reality?.actualWork || !reality.expectedBeforeJoining || !reality.willTeach) return draft;
+  const assessmentPlan = await proposeAssessmentPlan({ reality, tasks: draft.tasks.map((task) => ({ title: task.title, description: task.instructions })), activeMinutes: draft.durationMinutes ?? 60 });
+  return { ...draft, roleReality: reality, assessmentPlan };
 }
 
 /** The classifier eyeballs intent, but this postcondition is deterministic:

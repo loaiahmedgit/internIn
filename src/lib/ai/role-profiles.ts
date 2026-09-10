@@ -21,6 +21,9 @@ export const InformationSlotSchema = z.enum([
   "access_level",
   "restrictions",
   "special_company_context",
+  "expected_before_joining",
+  "will_teach",
+  "realistic_example",
 ]);
 export type InformationSlot = z.infer<typeof InformationSlotSchema>;
 
@@ -38,6 +41,9 @@ export const SLOT_FIXED_TYPE: Partial<Record<InformationSlot, "single" | "multip
   access_level: "single",
   restrictions: "freeform",
   special_company_context: "freeform",
+  expected_before_joining: "freeform",
+  will_teach: "freeform",
+  realistic_example: "freeform",
 };
 
 export function resolveQuestionType(slot: InformationSlot, modelSuggestedType: "single" | "multiple" | "freeform"): "single" | "multiple" | "freeform" {

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { looksRobotic } from "./clarification-wording";
+import { looksRobotic, groundedClarificationFallback } from "./clarification-wording";
 
 describe("looksRobotic", () => {
+  it("accepts repeated modal verbs as grammar rather than repeated domain content", () => {
+    expect(looksRobotic("Would they triage requests, or would they respond directly to customers?")).toBe(false);
+    expect(looksRobotic("Should they review documents, or should they organize incoming support tickets?")).toBe(false);
+  });
   it("flags the exact reported pattern — a significant word repeated across the sentence", () => {
     expect(looksRobotic("Will they mainly track support requests and manage support request queue, or will they also support broader customer support?")).toBe(true);
   });
@@ -30,5 +34,18 @@ describe("looksRobotic", () => {
     "Will they mainly fix dashboard bugs, or will they also help design new product features?",
   ])("does not flag a naturally varied contrast across domains: %s", (question) => {
     expect(looksRobotic(question)).toBe(false);
+  });
+});
+
+
+describe("grounded clarification fallback", () => {
+  it("does not invent a concrete broader responsibility on provider failure", () => {
+    const result = groundedClarificationFallback("Will they manage support requests, or also support broader customer support?");
+    expect(looksRobotic(result)).toBe(false);
+    expect(result).toContain("work you've described");
+  });
+  it("preserves an explicit A-or-B distinction", () => {
+    const question = "Will they process invoices, or audit invoices for accuracy?";
+    expect(groundedClarificationFallback(question)).toBe(question);
   });
 });

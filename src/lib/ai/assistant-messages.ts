@@ -64,7 +64,7 @@ export interface QuestionnaireAnswer {
   values?: string[];
 }
 
-export type QuestionnaireContinuation = "offer_next_action" | "draft_challenge";
+export type QuestionnaireContinuation = "offer_next_action" | "draft_challenge" | "architect_internship" | "architect_challenge";
 
 /** The Questionnaire also carries the deterministic workflow it resumes.
  * A general hiring request returns to the internship-first action offer;

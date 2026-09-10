@@ -98,14 +98,20 @@ export async function extractWorkNeedProfile(originalRequest: string, transcript
   return withGenerateRetries("extractWorkNeedProfile", WORK_NEED_ATTEMPTS, async () => {
     const { object } = await generateObject({
       model: getModel(),
+      temperature: 0,
       schema: WorkNeedProfileSchema,
       system: `Extract a task-first description of what an employer needs from an internship hiring conversation.
 
 Rules:
+- This is EXTRACTION, not a job-description generator. Keep only the work the employer actually describes. Do not expand it into a standard list of duties for the profession.
+- For directly stated activities, retain the employer's verbs and objects in concise phrases (usually 3–10 words). Two stated activities normally produce two items, not eight related duties. Do not add testing, documentation, collaboration, tools, workflows, or best practices unless the employer actually mentioned them.
+- When the employer describes an unambiguous problem/outcome, include the smallest directly implied activity rather than leaving activities empty. Preserve its original work nouns so retrieval stays grounded.
+- systemsOrTools must retain EVERY explicitly named tool/system exactly as named (including names embedded inside activities), and ONLY those names. Do not add languages, platforms, Git, or frameworks merely because they are common for this work.
 - explicitRoleTitle is ONLY a role the employer actually named. Preserve their wording; never put your inferred recommendation there.
 - problems are the business/work problems described.
 - activities are the concrete work needed to address those problems. Convert passively worded problems into the minimum concrete day-to-day activities logically required to reach the stated outcome when that implication is unambiguous. If multiple materially different kinds of work could solve the problem, do not choose a branch. Activities may make safe, direct implications explicit, but must not invent company facts.
 - Keep activities atomic: one responsibility per array item rather than bundling several activities into one string.
+- If an explicit role title conflicts with the described duties, keep the title only in explicitRoleTitle. domainSignals and domainClarity describe the actual duties, never the title. A contradictory title does not make otherwise clear work ambiguous.
 - domainSignals are open-ended work-domain concepts grounded in the employer's description, such as the business function, professional field, operating context, or technical area. Do not choose from a fixed taxonomy and do not infer the employer's industry unless it is actually relevant to the work. Prefer the widest field or department this work sits within over a narrow process name that just re-describes the same activities in different words — e.g. for invoice/payment matching work, "finance operations" is a domain signal; "accounts payable" is not, because it names the exact same task, not a wider context around it. The same distinction applies in any field, not only finance.
 - systemsOrTools preserves named systems and tools, using the product name the employer used.
 - desiredOutcomes describes the requested operational outcome, not a hiring judgment.

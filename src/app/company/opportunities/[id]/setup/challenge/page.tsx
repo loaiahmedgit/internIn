@@ -1,5 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getDb, schema } from "@/db";
 import { requireCurrentCompanyMember } from "@/lib/auth";
 import type { Challenge } from "@/lib/ai";
@@ -16,7 +16,6 @@ export default async function EditAttachedChallengePage({ params }: { params: Pr
     .where(and(eq(schema.opportunities.id, id), eq(schema.opportunities.companyId, membership.companyId)))
     .limit(1);
   if (!opportunity) notFound();
-  if (opportunity.status !== "draft") redirect(`/company/opportunities/${id}?tab=challenge`);
 
   const [challengeRow] = await db
     .select()
@@ -40,6 +39,8 @@ export default async function EditAttachedChallengePage({ params }: { params: Pr
     scenario: version.scenario,
     estimatedMinutes: version.estimatedMinutes,
     estimatedDurationLabel: version.estimatedDurationLabel,
+    roleReality: version.roleReality,
+    assessmentPlan: version.assessmentPlan,
     assessmentBasis: version.assessmentBasis,
     productionWorkRisk: version.productionWorkRisk,
     productionWorkReason: version.productionWorkReason,
@@ -56,5 +57,5 @@ export default async function EditAttachedChallengePage({ params }: { params: Pr
     status: challengeRow.status,
   };
 
-  return <OpportunityChallengeReviewEditor opportunityId={id} role={opportunity.role} initialChallenge={challenge} />;
+  return <OpportunityChallengeReviewEditor opportunityId={id} role={opportunity.role} initialChallenge={challenge} isDraft={opportunity.status === "draft"} />;
 }

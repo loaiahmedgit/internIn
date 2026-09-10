@@ -1,3 +1,5 @@
+import { beforeEach } from "vitest";
+import { hasConfiguredModel } from "./model";
 import { config } from "dotenv";
 config({ path: ".env.local" });
 import { describe, it, expect } from "vitest";
@@ -13,7 +15,7 @@ import { classifyAssistantRequest } from "./assistant-router";
  * (CI without secrets) rather than failing — this is an opt-in proof, not
  * part of the required, always-green suite.
  */
-const hasCredentials = Boolean(process.env.OPENROUTER_API_KEY);
+const hasCredentials = hasConfiguredModel();
 const maybe = hasCredentials ? describe : describe.skip;
 
 maybe("classifyAssistantRequest — real role and clarification routing (live model)", () => {
@@ -114,3 +116,9 @@ maybe("classifyAssistantRequest — real role and clarification routing (live mo
     60_000,
   );
 });
+
+
+beforeEach(async () => {
+  const delay = Number(process.env.GROQ_TEST_INTERVAL_MS ?? 0);
+  if (Number.isFinite(delay) && delay > 0 && delay <= 20000) await new Promise((resolve) => setTimeout(resolve, delay));
+}, 25000);

@@ -1,3 +1,4 @@
+import { ARCHITECT_POLICY } from "@/lib/challenges/architect";
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { AIProvider } from "./provider";
@@ -43,6 +44,8 @@ export { getModel } from "./model";
 // AI output shapes omit app-managed control fields (ids, status).
 const ChallengeContentSchema = ChallengeSchema.omit({
   status: true,
+  roleReality: true,
+  assessmentPlan: true,
   nonProductionConfirmed: true,
   durationExceptionJustification: true,
 }).extend({
@@ -107,12 +110,13 @@ Tasks: ${challenge.tasks.map((t) => t.description).join("; ")}`,
     const { object: content } = await generateObject({
       model: getModel(),
       schema: ChallengeContentSchema,
+      system: ARCHITECT_POLICY,
       prompt: `Build a realistic but SAFE work-sample challenge for a "${input.internship.role}" candidate, based on real work described as: "${input.workDescription}"
 
 Use this fictional scenario (do not invent a different company): ${scenario.companyName} — ${scenario.premise} Synthetic data available: ${scenario.dataDescription}
 
 Requirements:
-- 3-5 concrete tasks the candidate must complete, in order
+- The smallest useful set of concrete tasks (normally 1-4). A short written work scenario is valid; do not force a project when it adds little evidence.
 - estimatedMinutes should be realistic for the scope (normally 30-90, never above 120 active-work minutes)
 - skills tested should overlap with: ${input.internship.skills.join(", ")}
 - deliverables: what the candidate must submit
@@ -140,6 +144,7 @@ Requirements:
     const { object: content } = await generateObject({
       model: getModel(),
       schema: ChallengeContentSchema,
+      system: ARCHITECT_POLICY,
       prompt: `Apply this edit instruction to the work challenge below and return the FULL updated challenge (not a diff). Keep everything unchanged except what the instruction asks for. A Challenge must remain a non-production assessment: never turn it into a live company/client deliverable or require real confidential data. If the instruction introduces potential production work, preserve the skill being assessed but convert it into an equivalent synthetic, adapted, or sandbox task; record the short risk reason, original intent, truthful assessment basis, and transformationApplied=true.
 
 Instruction: "${instruction}"
@@ -153,6 +158,8 @@ ${JSON.stringify({ ...challenge, status: undefined })}`,
     const challengeIds = new Map(challenge.tasks.map((t) => [t.description, t.id]));
     const next: Challenge = {
       ...content,
+      roleReality: challenge.roleReality,
+      assessmentPlan: null,
       tasks: content.tasks.map((t) => ({ id: challengeIds.get(t.description) ?? crypto.randomUUID(), ...t })),
       rubric: normalizeRubricWeights(content.rubric),
       status: "pending_approval",

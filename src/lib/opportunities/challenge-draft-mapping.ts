@@ -35,6 +35,8 @@ export function mapChallengeDraftToChallenge(draft: ChallengeDraft): Challenge {
   ].filter((line): line is string => Boolean(line));
 
   return {
+    roleReality: draft.roleReality ?? null,
+    assessmentPlan: draft.assessmentPlan ?? null,
     title: draft.title,
     scenario: scenarioParts.join("\n\n"),
     // The human label (usually "30-60 minutes" or "60-90 minutes") is canonical and always carried

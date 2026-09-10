@@ -1,3 +1,5 @@
+import { beforeEach } from "vitest";
+import { hasConfiguredModel } from "./model";
 import { config } from "dotenv";
 config({ path: ".env.local" });
 import { describe, expect, it } from "vitest";
@@ -5,7 +7,7 @@ import { extractWorkNeedProfile } from "./work-need-extraction";
 import { recommendRoleFromProfiles } from "./role-intelligence";
 import { ROLE_INTELLIGENCE_FIXTURES } from "./role-intelligence-fixtures";
 
-const maybe = process.env.OPENROUTER_API_KEY ? describe : describe.skip;
+const maybe = hasConfiguredModel() ? describe : describe.skip;
 
 maybe("role intelligence — live task-first extraction", () => {
   it(
@@ -20,7 +22,7 @@ maybe("role intelligence — live task-first extraction", () => {
       expect(need.activities.join(" ")).toMatch(/migrat|map|cleans|validat|implement/i);
       expect(need.systemsOrTools.join(" ")).toMatch(/SAP/i);
       expect(need.systemsOrTools.join(" ")).toMatch(/Oracle/i);
-      expect(result.recommendedRole?.title).toBe("ERP Implementation Assistant Intern");
+      expect(result.recommendedRole?.title, JSON.stringify({ need, result })).toBe("ERP Implementation Assistant Intern");
     },
     60_000,
   );
@@ -64,10 +66,16 @@ maybe("role intelligence — live task-first extraction", () => {
       const result = recommendRoleFromProfiles(need, ROLE_INTELLIGENCE_FIXTURES);
       expect(need.explicitRoleTitle?.toLowerCase()).toContain("graphic design");
       expect(result.recommendedRole?.title.toLowerCase()).toContain("graphic design");
-      expect(result.clarificationNeeded).toBe(true);
+      expect(result.clarificationNeeded, JSON.stringify({ need, result })).toBe(true);
       const alternative = ROLE_INTELLIGENCE_FIXTURES.find((profile) => profile.id === result.alternatives[0]?.roleProfileId);
       expect(alternative?.occupationFamily).toBe("Software Development");
     },
     60_000,
   );
 });
+
+
+beforeEach(async () => {
+  const delay = Number(process.env.GROQ_TEST_INTERVAL_MS ?? 0);
+  if (Number.isFinite(delay) && delay > 0 && delay <= 20000) await new Promise((resolve) => setTimeout(resolve, delay));
+}, 25000);

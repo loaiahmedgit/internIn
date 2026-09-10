@@ -1,6 +1,7 @@
 "use server";
 
 import { aiProvider } from "./index";
+import { extractRoleReality, proposeAssessmentPlan } from "./challenge-architect";
 import { requireCurrentCompanyMember, requireCurrentStudent } from "@/lib/auth";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
@@ -50,7 +51,11 @@ export async function generateChallengeAction(input: {
 }): Promise<Challenge> {
   await requireCurrentCompanyMember("hiring_access");
   const validated = GenerateChallengeInputSchema.parse(input);
-  return ChallengeSchema.parse(await aiProvider.generateChallenge(validated));
+  const roleReality = await extractRoleReality(validated.workDescription);
+  const challenge = ChallengeSchema.parse(await aiProvider.generateChallenge(validated));
+  const assessmentPlan = roleReality.actualWork && roleReality.expectedBeforeJoining && roleReality.willTeach
+    ? await proposeAssessmentPlan({ reality: roleReality, tasks: challenge.tasks, activeMinutes: challenge.estimatedMinutes }) : null;
+  return { ...challenge, roleReality, assessmentPlan };
 }
 
 export async function editChallengeAction(challenge: Challenge, instruction: string): Promise<Challenge> {

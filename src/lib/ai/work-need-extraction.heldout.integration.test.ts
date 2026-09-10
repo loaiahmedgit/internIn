@@ -1,10 +1,11 @@
+import { hasConfiguredModel } from "./model";
 import { config } from "dotenv";
 config({ path: ".env.local" });
 import { describe, expect, it } from "vitest";
 import { workActivitySignals } from "./role-intelligence-schemas";
 import { extractWorkNeedProfile } from "./work-need-extraction";
 
-const maybe = process.env.OPENROUTER_API_KEY && process.env.RUN_ROLE_HELDOUT_LIVE === "1"
+const maybe = hasConfiguredModel() && process.env.RUN_ROLE_HELDOUT_LIVE === "1"
   ? describe
   : describe.skip;
 

@@ -1,4 +1,6 @@
+import { AssessmentPlanSummary } from "@/components/challenges/assessment-plan-summary";
 import Link from "next/link";
+import { ApplicationEntrySummary } from "@/components/opportunities/application-entry-summary";
 import { notFound } from "next/navigation";
 import { BarChart3, ChevronRight, Clock3, FileText, FolderOpen, Lightbulb, ListChecks, ShieldCheck } from "lucide-react";
 import { eq, and, desc, asc, inArray } from "drizzle-orm";
@@ -55,6 +57,8 @@ export default async function ApplicationWorkspacePage({
       opportunityId: schema.applications.opportunityId,
       status: schema.applications.status,
       challengeStartedAt: schema.applications.challengeStartedAt,
+      assignedChallengeVersionId: schema.applications.assignedChallengeVersionId,
+      entryEvidence: schema.applications.entryEvidence,
       role: schema.opportunities.role,
       location: schema.opportunities.location,
       workMode: schema.opportunities.workMode,
@@ -158,8 +162,9 @@ export default async function ApplicationWorkspacePage({
   // other, so they run together instead of serially.
   const [[currentVersion, challengeResources], submissionArtifactRows] = await Promise.all([
     (async () => {
-      const version = challengeRow?.currentVersionId
-        ? (await db.select().from(schema.challengeVersions).where(eq(schema.challengeVersions.id, challengeRow.currentVersionId)).limit(1))[0]
+      const versionId = latestSubmission?.challengeVersionId ?? application.assignedChallengeVersionId ?? (application.applicationMode !== "quick_apply" && challengeRow?.status === "published" ? challengeRow.currentVersionId : null);
+      const version = versionId
+        ? (await db.select().from(schema.challengeVersions).where(eq(schema.challengeVersions.id, versionId)).limit(1))[0]
         : undefined;
       const resources = version ? await db.select().from(schema.challengeResources).where(eq(schema.challengeResources.challengeVersionId, version.id)) : [];
       return [version, resources] as const;
@@ -169,11 +174,12 @@ export default async function ApplicationWorkspacePage({
       : Promise.resolve([]),
   ]);
 
+  const hasStartedAssignedChallenge = Boolean(application.challengeStartedAt && application.assignedChallengeVersionId);
   const challengeStatus: "to_do" | "in_progress" | "submitted" | "reviewed" = latestSubmission
     ? latestSubmission.status === "reviewed"
       ? "reviewed"
       : "submitted"
-    : application.challengeStartedAt
+    : hasStartedAssignedChallenge
       ? "in_progress"
       : "to_do";
   const CHALLENGE_STATUS_LABEL: Record<typeof challengeStatus, { label: string; style: string }> = {
@@ -235,11 +241,13 @@ export default async function ApplicationWorkspacePage({
           <>
             <ChevronRight className="size-3.5" aria-hidden="true" />
             <span className="truncate text-navy/60">
-              {application.challengeStartedAt || latestSubmission ? currentVersion.title : "Start Challenge"}
+              {hasStartedAssignedChallenge || latestSubmission ? currentVersion.title : "Start Challenge"}
             </span>
           </>
         )}
       </nav>
+
+      {application.entryEvidence && <div className="mt-6"><ApplicationEntrySummary evidence={application.entryEvidence} /></div>}
 
       {offer && (
         <div className="mt-6 border border-teal/30 bg-teal/5 p-5">
@@ -346,11 +354,17 @@ export default async function ApplicationWorkspacePage({
         </div>
       )}
 
-      {!currentVersion ? (
+      {application.applicationMode === "quick_apply" && !latestSubmission ? (
+        <section className="mt-6 space-y-2">
+          <h1 className="text-xl font-semibold text-navy">Your application</h1>
+          <p className="text-navy/68">Your profile and work responses are available for company review. No additional Challenge is required.</p>
+          <Link href="/student/applications" className="text-sm font-medium text-teal-ink underline">View application status</Link>
+        </section>
+      ) : !currentVersion ? (
         <p className="mt-6 text-navy/68">
           This Challenge isn&apos;t published yet — check back soon.
         </p>
-      ) : !application.challengeStartedAt && !latestSubmission ? (
+      ) : !hasStartedAssignedChallenge && !latestSubmission ? (
         <div className="mx-auto mt-6 max-w-[800px] rounded-2xl border border-black/[0.04] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:p-8">
           <div className="flex items-center gap-3">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal/10 text-base font-semibold text-teal-ink">
@@ -383,6 +397,7 @@ export default async function ApplicationWorkspacePage({
           </p>
 
           <p className="mt-4 text-[15px] leading-6 text-navy/70">{firstSentence(currentVersion.scenario)}</p>
+          <div className="mt-4"><AssessmentPlanSummary plan={currentVersion.assessmentPlan} /></div>
 
           <hr className="my-5 border-navy/8" />
           <IconRow icon={FileText} title="What you'll do">
@@ -452,6 +467,7 @@ export default async function ApplicationWorkspacePage({
               </div>
               <div className="mt-2">
                 <ExpandableText text={currentVersion.scenario} />
+                <div className="mt-4"><AssessmentPlanSummary plan={currentVersion.assessmentPlan} /></div>
               </div>
             </section>
 

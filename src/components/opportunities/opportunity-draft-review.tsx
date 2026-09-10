@@ -41,6 +41,7 @@ function dayAfter(date: Date): Date {
 }
 
 type ChallengeSummary = {
+  assessmentPlanReady?: boolean;
   title: string;
   scenario: string;
   skills: string[];
@@ -133,6 +134,7 @@ export function OpportunityDraftReview({
     deadline: !deadline ? "Required" : deadline < today ? "Cannot be in the past" : null,
     startDate: !startDate ? "Required" : startDate < today ? "Cannot be in the past" : deadline && startDate <= deadline ? "Must be after the deadline" : null,
     slots: slots < 1 ? "At least 1" : null,
+    assessmentPlan: challengeSummary && !challengeSummary.assessmentPlanReady ? "Review the assessment plan" : null,
     assessmentBasis: challengeSummary && !assessmentBasis ? "Required" : null,
     nonProductionConfirmed: challengeSummary && !nonProductionConfirmed ? "Required" : null,
     challengeDuration:
@@ -185,7 +187,8 @@ export function OpportunityDraftReview({
       <div className="overflow-hidden rounded-xl border border-navy/10 bg-white">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-navy/10 px-5 py-5 sm:px-6">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">Ready to publish</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">Internship review</p>
+            {challengeSummary && !challengeSummary.assessmentPlanReady && <p className="mt-3 text-sm text-navy/70">Complete the entry foundations and evidence plan before publishing. <Link className="underline" href={`/company/opportunities/${opportunityId}/setup/challenge`}>Review assessment plan</Link></p>}
             <h1 className="mt-1 text-xl font-semibold tracking-tight text-navy">{role}</h1>
             <p className="mt-0.5 text-sm text-navy/55">{companyName}</p>
             {shortDescription && <p className="mt-3 max-w-2xl text-sm leading-relaxed text-navy/70">{shortDescription}</p>}

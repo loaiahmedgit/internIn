@@ -1,3 +1,4 @@
+import { AssessmentPlanDraftSchema, RoleRealitySchema } from "@/lib/challenges/architect";
 import { z } from "zod";
 import { CHALLENGE_RESOURCE_TYPES, SUBMISSION_ARTIFACT_KINDS, SUBMISSION_INPUT_MODES } from "@/lib/challenges/submission-model";
 import { ASSESSMENT_BASIS_VALUES, PRODUCTION_WORK_RISK_VALUES } from "@/lib/challenges/no-free-labor";
@@ -123,9 +124,11 @@ export const AssessmentBasisSchema = z.enum(ASSESSMENT_BASIS_VALUES);
 export const ProductionWorkRiskSchema = z.enum(PRODUCTION_WORK_RISK_VALUES);
 
 export const ChallengeSchema = z.object({
+  roleReality: RoleRealitySchema.nullable().optional(),
+  assessmentPlan: AssessmentPlanDraftSchema.nullable().optional(),
   title: z.string().trim().min(2).max(180),
   scenario: z.string().trim().min(20).max(6000),
-  estimatedMinutes: z.number().int().min(10).max(480),
+  estimatedMinutes: z.number().int().min(5).max(480),
   /** Human duration range (normally "30-60 minutes") — the canonical display value;
    * see challenge-duration.ts's formatChallengeDuration. Null for a
    * challenge from a path that never produced one. */

@@ -35,7 +35,8 @@ export default async function EditOpportunityPage({ params }: { params: Promise<
     startDate: opportunity.startDate,
     slots: opportunity.slots,
     skills: opportunity.skills,
-    requireCv: opportunity.requireCv,
+    requireCv: false,
+    eligibilityRequirements: opportunity.eligibilityRequirements,
     applicationQuestions: opportunity.applicationQuestions,
     applicationMode: opportunity.applicationMode,
   };

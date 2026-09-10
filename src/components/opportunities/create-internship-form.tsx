@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { ELIGIBILITY_FIELD_LABEL, type EligibilityRequirement } from "@/lib/opportunities/application-entry";
 import { TagListEditor } from "@/components/opportunities/tag-list-editor";
 import { saveInternshipAction, assistInternshipCopyAction, type InternshipFormInput } from "@/lib/opportunities/actions";
 import { toDateInputValue } from "@/lib/format-date";
@@ -38,7 +38,8 @@ function toFormState(initial?: Partial<InternshipFormInput>): FormState {
     startDateInput: initial?.startDate ? toDateInputValue(new Date(initial.startDate)) : "",
     slots: initial?.slots ?? 1,
     skills: initial?.skills ?? [],
-    requireCv: initial?.requireCv ?? true,
+    requireCv: false,
+    eligibilityRequirements: initial?.eligibilityRequirements ?? [],
     applicationQuestions: initial?.applicationQuestions ?? [],
     applicationMode: initial?.applicationMode ?? "optional_challenge",
   };
@@ -264,12 +265,9 @@ export function CreateInternshipForm({
             <CardDescription>What applicants need to provide.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-navy">Require CV</p>
-                <p className="text-xs text-navy/50">Applicants must attach a CV to apply.</p>
-              </div>
-              <Switch checked={form.requireCv} onCheckedChange={(v) => update("requireCv", v)} />
+            <div>
+              <p className="text-sm font-medium text-navy">Profile-based applications</p>
+              <p className="text-xs text-navy/50">A CV is optional supporting context. Every applicant can provide brief work evidence.</p>
             </div>
             <Separator />
             <div>
@@ -294,8 +292,18 @@ export function CreateInternshipForm({
               )}
             </div>
             <Separator />
-            <Field label="Additional application questions" hint="optional">
-              <TagListEditor items={form.applicationQuestions} onChange={(v) => update("applicationQuestions", v)} placeholder="e.g. Why are you interested in this role?" emptyHint="No extra questions — applicants just submit a CV and, if included, the challenge." />
+            <div className="space-y-3">
+              <p className="text-sm font-medium">Objective prerequisites</p>
+              <p className="text-xs text-muted-foreground">Only add genuinely mandatory prerequisites. Any listed alternative within a field is accepted; all configured fields must be met. Values match declared profile entries exactly, ignoring case and spacing.</p>
+              {(["study_field", "education_level", "certification"] as EligibilityRequirement["field"][]).map((field) => (
+                <Field key={field} label={ELIGIBILITY_FIELD_LABEL[field]} hint="optional">
+                  <TagListEditor items={form.eligibilityRequirements?.find((rule) => rule.field === field)?.acceptedValues ?? []} onChange={(acceptedValues) => update("eligibilityRequirements", [...(form.eligibilityRequirements ?? []).filter((rule) => rule.field !== field), ...(acceptedValues.length ? [{ field, acceptedValues }] : [])])} placeholder={field === "study_field" ? "e.g. Nursing" : field === "education_level" ? "e.g. Bachelor's" : "e.g. First aid"} emptyHint="No prerequisite in this field." />
+                </Field>
+              ))}
+            </div>
+            <Separator />
+            <Field label="Short work questions" hint="optional">
+              <TagListEditor items={form.applicationQuestions} onChange={(v) => update("applicationQuestions", v)} placeholder="e.g. Write a supervisor handoff for a delayed delivery." emptyHint="When empty, internIn provides two short role-context questions about prioritization and checking work. Keep custom questions to 2–4, about 5–15 minutes total." />
             </Field>
           </CardContent>
         </Card>
