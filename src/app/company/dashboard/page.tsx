@@ -50,6 +50,10 @@ export default async function CompanyHomePage({
   const now = new Date();
   const metrics = hiringMetrics(data.applications);
   const published = data.postings.filter((p) => p.status === "published");
+  // Home is an operational preview, not the full internship directory.
+  // Keeping this to four rows matches the adjacent pipeline's natural
+  // height; the existing header action remains the route to every posting.
+  const healthPreview = published.slice(0, 4);
 
   // Real period-over-period deltas — omitted (not "0%") when the prior
   // period has nothing to compare against, per the no-fabrication rule.
@@ -165,7 +169,7 @@ export default async function CompanyHomePage({
           detail="Awaiting candidate response"
         />
       </div>
-      <div className="mt-6 grid items-stretch gap-5 xl:grid-cols-2">
+      <div className="mt-6 grid items-start gap-5 xl:grid-cols-2">
         <HiringPanel
           title="Hiring pipeline overview"
           subtitle="All-time applicant-to-offer progress"
@@ -194,7 +198,7 @@ export default async function CompanyHomePage({
           }
         >
           <div className="space-y-3">
-            {published.map((p) => {
+            {healthPreview.map((p) => {
               const m = hiringMetrics(
                 data.applications.filter((a) => a.opportunityId === p.id),
               );
