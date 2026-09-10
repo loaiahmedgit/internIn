@@ -16,7 +16,9 @@ import {
   ASSESSMENT_BASIS_DESCRIPTION,
   ASSESSMENT_BASIS_LABEL,
   ASSESSMENT_BASIS_VALUES,
+  getChallengeSafeguardIssues,
   MAX_UNPAID_CHALLENGE_MINUTES,
+  NO_FREE_LABOR_POLICY_VERSION,
   type AssessmentBasis,
 } from "@/lib/challenges/no-free-labor";
 
@@ -80,6 +82,25 @@ export function ChallengeBuilder({
 
   async function handleApprove() {
     setSaveError(null);
+
+    // Keep the deterministic server-side gate as the authority, but surface
+    // its actionable R3 guidance before crossing the Server Action boundary.
+    // Production React intentionally redacts thrown server errors, which made
+    // a correctly blocked approval appear as an opaque minified error.
+    const [safeguardIssue] = getChallengeSafeguardIssues({
+      policyVersion: NO_FREE_LABOR_POLICY_VERSION,
+      assessmentBasis: challenge.assessmentBasis,
+      nonProductionConfirmed: challenge.nonProductionConfirmed === true,
+      estimatedMinutes: challenge.estimatedMinutes,
+      durationExceptionJustification: challenge.durationExceptionJustification,
+      productionWorkRisk: challenge.productionWorkRisk,
+      transformationApplied: challenge.transformationApplied,
+    });
+    if (safeguardIssue) {
+      setSaveError(safeguardIssue.message);
+      return;
+    }
+
     setActionPending(true);
     try {
       const next: Challenge = { ...challenge, status: "approved" };
