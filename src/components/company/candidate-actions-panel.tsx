@@ -38,6 +38,7 @@ export function CandidateActionsPanel({
   status,
   offerStatus,
   hasEvidence,
+  challengeRequirementMet,
 }: {
   applicationId: string;
   candidateName: string;
@@ -45,6 +46,11 @@ export function CandidateActionsPanel({
   status: Status;
   offerStatus: "pending" | "accepted" | "declined" | null;
   hasEvidence: boolean;
+  /** R2 §17/§18 — false only for challenge_required with no final
+   * submission yet. The server (shortlistApplicationAction/
+   * inviteToInternshipAction) is the real gate; this only disables the
+   * button so the company sees why before ever hitting that rejection. */
+  challengeRequirementMet: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -73,7 +79,8 @@ export function CandidateActionsPanel({
             <Button
               variant={primary ? "default" : "outline"}
               className={primary ? "flex-1 bg-teal text-white hover:bg-teal/90" : "flex-1"}
-              disabled={isPending}
+              disabled={isPending || !challengeRequirementMet}
+              title={challengeRequirementMet ? undefined : "This internship requires a completed Challenge before you can send an offer."}
             />
           }
         >
@@ -153,7 +160,8 @@ export function CandidateActionsPanel({
           <div className="flex items-center gap-2">
             <Button
               className="flex-1 bg-teal text-white hover:bg-teal/90"
-              disabled={isPending}
+              disabled={isPending || !challengeRequirementMet}
+              title={challengeRequirementMet ? undefined : "This internship requires a completed Challenge before the candidate can be shortlisted."}
               onClick={() => run(() => shortlistApplicationAction(applicationId))}
             >
               <Star className="size-4" aria-hidden="true" />
@@ -162,6 +170,9 @@ export function CandidateActionsPanel({
             {renderSendOffer(false)}
             {renderMoreActions("review")}
           </div>
+        )}
+        {status === "applied" && !challengeRequirementMet && (
+          <p className="mt-2 text-xs text-navy/50">This internship requires a completed Challenge before the candidate can be shortlisted or sent an offer.</p>
         )}
 
         {status === "shortlisted" && offerStatus !== "pending" && offerStatus !== "accepted" && (

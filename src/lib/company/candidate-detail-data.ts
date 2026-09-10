@@ -2,6 +2,7 @@ import { eq, or, and, inArray, asc, desc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireCompanyMember } from "@/lib/auth";
 import type { EvidenceSummary } from "./evidence-summary";
+import type { ApplicationMode } from "@/lib/opportunities/application-mode";
 
 export interface CandidateDetail {
   applicationId: string;
@@ -14,6 +15,10 @@ export interface CandidateDetail {
   opportunityId: string;
   role: string;
   companyId: string;
+  /** R2 §16 — drives honest Challenge-context copy (Required/Optional/no
+   * challenge at all), independent of whether `challenge`/`submission`
+   * below are populated (those reflect submission state, not the mode). */
+  applicationMode: ApplicationMode;
   requirements?: { description: string; skills: string[]; hoursPerWeek: number; location: string; workMode: string | null };
   evaluatedSummary?: EvidenceSummary | null;
   // Real student profile fields only — anything the schema doesn't collect (phone,
@@ -88,6 +93,7 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
       opportunityId: schema.applications.opportunityId,
       opportunityCompanyId: schema.opportunities.companyId,
       role: schema.opportunities.role,
+      applicationMode: schema.opportunities.applicationMode,
       studentName: schema.users.fullName,
       studentEmail: schema.users.email,
     })
@@ -212,6 +218,7 @@ export async function getCandidateDetail(applicationId: string, companyId: strin
     evaluatedSummary,
     opportunityId: row.opportunityId,
     role: row.role,
+    applicationMode: row.applicationMode,
     companyId,
     profile: profile ?? null,
     submission: submission

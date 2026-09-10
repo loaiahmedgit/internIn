@@ -1,258 +1,244 @@
-# internIn — Handoff to Codex
+# internIn — Agent Handoff
 
-This is a working handoff, not marketing copy. Read it in order. Everything here was verified against the actual repo state at handoff time (`npm run build`, `npm run test` both green).
+**This is a CURRENT-STATE OPERATING DOCUMENT, not a diary.** It describes what internIn is *now*, what is live, what is frozen, and what to do next.
 
-## 1. What internIn is
+## If you are a new coding agent taking over this repository
 
-internIn is an early-career hiring and internship platform where students with little or no prior experience prove themselves through realistic company work challenges. Companies describe an internship role and the real work an intern would do to an AI assistant, which generates a safe, simulated Challenge (synthetic data, fictional company — never real internal data). Students complete the challenge; companies review evidence of performance instead of relying on a CV. A company can invite a strong candidate into an internship, at which point internIn generates a structured week-by-week internship program, tracks it, and issues Verified Experience when it's done.
+1. Read this file completely before editing.
+2. Read the referenced architecture docs (§"Canonical architecture docs" below).
+3. Run `git status` and `git log --oneline -10`. Inspect the real schema/code — do not trust stale prose over what you can read now.
+4. The **current** master direction is HONESTY + EVIDENCE (see below). Older roadmap docs (`docs/00`–`docs/11`) are still the source of truth for *product scope/mechanics*, but where an older doc conflicts with the honesty direction or with `docs/13`, the honesty direction wins.
+5. Preserve working functionality. Phases 4A–6B, R1, R2 are done and verified — do not undo them because an older doc reads differently.
+6. Continue from the **NEXT TASK** section at the bottom unless the owner gives newer instructions. Current owner instructions always override this file.
+7. Report uncertainty instead of fabricating implementation state.
 
-**Core principle, non-negotiable:** AI never makes the hiring decision, and AI-generated content never auto-publishes. Every Challenge goes through an explicit human approval gate (`draft → ai_generated → pending_approval → approved → published`) before a student can see it.
+---
 
-**Anti-exploitation rule, non-negotiable:** pre-hiring Challenges must be synthetic/sanitized/limited. Companies cannot use internIn to extract free production work — if the output would create real production value, it has to become paid work instead.
+## Current master product direction: HONESTY
 
-**Monetization (decided, not TBD):** students always free (no pay-to-win). Companies: free to start (create internships, generate Challenges, review candidates), then **QAR 499 per successful intern hired** — that fee is what unlocks the Internship Program Builder and management tools. No AI-credit pricing, ever — companies should feel like "internIn created my challenge," not "I consumed tokens." The QAR 499 charge itself is intentionally **stubbed** for v1 (no real Stripe integration yet — see `internship_offers.placementFeeStatus` enum: `unpaid | stubbed_paid | paid`).
+internIn helps companies evaluate early-career candidates using **profile evidence + demonstrated evidence + human verification** — not only prior experience.
 
-Full original product spec (this is the source of truth for scope/behavior, read it before changing product behavior): **`docs/00-product-concept.md` through `docs/11-agentic-architecture-direction.md`**. Eleven files, each covering one slice (company flow, student flow, candidate evidence, internship builder, anti-exploitation, monetization, landing page copy, page list + data model, AI architecture, brand identity, agentic architecture direction). Don't re-derive these from scratch — they were carefully negotiated with the founder across several plan revisions. **`docs/11` in particular is binding for all future AI work** — check new AI features against it before building.
+**The semantic ladder (never collapse these into a generic "Verified"):**
 
-## 2. Brand identity
+- **CLAIMED** — a candidate/company stated something.
+- **OBSERVED** — internIn directly observed an event/artifact (e.g. a raw submission).
+- **VALIDATED** — a defined deterministic check confirmed a specific factual condition.
+- **DEMONSTRATED** — accumulated evidence supports an ability *in the tested context* (internIn's AI-evaluated rubric criteria at `strong`/`solid`).
+- **HUMAN REVIEWED** — an authorized person inspected the evidence. Inspection alone is **not** endorsement.
+- **COMPANY ENDORSED** — an explicitly authorized company person intentionally recognized *specific* demonstrated capabilities. Never inferred, never automatic.
+- **NOT ASSESSED / NOT DIGITALLY VERIFIED / UNKNOWN** — say this plainly rather than implying more.
 
-- Wordmark: use `/public/logo.png` (already transparent-background, correctly cropped). **Never redraw, recolor, or re-crop it, and never put it in a decorative chip/box.** This was gotten wrong twice earlier in the project (a hand-drawn text approximation, then a botched background-removal script that corrupted the original file) — the founder was rightly frustrated both times. The current `logo.png` is correct and confirmed by the founder. Leave it alone.
-- Colors: navy `#213248` (text, structure), teal `#1BA59C` (sparing accent — primary actions, status, one closing band), light gray `#F3F5F7`, cool gray `#C7CDD3`.
-- Full design system spec: **`design-system/internin/MASTER.md`** (direction, type scale, layout rhythm, motion dial, forbidden patterns) and **`design-system/internin/pages/landing.md`** (landing-page-specific). Read `MASTER.md` before touching any UI — it explicitly forbids gradients/glow/glassmorphism/generic SaaS card grids/fake browser mockups/big sparkle icons, which is exactly the "looks AI-generated" failure mode this project has been actively steering away from.
-- Full brand kit sheet at `BrandKit.png` (root) if you need the original reference.
+**Ability ≠ overall suitability.** A Challenge gives evidence about specific role-relevant work. It does **not** establish total job suitability, culture fit, motivation, long-term reliability, future performance, real-world teamwork, or physical execution. Do not build a global "suitability score."
 
-## 3. Stack (locked — do not swap without asking)
+---
 
-Next.js 16 (App Router) + TypeScript, Tailwind v4 + shadcn/ui (**this shadcn version runs on Base UI, not Radix** — see gotcha #1 below), Motion (+ GSAP sparingly), Drizzle ORM + PostgreSQL via Supabase, Supabase Auth (`@supabase/ssr`), Vercel AI SDK (`generateObject`) + OpenRouter for the real AI provider with model set via `AI_MODEL` env var (never hardcoded), Zod for every AI I/O boundary and every server action input, Vitest for tests. Explicitly **not** using: FastAPI/microservices, Redis, Kubernetes, GraphQL, a vector DB, Prisma.
+## Current product core
 
-## 4. Repo layout
+Company creates internship → applicant applies → realistic Challenge where applicable → applicant produces an actual artifact/work → internIn validates observable/objective evidence where possible → AI organizes evidence honestly → human company reviewer inspects quickly → **human** hiring decision → optional explicit human company endorsement.
 
-```
-internIn/
-  docs/                      product spec, source of truth — read before changing behavior
-  design-system/internin/    UI direction spec — read before changing UI
-  vault/                     Obsidian knowledge-graph vault of the product spec (graphify output)
-  graphify-out/              graphify's raw graph data/report
-  BrandKit.png, logo.png     brand assets — logo.png is also copied to public/
-  public/logo.png            the actual asset the app renders (transparent, cropped)
-  src/
-    app/
-      (marketing)/           landing page + /pricing — public
-      (auth)/                /signin, /signup, actions.ts (Supabase Auth)
-      company/
-        page.tsx             redirects to /company/dashboard
-        dashboard/            real, DB-backed, protected
-        opportunities/new/    the Create-Internship wizard — protected, writes to DB
-        layout.tsx
-    components/
-      marketing/              landing-page.tsx assembles hero/role-demo/sections
-      opportunities/          create-internship-wizard.tsx (the multi-step flow)
-      challenges/             challenge-builder.tsx (edit/approve/publish UI)
-      ai/                     thinking-indicator.tsx
-      ui/                     shadcn primitives + wordmark.tsx (uses the real logo)
-    lib/
-      ai/                     provider.ts (interface), schemas.ts (Zod), mock-provider.ts,
-                               gemma-provider.ts (real), index.ts (swap point), actions.ts (server actions)
-      opportunities/actions.ts  DB persistence server actions (create/save-version/publish)
-      supabase/               client.ts, server.ts, middleware.ts (session + route protection)
-      auth.ts                 getCurrentUser / requireCurrentCompanyMember / requireCompanyMember
-      utils.ts                shadcn's cn()
-    db/
-      schema.ts               Drizzle schema, 17 tables
-      migrations/              generated SQL (0000_zippy_terrax.sql) — not yet pushed anywhere
-      index.ts                 getDb() — lazy, throws clearly if DATABASE_URL unset
-    proxy.ts                  route protection (Next.js 16 renamed "middleware" → "proxy";
-                               the build output literally prints "ƒ Proxy (Middleware)" — do not
-                               recreate a src/middleware.ts, it will silently not run)
-  drizzle.config.ts
-  vitest.config.ts
-  .env.local.example
-```
+**Near-term focus:** `CHALLENGE → EVIDENCE → FAST HUMAN REVIEW → HIRING`.
 
-## 5. What actually works right now
+**Post-hire expansion is FROZEN** (details below).
 
-- **Landing page** (`/`) — redesigned past the original v1; follows `design-system/internin/MASTER.md`. Editorial/base.org-inspired rhythm, not generic SaaS.
-- **`/pricing`** — static, matches the monetization section above.
-- **Auth**: `/signup` (role toggle: student vs company; company signup creates a `companies` row + `company_members` owner row), `/signin`, sign-out action. Session cookies via `@supabase/ssr`.
-- **`/company/dashboard`** — real, protected, server component. Reads the signed-in user's company + opportunities from Postgres via Drizzle. Empty state links to the wizard.
-- **`/company/opportunities/new`** — the full Create-Internship → AI Challenge Builder wizard, **now protected and DB-wired, not a client-only demo**:
-  1. Describe role in plain language → `generateInternshipAction` (AI) → structured `InternshipDraft`
-  2. Review/edit the draft → on "Continue," `createOpportunityAction` inserts a real `opportunities` row (status `draft`)
-  3. Describe the actual work → `generateChallengeAction` (AI) → a `Challenge`, immediately persisted via `saveChallengeVersionAction` as `challenge_versions` version 1 (`source: "ai_generated"`)
-  4. Challenge Builder: manual field edits are local-only (no DB write per keystroke); the "Tell the AI what to change" box calls `editChallengeAction` then persists a new version (`source: "ai_generated"`, `editInstruction` recorded); **Approve** persists a version with `source: "approved"`; **Publish** flips `challenges.status` and `opportunities.status` to `published` and writes an `event_log` row.
-- **Real AI provider** (`gemma-provider.ts`) — OpenRouter via `generateObject`, model from `AI_MODEL`. Auto-selected in `src/lib/ai/index.ts` when `OPENROUTER_API_KEY` is set; falls back to `mock-provider.ts` (deterministic, templated, no network call) otherwise, so the whole flow above works with zero external credentials for demos. **A real key is now set in `.env.local`** — verified with a live `generateText` call against `AI_MODEL` (`google/gemma-4-31b-it-20260402`) before trusting it. The whole app now runs on the real provider by default; unset `OPENROUTER_API_KEY` to fall back to the mock one for zero-cost local iteration.
-- **Server-side authorization**: `src/lib/auth.ts` + `src/lib/opportunities/actions.ts` — every write resolves the session's company membership itself and throws if it doesn't match, rather than trusting a client-supplied id.
-- **Tests**: `npm test` — 28 tests on the AI provider layer (mock provider's template selection, instruction parsing, status transitions, notes-grounded candidate summaries), 100% line coverage on `mock-provider.ts`. `npm run test:coverage` for the full report.
-- **DB schema**: 17 tables, two migrations generated (`0000_zippy_terrax.sql`, `0001_blushing_morgan_stark.sql` — adds `submissions.notes`), **pushed to a live Supabase project** (`qdlrrqjevcvjtkbsezaj`, org `loaiahmedgit's Org`, region `ap-south-1`) — see section 11 below for connection details and a real gotcha hit getting there.
-- **Student flow (Phase 3, minimal vertical slice)**:
-  - `/opportunities` — public browse page, lists `published` opportunities joined with company name. `force-dynamic` (no `cookies()` call, would otherwise statically prerender at build time and crash without `DATABASE_URL`).
-  - `/opportunities/[id]` — detail page + `ApplyButton` client component, calls `applyToOpportunityAction` (`src/lib/opportunities/student-actions.ts`), redirects to the new application's workspace. Also `force-dynamic`.
-  - `/student/dashboard` — protected, lists the signed-in student's applications with company/role/status.
-  - `/student/applications/[id]` — protected challenge workspace: renders the opportunity's current published `challenge_version` (scenario, tasks, deliverables) and either a `SubmitChallengeForm` (calls `submitChallengeAction`) or, once a submission exists, its status.
-  - `requireCurrentStudent()` added to `src/lib/auth.ts`, mirrors `requireCurrentCompanyMember()`.
-  - `src/lib/supabase/middleware.ts`'s `isProtected` now also covers `/student/dashboard` and `/student/applications` (same `!user` check as company routes — no role check yet, matching existing pattern).
-  - Not done: no Smart Matching/scoring (docs/02); no file upload (Supabase Storage) — submission is a URL + notes only; no resubmission flow if a company requests changes.
-- **Student Profile page** (docs/02 + docs/08's explicit MVP "Build" list — the last unbuilt item from that list):
-  - `/student/profile` — view/edit university, major, graduation year, availability, skills, interests (comma-separated text inputs, parsed to arrays), and an optional CV link. `StudentProfileForm` (client) calls `updateStudentProfileAction` (`src/lib/opportunities/student-actions.ts`), which just updates the `student_profiles` row `/signup` already created (never inserts — one profile per user is guaranteed at signup, `userId` is unique).
-  - Deliberately kept minimal per docs/02's own philosophy ("internIn shouldn't punish someone for not already having an impressive CV") — no résumé parsing, no required fields, CV link is optional. Linked from `/student/dashboard`'s header alongside Verified Experience.
-  - Not done: profile data isn't used for anything yet (no Smart Matching against it, no display of it to companies) — it's captured but not yet consumed anywhere.
-- **Candidate Evidence page (company side)**:
-  - `/company/opportunities/[id]` — company-owned opportunity detail: lists applications with a "View evidence" link per submission.
-  - `/company/submissions/[id]` — the actual Candidate Evidence page from `docs/03`: factual data first (tasks completed, time spent, AI usage mode, company rubric, submission notes + "View original work" artifact links), then an AI summary section (descriptive strength/watch-for, never a bare score) with a `GenerateEvidenceButton` that calls `generateCandidateEvidenceAction` (`src/lib/opportunities/evidence-actions.ts`).
-  - Fixed a real gap found while building this: `summarizeCandidateAction`/the AI providers previously fabricated evidence from the challenge template alone, ignoring the actual submission — the exact TODO `gemma-provider.ts` had left for "once real submissions exist (Phase 3)". `AIProvider.summarizeCandidate` now takes `submissionNotes` and both providers ground their output in it. `submissions` gained a real `notes` column (was previously only in `event_log.metadata`, unqueryable) — migration `0001_blushing_morgan_stark.sql`.
-  - Factual fields (`tasksCompleted`, `timeSpentMinutes`) are computed server-side from real data (task count, `submittedAt - application.createdAt`) and never taken from the AI's output — only the descriptive summary/strength/weakness text is AI-generated. `candidate_evidence` upserts on `submissionId` (unique), so regenerating updates the same row.
-- **Candidate Comparison page (company side)**:
-  - `/company/opportunities/[id]/compare` — only reachable once 2+ submissions on that opportunity have generated evidence (linked from `/company/opportunities/[id]` as "Compare candidates"). Server component loads every application whose submission already has a `candidate_evidence` row; anyone without one is silently excluded (comparison never triggers generation itself — it's a read/derive step, not a place to silently run AI on submissions the company hasn't looked at yet).
-  - `CandidateComparisonView` (client): checkbox-select 2+ candidates → `compareCandidateSubmissionsAction` (`src/lib/opportunities/evidence-actions.ts`) rebuilds `CandidateEvidence` objects from the DB rows (candidateName joined from `users`, `submissionSummary` derived from artifact count since that field isn't persisted in `candidate_evidence`) and calls the existing `compareCandidatesAction` AI wrapper. Table isn't persisted — it's a live comparison, recomputed each time.
-  - Each row has a **Shortlist** button → `shortlistApplicationAction` (`src/lib/opportunities/actions.ts`), sets `applications.status = "shortlisted"` after re-verifying the company owns the application's opportunity, logs `event_log`.
-  - **Invite to Internship** is available from both this table's rows and the evidence page (see below) — deliberately not duplicated here.
-  - Deliberately still not built: **Request interview** (no matching `application_status` value in the schema — would need a new enum value, not attempted).
-- **Invite to Internship (company side, docs/03 "the defining moment" + docs/06 monetization)**:
-  - `InviteToInternshipButton` (`src/components/opportunities/invite-to-internship-button.tsx`) — on `/company/submissions/[id]` (the evidence page) and on each row of `/company/opportunities/[id]/compare`. Opens a confirmation dialog that names the **QAR 499 placement fee** explicitly before doing anything, per docs/06's requirement that the fee visibly trigger, not happen silently.
-  - `inviteToInternshipAction` (`src/lib/opportunities/actions.ts`) — re-verifies company ownership of the application, inserts an `internship_offers` row (`status: "pending"`, `placementFeeStatus: "stubbed_paid"` — the fee is stubbed per the MVP decision, but the state is set immediately rather than left `"unpaid"`, since the point is to prove the "pay when you hire" thesis end to end), flips `applications.status` to `"invited"`, logs `event_log` with `{ placementFeeStatus, placementFeeQar: 499 }`. Idempotent — calling it again on an already-invited application just returns the existing offer id (`internship_offers.applicationId` is unique).
-  - No real payment processor (intentionally out of scope per docs/06 — v1 is stubbed only).
-- **Student offer accept/decline (docs/03 flow closure)**:
-  - `/student/applications/[id]` now shows an offer banner whenever an `internship_offers` row exists for that application: pending → `OfferResponseButtons` (Accept/Decline); accepted/declined → a plain status line, no buttons.
-  - `respondToOfferAction` (`src/lib/opportunities/student-actions.ts`) — reuses `assertOwnsApplication`, requires `offer.status === "pending"` (rejects re-deciding an already-answered offer), sets `internship_offers.status` to `"accepted"`/`"declined"`. On decline, also flips `applications.status` to `"declined"` (there's no `applications.status` value for "accepted" — `offer.status` alone carries that signal, `applications.status` just stays `"invited"`). Logs `event_log` (`offer_accepted`/`offer_declined`).
-  - Not done: nothing happens on acceptance beyond the status flip — no notification to the company.
-- **Internship Program Builder (docs/04)**:
-  - `/company/offers/[id]/program/new` — only reachable once the offer is accepted (checked server-side, not just hidden in the UI) and only if no program exists yet for that offer (`internshipPrograms.offerId` is unique — redirects to the view page if one already exists). `InternshipProgramWizard` (client): manager sets duration/hours-per-week and describes the internship in free text → `generateInternshipProgramAction` (existing AI action, unchanged) drafts week-by-week `title`+`objectives` → every field is editable inline before anything is saved (AI proposes, the company controls — no separate approval-gate table was added here since, unlike student-facing Challenges, this content never reaches a student unreviewed; the wizard's own review step is the gate).
-  - `createInternshipProgramAction` (`src/lib/opportunities/actions.ts`) — re-verifies company ownership via `offer → application → opportunity.companyId`, requires `offer.status === "accepted"`, rejects a second program for the same offer, inserts `internship_programs` (`status: "active"`) + one `internship_weeks` row per week, logs `event_log`.
-  - `/company/offers/[id]/program` — read view of the created plan (week/title/objectives). Linked from `/company/submissions/[id]` once the offer is accepted ("Build internship program" / "View internship program" depending on whether one exists yet).
-  - Student side: `/student/applications/[id]` renders the same week-by-week plan read-only once accepted — reused the existing per-application page rather than building a separate "Internship Workspace" route.
-  - Deliberately not built (scoped down from docs/04's full ask): no drag-to-reorder or "tell the AI what to change" edit-by-instruction for programs (unlike the Challenge Builder).
-- **Supervisor task tracking & feedback (docs/04 "Internship Workspace")**:
-  - `src/lib/opportunities/program-actions.ts` — `addInternshipTaskAction`, `updateInternshipTaskStatusAction`, `addSupervisorFeedbackAction`. Since the AI-generated program only has week `title`+`objectives` (no tasks — `InternshipProgramSchema` has no task field), tasks are added manually by the company per week; there's no "supervisor" role distinct from company member in the schema, so any company member of the owning company can add tasks, cycle their status (`pending → in_progress → done → pending`), and post feedback (optionally attached to a week). Every action re-derives ownership by joining week/program → offer → application → `opportunities.companyId`, never trusting a client id.
-  - `/company/offers/[id]/program` now renders `InternshipTaskList` per week (inline add + click-to-cycle status) and an `AddFeedbackForm` + feedback timeline at the bottom (author name, optional week tag, newest first).
-  - `/student/applications/[id]`'s program section is the read-only mirror: task status badges per week (strikethrough when done) and the same feedback timeline — students see progress and feedback but can't add either.
-  - Not done: no drag/reorder or edit/delete on tasks or feedback (add + status-cycle only); no per-task assignee or due date; no distinct supervisor role/permission (any company member can act).
-- **Verified Experience (docs/04 closing step)**:
-  - `completeInternshipProgramAction` (`src/lib/opportunities/program-actions.ts`) — flips `internship_programs.status` to `"completed"` (rejects a second completion — `programStatusEnum` has no "re-open"), then inserts one `verified_experience` row. `workCompleted` is built from tasks the supervisor actually marked `"done"` (falls back to week titles if none were tracked, so the record is never empty); `skillsDemonstrated` comes straight from the opportunity's own declared `skills` — neither field is AI-invented, both are facts already in the database. Completing the program **is** the supervisor verification act (`supervisorVerified: true`, `verifiedAt: now`) — there's no separate multi-step approval, matching the "any company member" trust level already used for tasks/feedback on this program.
-  - `CompleteProgramButton` — confirmation dialog (mirrors `InviteToInternshipButton`'s pattern) warning it can't be undone, shown on `/company/offers/[id]/program` only while `status === "active"`.
-  - Both `/company/offers/[id]/program` and `/student/applications/[id]` render the same record once it exists: role + duration + "Verified", work completed (bulleted), skills demonstrated (chips) — deliberately not a bare "Certificate of Completion," per docs/04's explicit anti-pattern.
-  - `/student/experience` — the portfolio: every one of the student's `verified_experience` records across all internships, newest-verified first, each card linking back to its `/student/applications/[id]` for full week-by-week detail. Linked from `/student/dashboard`'s header. Empty state points back to the applications list rather than showing nothing.
-  - Not done: no way to un-complete/edit a record after the fact (matches "immutable record" intent, but also means a mistake can't be corrected without a DB edit); no public/shareable version of the portfolio (it's behind student auth only, per `requireCurrentStudent`).
-- **PostHog + Sentry (Phase 6, partial)**:
-  - Wired through Next.js 16's file conventions: `src/instrumentation-client.ts` (client-side `Sentry.init` + `posthog.init`, both no-op if their env var is unset — same fail-closed pattern as the mock AI provider) and `src/instrumentation.ts` (server/edge `Sentry.init` via `register()`, `onRequestError` wired to `Sentry.captureRequestError`). `next.config.ts` wrapped with `withSentryConfig`. `src/app/global-error.tsx` added so root-level render errors get reported, not just swallowed.
-  - **Real gotcha**: `SENTRY_DSN` has no `NEXT_PUBLIC_` prefix, so Next won't inline it into the client bundle — client-side `process.env.SENTRY_DSN` would silently be `undefined`. Added `NEXT_PUBLIC_SENTRY_DSN` (same value) for the client; kept plain `SENTRY_DSN` for server/edge. Sentry DSNs are meant to be public (they can only submit events, not read data), so this is safe.
-  - Pageview/navigation tracking uses Next 16.3's `onRouterTransitionStart` export from `instrumentation-client.ts` (calls `Sentry.captureRouterTransitionStart` + `posthog.capture("$pageview", ...)`) rather than a manual `usePathname`-based listener — this only fires on client-side transitions, not the very first page load, which is correct/expected.
-  - **Verified live in a real browser, not just "build passed"**: Sentry sends real navigation spans and a real `captureException` reached the dashboard (confirmed via network — 200s from the actual ingest endpoint). PostHog initializes and loads its remote config fine, but `posthog.capture()` calls were silently no-op'd (returned `undefined`, no network call, no error) when tested through this session's browser-automation tooling — traced it to PostHog's own bot detection (`navigator.webdriver === true` on CDP-driven Chrome triggers `posthog._is_bot()`, which the SDK checks internally before sending anything). Confirmed by a raw `fetch()` straight to the ingest endpoint succeeding with the same API key while `.capture()` returned `undefined`. **Not a bug in this setup** — real visitors' browsers don't set `navigator.webdriver`, so events will send normally; just don't expect to see PostHog events show up when testing through Playwright/chrome-devtools MCP/etc. — that's the SDK working as intended, not a wiring problem.
-- **Inngest (Phase 6, complete)**:
-  - `src/lib/inngest/client.ts` (the `Inngest` instance), `src/lib/inngest/functions.ts` (`sendInternshipOfferEmail`, triggered by an `internship/offer.created` event, sends via Resend), `src/app/api/inngest/route.ts` (the `serve()` endpoint, standard Next.js App Router convention — Inngest's cloud service calls this to discover and invoke functions).
-  - `inviteToInternshipAction` (`src/lib/opportunities/actions.ts`) now emits `internship/offer.created` after creating the offer — this is the first real use of a background job in the app, and closes a genuine gap: previously a student learned about an offer only by happening to check their dashboard, with zero notification.
-  - `sendInternshipOfferEmail` no-ops cleanly if `RESEND_API_KEY` is unset, matching the mock-provider fail-closed pattern used everywhere else.
-  - `inngest-cli` added as a devDependency (with a `package.json` `allowScripts` entry for its binary postinstall) so `npx inngest-cli dev -u http://localhost:3000/api/inngest` works out of the box for local testing.
-  - **Real gotcha**: with real `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` set (as they are here), the SDK assumes production ("cloud") mode and the local Dev Server's sync fails with `Error: Expected server kind cloud, got dev`. Fix: `INNGEST_DEV=1` in `.env.local` forces dev mode locally — it's gitignored/local-only and must never be set in an actual deployment's env vars (documented in `.env.local.example`).
-  - **Verified for real, not just build-passing**: ran the local Dev Server, confirmed it synced the app and found the function, POSTed a real `internship/offer.created` test event to it, watched the run complete, and confirmed the function's actual output was `{"sent": true}` — Resend genuinely sent an email (to `delivered@resend.dev`, Resend's own supported delivery-simulation address) through the real pipeline, not a mock.
-  - **Now has three more notification jobs**, all following the same pattern (event emitted from the relevant server action, function no-ops without `RESEND_API_KEY`, registered in `src/app/api/inngest/route.ts`):
-    - `submission/received` — emitted from `submitChallengeAction` (`student-actions.ts`), notifies every company member's email (via a new `getCompanyContext` helper joining `companyMembers`+`users`), links to `/company/submissions/[id]`.
-    - `internship_offer/responded` — emitted from `respondToOfferAction`, notifies company members whether the student accepted or declined, links to `/company/opportunities/[id]`.
-    - `supervisor_feedback/added` — emitted from `addSupervisorFeedbackAction` (`program-actions.ts`, whose `assertOwnsProgram` now also selects `companyName`/`applicationId`/`studentEmail`/`studentName` for this), notifies the student, links to `/student/applications/[id]`.
+---
 
-- **Real file upload via Supabase Storage**:
-  - Bucket `submission-artifacts` created (public — these are synthetic-challenge submissions, not real company data, so a durable public link was chosen over signed-read-URL expiry/regeneration complexity).
-  - `src/lib/supabase/admin.ts` — service-role client, server-only (never imported client-side, same discipline as `aiProvider`).
-  - `getSubmissionUploadUrlAction` (`student-actions.ts`) — verifies the student owns the application, returns a short-lived signed **upload** URL scoped to `{applicationId}/{uuid}-{filename}`, plus the eventual public URL.
-  - `SubmitChallengeForm` now has a real file input: picks a file → gets the signed URL → uploads directly from the browser via `supabase.storage.from(...).uploadToSignedUrl(...)` → the resulting public URL becomes the submission's `artifactUrl`, exactly as if the student had pasted a link. **No schema or `submitChallengeAction` changes needed** — the existing `artifacts: {name, url}[]` shape already fit.
-  - Verified with a real end-to-end test (not just types): admin client signs an upload URL, an anon client uploads through it, the resulting public URL served the exact uploaded content back over HTTP.
+## Current application-mode direction (R2 — IMPLEMENTED)
 
-- **OAuth sign-in (Google + LinkedIn + Microsoft, all live)**:
-  - `src/components/auth/oauth-buttons.tsx` — client component, "Continue with Google/LinkedIn/Microsoft" buttons, `supabase.auth.signInWithOAuth({ provider, options: { redirectTo: \`${window.location.origin}/auth/callback\` } })`. Provider keys: `google`, `linkedin_oidc`, `azure`. Rendered on both `/signin` and `/signup` above the email/password form.
-  - `src/app/auth/callback/route.ts` — the fixed redirect target. Exchanges the OAuth code via `supabase.auth.exchangeCodeForSession`, checks whether a `users` row already exists for this `authUserId`; if not (first-time OAuth signup), redirects to `/auth/complete-profile`; if so, straight to the role-appropriate dashboard.
-  - `/auth/complete-profile` + `completeOAuthProfile` server action (`src/app/(auth)/actions.ts`) — **why this page exists**: none of Google/LinkedIn/Microsoft's OAuth responses carry a student-vs-company concept, so a first-time OAuth user is asked the same role question the manual signup form always asked, just after the redirect instead of before it. Pre-fills name from `user_metadata.full_name`/`.name`. Guards against re-completion (redirects away if a `users` row already exists for that auth user).
-  - Configured in `supabase/config.toml`'s `[auth.external.google]`/`[auth.external.linkedin_oidc]`/`[auth.external.azure]` blocks (`enabled`, `client_id`/`secret` via `env()`, same pattern as the existing Resend SMTP `env()` substitution in section 10 — **same gotcha applies: `supabase config push` diffs and overwrites the whole remote Auth config, read the diff before trusting it**). Real credentials live only in `.env.local` (`SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`/`_SECRET`, `SUPABASE_AUTH_EXTERNAL_LINKEDIN_OIDC_CLIENT_ID`/`_SECRET`, `SUPABASE_AUTH_EXTERNAL_AZURE_CLIENT_ID`/`_SECRET`) and must be sourced into the shell before any `config push` (`set -a; source .env.local; set +a`), exactly like `RESEND_API_KEY`. All three verified live end-to-end via a direct `curl` to `.../auth/v1/authorize?provider=<x>` showing a real 302 to the provider's actual consent screen.
-  - **Microsoft/Azure app registration gotcha, already resolved but worth knowing**: the founder's Microsoft account initially had no real Entra ID tenant with app-registration rights (personal-account default tenant showed "these applications are not contained within any directory" — Azure deprecated directory-less app registration). A real tenant appeared after simply navigating Microsoft Entra ID in the portal. The app registration itself must use **Supported account types = "Any Entra ID Tenant + Personal Microsoft accounts"** (multitenant + personal — the single-tenant default rejects any account outside that one org with `AADSTS...does not exist in tenant`), redirect URI (Web) = `https://qdlrrqjevcvjtkbsezaj.supabase.co/auth/v1/callback`, client secret expiry set to 730 days (max) so it doesn't need redoing soon. A "newly registered multitenant apps need a verified publisher" banner appears on the app's Overview page — cosmetic only (shows an "unverified" notice to some end users during consent), not a functional blocker, safe to ignore unless real users report it.
-- **Student onboarding + company verification gate** (V1 identity/trust redesign):
-  - `/student/onboarding` — new, gated on first `/student/dashboard` visit via `student_profiles.educationStage IS NULL`. Adaptive: "What best describes you?" (high school / university / recent graduate / vocational / other) changes the institution/program/year field labels shown next (e.g. "School" + "Expected graduation year" for high school vs. "University/institution" + "Major/program" + "Expected graduation year" for university), then shared fields (career interests, opportunity types, location). Deliberately excludes skills/availability/CV — those stay optional, deferred to the existing `/student/profile` page, per docs/02's "never punish someone for not having an impressive CV" rule.
-  - Implemented as a `variant="onboarding" | "full"` prop on the existing `StudentProfileForm`/`updateStudentProfileAction` (`src/components/opportunities/student-profile-form.tsx`, `src/lib/opportunities/student-actions.ts`) rather than a parallel form — one component, one action, two contexts. `student_profiles` gained `educationStage` (enum, nullable — null is literally the "onboarding incomplete" signal), `location`, `opportunityTypes` (jsonb string array, same shape as existing `interests`/`skills`).
-  - `/company` signup (both the email/password form and the OAuth `complete-profile` form) now also asks: **your role** (Founder/Owner, HR/Talent Acquisition, Hiring Manager, Team Manager, Other — stored on `companyMembers.jobTitle`), **company website**, **industry** (both required), **company size** (optional). `companies` gained `website`/`industry`/`size`.
-  - **`companies.verified`** (boolean, default `false`) — the actual trust boundary. `publishOpportunityAction` and `inviteToInternshipAction` (`src/lib/opportunities/actions.ts`) both throw via a new `assertCompanyVerified` check unless the company is verified; everything else (draft, AI Challenge Builder, preview) stays open regardless. **No automated verification exists** — this is deliberately manual for V1 (flip the row by hand after eyeballing a company) per an explicit founder decision to defer MOCI/Ministry of Labour/CR-upload integration until there's real traction. The founder's own pre-existing test company was manually flipped to `verified = true` after this migration so existing testing wasn't retroactively broken.
-- **Optional CV upload with AI extraction** (`/student/profile`, "full" variant only):
-  - Real PDF upload (`pdf-parse` extracts text server-side) to a new **private** Supabase Storage bucket `student-cvs` — deliberately not the existing public `submission-artifacts` bucket, since a real CV carries personal info and should never get a durable public URL like synthetic challenge submissions do. Path scoped to `{userId}/...`, authorization re-checked server-side (`extractCvAction` rejects any path not starting with the caller's own user id).
-  - `AIProvider` gained `extractResumeInfo(resumeText)` (both `MockAIProvider` — keyword-matching, and `GemmaProvider` — real `generateObject` against `ResumeExtractionSchema`), returning `{skills, interests}`.
-  - Follows the same never-auto-commit pattern as every other AI feature in this app: extraction results merge into the profile form's existing Skills/Interests fields in local state only — nothing writes to the DB until the student reviews and explicitly clicks "Save profile." `student_profiles.cvFileKey` stores the private Storage path once saved.
-  - Bucket created via a one-off admin script (not `config.toml` — Storage buckets aren't declared there), same pattern as the original `submission-artifacts` bucket.
-- **Smart Matching** (docs/02, "guidance, never a gate"):
-  - `computeMatchScore` (`src/lib/matching.ts`, 7 tests in `matching.test.ts`) — case-insensitive overlap between a student's `skills`+`interests` and an opportunity's declared `skills`, as a 0–100 percentage.
-  - `/opportunities` computes this per opportunity for a signed-in student with a profile, shows a "X% match" badge, and sorts the list by it. Companies and anonymous visitors see the unsorted list with no badges (no profile to match against). **Never gates applying** — `applyToOpportunityAction` is completely unaware this exists, per docs/02's explicit rule.
-  - Not done: no explanation of *why* a score is what it is (e.g. which skills matched); no matching against `availability` (docs/02 also mentions this) — only skills+interests are used.
+One canonical, opportunity-wide `application_mode` (`opportunities.application_mode` enum, migration `0027`):
 
-## 6. What's NOT done (the actual next work, in priority order)
+- **QUICK APPLY** (`quick_apply`) — no Challenge required. May publish with no challenge at all. Company evaluates on profile evidence.
+- **OPTIONAL CHALLENGE** (`optional_challenge`) — application is submitted immediately. Challenge is genuinely optional: skipping it is **never** treated as failure/incomplete/invalid, never a red/amber warning, never blocks shortlist or offer. Publishing this mode still requires a real approved Challenge.
+- **CHALLENGE REQUIRED** (`challenge_required`) — the application record is created immediately, but the company **cannot shortlist or send an offer** until a valid final submission (`submissions` row) exists.
 
-Every gap from the original build plan is now closed. What's left is genuinely optional polish, not missing functionality:
+**Fairness rule:** the requirement is a property of the *opportunity*, applied uniformly. There is **no** "strong CV skips the Challenge / weak CV must prove itself" path. Never build one.
 
-1. Smart Matching could factor in `availability`/major, and could explain *why* a score is what it is (which skills matched) — currently just a bare percentage.
-2. More Inngest notification events could exist (e.g. "internship program completed," "task marked done") but the ones that matter most (offer created, submission received, offer responded, feedback added) are all wired.
-3. No admin/moderation surface exists (explicitly out of v1 scope per docs/08).
+**New-opportunity default:** `optional_challenge` (locked owner decision).
 
-The full company → AI Challenge → student submission (with real file upload) → evidence → comparison → invite (with a real notification email) → accept (with a real notification email) → program → tasks/feedback (with a real notification email) → Verified Experience → student portfolio loop (docs/00–04) now has a working, fully wired, end-to-end implementation — real database, real Auth, real AI, real email, real analytics/error-tracking, real background jobs, real file storage, and Smart Matching. Nothing in the product is running on a mock, a placeholder, or a stub except the QAR 499 payment charge itself, which docs/06 explicitly calls out as intentionally stubbed for v1 (see `internship_offers.placementFeeStatus`).
+**Server-side enforcement (single shared checks in `src/lib/opportunities/actions.ts`):**
+- `assertChallengeRequirementMet` — called from `shortlistApplicationAction` and `inviteToInternshipAction`. Clears on a bare `submissions` row only. A started-but-not-submitted session never clears it. **AI evidence evaluation is NOT required** to clear it (a provider outage must never block hiring).
+- `ensureChallengeReadyForPublish` — shared publish gate for both real publish entry points (`publishOpportunityAction` from ChallengeBuilder, and `saveInternshipAction`'s `publish:true` path from the manual form). `quick_apply` skips it.
+- `updateApplicationModeAction` — canonical way to change mode after creation (`ApplicationModeSettings` panel on the opportunity page). Switching a published opportunity to optional/required requires a real approved Challenge; switching to `quick_apply` or editing a draft is always safe and never deletes Challenge data. Historical shortlists/hires are never retroactively re-gated.
 
-## 7. Cross-cutting rules to keep following (don't relax these)
+**Display (R2 §12):** `applicationStage` (pure hiring pipeline) and `challengeState` (separate, mode-aware; `null` for `quick_apply`) are two separate rows everywhere. Optional-not-attempted renders in a plain neutral badge — never the old amber "Challenge to complete" warning.
 
-These came from explicit founder pushback on an early plan draft — they're not my invention, they're requirements:
+---
 
-- **AI model via env var, never hardcoded.** `gemma-provider.ts` reads `AI_MODEL`; don't put a model string anywhere else.
-- **Auditability**: AI generations and edits are never overwritten in place. Every meaningful change is a new `challenge_versions` row (see `saveChallengeVersionAction`). Keep this pattern for the Internship Program equivalent when you build it.
-- **Explicit approval gate**: nothing AI-generates its way to `published`. Keep the status enum discipline.
-- **Real server-side authorization**, not just a join table existing — every DB action re-derives "does this session actually own this row" itself (see `requireCurrentCompanyMember`, `assertOwnsOpportunity`). Follow the same pattern for student-side actions (a student must never be able to read another student's submission).
-- **`created_at`/`updated_at` + an append-only `event_log`** on everything that matters. The `event_log` table is generic (`entityType`, `entityId`, `eventType`, `actorUserId`, `metadata` jsonb) — keep using it rather than inventing per-feature audit tables.
-- **`candidate_evidence.rubricVersionId`** must pin the exact `challenge_versions` row used to evaluate a submission, so editing a rubric later never silently changes a historical evaluation. The column exists; make sure whatever writes `candidate_evidence` actually sets it correctly.
-- **Don't over-install plumbing early.** Resend/PostHog/Sentry/Inngest are Phase 6, on purpose — don't add them "since they're in the stack" before the phase that needs them.
-- **Every phase should ship something demonstrable**, not just infrastructure. This is why Phase 1 was a working mocked demo before any DB existed, and why Phase 2 wired real persistence into the *existing* wizard rather than building a parallel admin panel nobody would see.
+## Challenge principles
 
-## 8. Gotchas actually hit this session (save yourself the time)
+Challenges remain. The potential future UI name "Skill Proof" is **NOT approved for implementation** — keep calling them Challenges.
 
-1. **shadcn here uses Base UI, not Radix.** `<Button>` has no `asChild` prop. Polymorphic rendering is `<Button render={<Link href="..." />} nativeButton={false}>text</Button>` — you need **both** `render` and `nativeButton={false}`, or Base UI logs a console error about native button semantics on every render.
-2. **Next.js Image optimizer flattens PNG transparency.** `next/image`'s built-in `/_next/image` route re-encoded `logo.png` and silently composited it onto white, even though the source file and even the exact optimizer output URL tested fine via direct `fetch()` + canvas pixel read. Fix: `<Image ... unoptimized />` for this asset. If you ever see a mystery white box behind a transparent PNG rendered via `next/image`, check this first.
-3. **Next.js 16 renamed middleware to "proxy."** File must be `src/proxy.ts` (given this repo's `src/` layout), not `src/middleware.ts` or root `middleware.ts` — both are silently ignored. The build output confirms the right name: it prints `ƒ Proxy (Middleware)`, not `ƒ Middleware`.
-4. **Testing controlled inputs with browser automation**: if you script-set a DOM input's value via the native value setter and it happens to equal a value already sitting in React's internal `_valueTracker` (e.g. from an earlier plain `.value =` write), React's synthetic `onChange` won't fire even though you used the "correct" trick. Reset to `''` first, dispatch, then set the real value, dispatch again.
-5. **`aiProvider` must never be imported into a `"use client"` file.** The real provider needs `OPENROUTER_API_KEY` server-side; importing `src/lib/ai/index.ts` from a client component either leaks nothing (env var is `undefined` in the browser bundle) but silently always falls back to the mock, or — if someone "fixes" that by prefixing the key `NEXT_PUBLIC_`, it leaks a real secret into the browser. The fix already in place: client components call the `"use server"` wrappers in `src/lib/ai/actions.ts`, never `aiProvider` directly. Keep this boundary when you add student-side or candidate-evidence AI calls.
-6. **`key={index}` on a mutable list is a real bug, not a lint nitpick.** The Challenge Builder's task list had this originally; fixed by adding a stable `id` field to `ChallengeTaskSchema` and generating it with `crypto.randomUUID()` at every construction site (mock provider, real provider, manual "add task" in the UI).
-7. **`drizzle-kit` (the CLI) never reads `.env.local`.** That's a Next.js-only convention — `next dev`/`next build` load it automatically, but `npx drizzle-kit push`/`generate` do not, silently falling back to `drizzle.config.ts`'s placeholder connection string instead. Worse: the real error ("password authentication failed for user 'placeholder'") gets **swallowed** by a bug in drizzle-kit's own spinner/error-rendering code (`renderWithTask` in its bundled CLI calls `process.exit(1)` synchronously right after triggering an unflushed async render of the error, so the process dies before anything prints) — the only visible symptom is `drizzle-kit push` exiting instantly with no output at all, or (if something else already introspected an empty/wrong schema) a confusing downstream Zod error about a missing `version`/`dialect`/`tables`. **Fix, already applied**: `drizzle.config.ts` now does `import { config } from "dotenv"; config({ path: ".env.local" });` before `defineConfig(...)`. If `drizzle-kit push` ever goes silent again with zero output, suspect this exact swallowed-error pattern first — don't assume it's hanging or that the DB is unreachable.
-8. **Supabase's direct DB host (`db.<ref>.supabase.co:5432`) can hang indefinitely** on networks that only resolve it over IPv6 (or where IPv6 routing to AWS is broken) — same silent-hang symptom as #7, easy to conflate with it. Fix: use the **pooler** connection string instead — `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres` (session mode, port 5432 — supports prepared statements, unlike the 6543 transaction-mode port which drizzle-kit needs session mode for). That's what `DATABASE_URL` is set to now.
-9. **`drizzle-kit push` needs `schemaFilter: ["public"]` in `drizzle.config.ts` on a fresh Supabase project.**
-   Also hit this session: **never wrap a call to a server action that calls `redirect()` in a client-side `try/catch`.** `redirect()` throws a special `NEXT_REDIRECT` digest that Next.js's own runtime needs to see uncaught — a naive `catch (e) { setError(e.message) }` around the awaited call renders the literal string "NEXT_REDIRECT" on screen as if it were a real error. The tempting half-fix (`if (isRedirectError(e)) throw e` in the catch) only hides that text — it leaves an actual race where the redirect silently fails to complete client-side (button looks frozen, but a manual page refresh shows the action actually succeeded). The real fix: make the action return `{ error: string } | void` for every expected failure and call `redirect()` as the very last, completely unwrapped statement; the client form just checks the returned value, no try/catch at all. Applied to `signIn`/`signUp`/`completeOAuthProfile` in `src/app/(auth)/actions.ts`.
-   Not a gotcha but worth flagging the same way: `/company/opportunities/new/page.tsx` shipped with **zero server-side auth check** — a bare `return <CreateInternshipWizard />` — meaning any signed-in user, including a student, could load the company AI wizard (though the actual `createOpportunityAction` server action was already protected via `requireCurrentCompanyMember`, so nothing could actually be persisted). Fixed to mirror `/company/dashboard`'s `getCurrentUser` + company-membership check. **Lesson: `middleware.ts`'s `isProtected` only checks "is someone signed in," never role — every page still needs its own role check, the middleware won't save you.** Without it, introspection walks every schema Supabase ships by default (`auth`, `storage`, `realtime`, `extensions`, `graphql`, `vault`, `pgsodium`, …), which is slow and not what you want diffed against your own `schema.ts` anyway. Already set.
+A Challenge means: realistic company-style problem → actual work → artifact → validation → evidence → human review. **Not** question → answer → AI score. Artifacts are central; MCQs are not core assessments.
 
-## 9. Skills/tools used to build this (for context on how decisions got made)
+Every Challenge should be able to answer: (1) what ability are we assessing, (2) what artifact would expose it, (3) how can that evidence be checked, (4) what can this Challenge provide evidence for, (5) what can it NOT establish.
 
-- **`graphify`** — turned the full product spec (docs/00-10) into a queryable Obsidian vault (`vault/`) and knowledge graph (`graphify-out/`), used early on to make the spec navigable and to catch cross-doc inconsistencies (it flagged two genuinely ambiguous edges — Moat↔DataModel and PricingTiers↔MVPScope — which is how the QAR 499 "stubbed for v1" decision actually got resolved explicitly rather than left implicit).
-- **Claude Code plan mode** — the phased build plan (Phase 1 mocked demo → Phase 2 real DB/auth/AI → Phase 3 student flow → Phase 4 candidate evidence → Phase 5 internship program → Phase 6 plumbing/polish) went through one full founder revision before approval; see section 6 above for what that revision actually mandated.
-- **ecc skills actually run** (not just installed): `ecc:database-migrations` (informed the Drizzle schema conventions — uuid PKs, `defaultNow()` timestamps, nullable/defaulted columns), `ecc:react-review` (caught the `key={index}` bug), `ecc:security-scan` (AgentShield — note this only audits AI-agent config, not app code; the actual app security check was manual: grepped for `dangerouslySetInnerHTML`, `NEXT_PUBLIC_` secrets, `localStorage` token storage, `eval` — all clean), `ecc:accessibility` (caught 3 inline-edit fields with `focus-visible:ring-0` stripping keyboard focus indication — fixed), `ecc:test-coverage` (stood up Vitest from zero, wrote the 27-test suite).
-- Chrome DevTools MCP (`mcp__plugin_ecc_chrome-devtools__*`) — used throughout to actually load pages, click through the wizard end-to-end, and inspect the DOM/network directly rather than trusting that generated code worked. This is how the Base UI `asChild`/`nativeButton` issue, the transparent-PNG issue, and the React-value-tracker testing gotcha were all actually found — every one of them looked fine in code review and only broke in the real browser.
+---
 
-## 10. Repo + Supabase + Vercel (live)
+## Approved future directions — NOT yet implemented
 
-- **GitHub**: `https://github.com/loaiahmedgit/internIn`, `main` branch. Pushed with `gh` (already authenticated as `loaiahmedgit`). No CI configured yet.
-- **Supabase project**: name `internIn`, ref `qdlrrqjevcvjtkbsezaj`, org `loaiahmedgit's Org` (id `ytdssysxvwcqrwywlbno`), region `ap-south-1` (closest available option to Qatar in this Supabase CLI version — no `me-central1` choice existed at creation time). Dashboard: `https://supabase.com/dashboard/project/qdlrrqjevcvjtkbsezaj`.
-- `.env.local` is filled in with real values (`DATABASE_URL` via the session pooler, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) — gitignored, never committed, confirmed via `git check-ignore`. The DB password is a random 32-char string generated with `openssl rand`; it only lives in `.env.local` and whoever's terminal scrollback captured the `supabase projects create` command.
-- Schema is live: all 17 tables pushed via `npx drizzle-kit push --force` and verified by querying `information_schema.tables` directly. `npx drizzle-kit generate` after any future `schema.ts` change, then `npx drizzle-kit push --force` to apply it to this same project (no separate staging DB exists).
-- Supabase CLI is authenticated on this machine via `npx supabase login --token <personal-access-token>` (stored in the CLI's local config, not in this repo). If it ever needs re-auth: generate a new token at `https://supabase.com/dashboard/account/tokens` (the one used to set this up should be considered exposed — it appeared in plaintext in a chat session — and is worth revoking and rotating). Same goes for the Resend API key below.
-- **Auth confirmation emails run through Resend**, not Supabase's own limited built-in mailer. `supabase/config.toml` (committed — no secret in it) has `[auth.email.smtp]` pointing at `smtp.resend.com`, `pass = "env(RESEND_API_KEY)"` — the CLI reads `RESEND_API_KEY` from the shell environment **at push time** and substitutes it; it's never written into the file. `RESEND_API_KEY` lives in `.env.local` only. To change anything here: edit `config.toml`, then `set -a; source .env.local; set +a; npx supabase config push --project-ref qdlrrqjevcvjtkbsezaj` (the CLI needs `RESEND_API_KEY` in its own process env for that `env()` substitution — sourcing `.env.local` first is required, `next dev`/`next build` loading it automatically doesn't help here since this is a separate CLI invocation).
-  - **Gotcha hit doing this**: `supabase config push` doesn't just apply the one section you changed — it diffs and overwrites the **entire** remote Auth config against whatever's in the local `config.toml`. The CLI's own `supabase init` scaffold ships with different defaults than what was already live on this project (`site_url`, `additional_redirect_urls`, MFA TOTP enroll/verify flags, OTP rate limit/length all differed). First push silently changed all of those; caught it by reading the diff output `config push` prints before it applies, and hand-restored the previous values in `config.toml` before pushing again. **Lesson: always read that diff before trusting a `config push`, especially on a project that already has settings you didn't just set.**
-  - Sender is `noreply@internin.app` (real domain, purchased via Cloudflare, DNS verified in Resend — DKIM/domain verification all green). Was `onboarding@resend.dev` (Resend's sandbox address) until the domain was verified; switching just meant updating `admin_email` in `config.toml` and pushing again.
-- **Storage**: `submission-artifacts` bucket exists (public) for student submission file uploads — see section 5's file-upload entry.
-- **Not done**: no Row Level Security policies on any table (every authorization check currently happens in the Next.js server actions layer via `requireCurrentCompanyMember`/`requireCurrentStudent`, not in Postgres itself — fine since the DB is never accessed except through those server actions, but worth knowing if that assumption ever changes).
+- **Ten-characteristic framework** (physical work / real humans / safety-critical decisions / specialized equipment / legal authority / real-world unpredictability / confidential information / long time horizons / team dependency / real consequences). Future Challenge-Architect AI should classify a role as digitally-assessable / human-review-required / practical-verification-required / not-meaningfully-assessable-digitally. **Not built.**
+- **AI provenance** for OBSERVED internIn AI usage. internIn cannot fully know whether someone used *external* AI — never claim universal AI detection. Similarity ≠ AI detection. No automatic cheating verdict. **Not built.**
+- **No-free-labor safeguards.** internIn Challenges must not become unpaid production work — use synthetic / historical / adapted / sandbox / fictional work. Disallowed: "fix our live production bug", "create next week's real client campaign", "generate real sales leads", "design the actual feature we intend to ship". A future Challenge Architect must detect/transform these. **Not built.** (This is R3 — the next planned phase.)
+- **Objective-validation architecture** (deterministic checks beyond AI rubric). **Not built.**
 
-- **Vercel**: production is live at **`https://www.internin.app`** (custom domain, bought via Cloudflare, DNS pointed at Vercel via two `DNS only`/unproxied CNAME records — `@` and `www` both to Vercel's assigned target). Apex `internin.app` 308-redirects to `www.internin.app` (Vercel's own default when both are added). The original platform-assigned URL `https://internin-six.vercel.app` still works too (kept in `additional_redirect_urls` below) — project is `internin` under `loaiahmedgits-projects` (Vercel appended `-six` to the *.vercel.app subdomain since bare `internin` was already taken by someone else; the custom domain has no such collision). Deployed via `vercel deploy --prod --token <token>` (CLI, not the dashboard).
-  - All 13 app env vars are set on Vercel's **Production** environment (`vercel env ls` to check names — never prints values): `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENROUTER_API_KEY`, `AI_MODEL`, `RESEND_API_KEY`, `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`, `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `NEXT_PUBLIC_APP_URL` (set to `https://www.internin.app`). **`INNGEST_DEV` is deliberately NOT set on Vercel** — that flag only belongs in local `.env.local` (see the Inngest gotcha above); if it were set on the real deployment, production would silently think it's talking to a local dev server and never reach real Inngest Cloud.
-  - `NEXT_PUBLIC_` vars needed `vercel env add ... --no-sensitive` — the plain `add` command errors (`invalid_visibility`) if you try to store a `NEXT_PUBLIC_`-prefixed var as "sensitive" on Production/Preview, since Vercel considers anything with that prefix inherently public (it ends up in the client bundle) and won't let it also be marked secret.
-  - `supabase/config.toml`'s `auth.site_url` is `https://www.internin.app` (confirmation/reset email links go to the real custom domain now); `additional_redirect_urls` keeps `http://localhost:3000`, the old `*.vercel.app` URL, and the bare apex domain so nothing breaks mid-transition. Pushed the same way as every other config change here (read the diff first).
-  - **Inngest's official Vercel integration is installed** (Marketplace → Inngest → "Link Existing Inngest Account", not "Create New" — links to the same Inngest account the manually-set `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` belong to). It added its own `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` scoped to **Preview** only — the manually-set **Production** ones are untouched, both coexist fine. Production now auto-syncs with Inngest Cloud on every future deploy — no more manual dashboard "Sync new app" step.
-  - **GitHub auto-deploy is connected and verified working** (`loaiahmedgit/internIn`, production branch `main`) — the founder connected it manually via the Vercel dashboard after `vercel link`/`vercel git connect` both failed to do it via CLI (`Failed to connect loaiahmedgit/internIn to project` — needed a one-time OAuth/App-install step in the dashboard that isn't scriptable via CLI/token). Confirmed two ways: the Vercel API (`GET /v9/projects/internin`'s `link` field shows `type: "github"`), and a real push to `main` triggering a new Production deployment (alias `internin-git-main-...vercel.app`, a naming pattern only Git-integration deploys get) within 15s, with no manual `vercel deploy` run. **A plain `git push` is enough from here on — manual `vercel deploy --prod` is no longer needed for normal commits**, only for anything that must go live without a commit (e.g. an env-var-only change).
+---
 
-## 11. How to resume
+## Credential / endorsement current state (R1 — COMPLETE)
 
-```bash
-cd /Users/loaiabouelezz/Desktop/internIn
-npm install          # if node_modules is stale/missing
-npm run dev           # http://localhost:3000
-npm run build          # typecheck + full production build
-npm test                # 27 tests, ~29s (real setTimeout delays in the mock provider)
-npm run test:coverage    # coverage report
-npx drizzle-kit generate  # regenerate migration after schema.ts changes
-```
+Public-facing name: **internIn Challenge Evidence Credential**. The base credential is an internIn evidence/validation result. It does **NOT** mean company endorsement or universal skill verification.
 
-Env vars: `.env.local` already has real, live Supabase credentials filled in (see section 10 for the project ref/org — the actual secret values are only in `.env.local` itself, never in this file) — DB and Auth work out of the box on this machine. Only `OPENROUTER_API_KEY` is still unset (mock AI provider is active; set it and the real `GemmaProvider` swaps in automatically, no code change). On a different machine: either copy this `.env.local` over, or re-fetch the keys with `npx supabase projects api-keys --project-ref qdlrrqjevcvjtkbsezaj` (needs `npx supabase login` first) and rebuild `DATABASE_URL` from the pooler format in section 8's gotcha #8.
+**Company endorsement** is: explicit human action only; capability-scoped (a server-validated subset of the credential's own frozen rubric snapshot); requires a real per-opportunity `certificate_approver` assignment **plus** appropriate company permission (neither alone); cannot be produced automatically by policy/issuance/confirmation/AI/shortlist/offer/hire; independent from shortlist/offer/hire. Do **not** describe the old automatic-endorsement behavior as current — it was a defect, fixed in R1.
 
-Read `docs/00-10` before changing product behavior. Read `design-system/internin/MASTER.md` before changing UI. Don't touch `logo.png`.
+**Key implementation concepts:**
+- `opportunity_responsibility_assignments` (migration `0026`) — **PRE-HIRE** responsibilities on a specific opportunity: `hiring_owner`, `challenge_owner`, `reviewer`, `certificate_approver`.
+- `programSupervisorAssignments` (migration `0024`) — **POST-HIRE** supervision. **Never merge these two concepts.**
+- The one place `companyEndorsed` may become true: `grantCredentialCompanyEndorsement` in `src/lib/credentials/company-endorsement.ts`, via `grantCredentialCompanyEndorsementAction`.
+
+---
+
+## Post-hire — PRESERVE but FREEZE
+
+Substantial post-hire infrastructure already exists and **must not be deleted**:
+`internshipPrograms`, `internshipWeeks`, `internshipTasks`, `supervisorFeedback`, `verifiedExperience`, `programSupervisorAssignments`.
+
+- **Phase 6A** (`229c007`) — supervisor access hardened to assignment-scoped.
+- **Phase 6B** (`96951c2`) — Student Active Internship Workspace. Route: `src/app/student/(dashboard)/internships/` (list) and `.../internships/[programId]/` (workspace: Overview / My Work / Timeline / Check-ins / Feedback). Task blocker + evidence functionality exists (migration `0025`).
+- **Check-ins status (honest):** No full check-in data model was implemented in Phase 6B. The tab exists as a placeholder/proposal only. Do not assume Check-ins is production-complete because a tab is present.
+
+The current master direction **FREEZES** further expansion of: full Supervisor Workspace, attendance/geolocation, more task management, employee collaboration, Student Agent, Supervisor Agent, post-hire analytics — until the hiring/evidence core is proven.
+
+---
+
+## Infrastructure
+
+- **Vercel** — Next.js 16 (App Router) frontend + server actions. Production: **https://www.internin.app**
+- **Supabase** — PostgreSQL, Auth (`@supabase/ssr`), Storage. Postgres RLS is a real enforcement boundary for any table reachable via the browser Supabase client.
+- **Railway** — existing persistent Fastify/TypeScript backend foundation for future long-running AI / workers / integrations. Not touched by recent phases.
+- **Cloudflare** — DNS/domain.
+
+Do not migrate hosting.
+
+## Storage / security principles
+
+Strict authorization on every server action; private submission-artifact and challenge-resource buckets; signed URLs minted per-request after an ownership check (never persisted); private certification-document bucket; cross-company and cross-student isolation enforced in the canonical server actions, not just the UI. Never trust a client-supplied `applicationMode` / mode / role.
+
+---
+
+## Stack (locked — do not swap without asking)
+
+Next.js 16 App Router + TypeScript, Tailwind v4 + shadcn/ui (**Base UI, not Radix**), Motion, Drizzle ORM + Supabase Postgres, Supabase Auth, Vercel AI SDK (`generateObject`) + OpenRouter (model via `AI_MODEL` env), Zod at every AI I/O and server-action boundary, Vitest. Not using: FastAPI/microservices, Redis, Kubernetes, GraphQL, a vector DB, Prisma.
+
+---
+
+## Migration checkpoint (hand-written SQL + paired `scripts/apply-*.mjs` idempotent appliers)
+
+Latest meaningful migrations:
+- `0023_challenge_credentials.sql` — credential core.
+- `0024_program_supervisor_assignments.sql` — post-hire supervisor assignment scoping.
+- `0025_internship_task_evidence.sql` — internship task evidence / blocking.
+- `0026_company_endorsement_honesty_fix.sql` — R1: `opportunity_responsibility_assignments` (pre-hire), `challenge_credentials` grant/withdrawal audit columns.
+- `0027_application_modes.sql` — R2: `application_mode` enum + `opportunities.application_mode` (default `optional_challenge`) + conservative backfill (challenge-less → `quick_apply`, all others keep the default; never `challenge_required`).
+
+All applied to production.
+
+---
+
+## Commit checkpoints (actual SHAs)
+
+- Phase 6A: `229c007`
+- Phase 6B: `96951c2`
+- R1 (company endorsement honesty fix): `301a405`
+- **R2 (application modes + fairness): this commit** (see `git log --oneline -1`; the SHA is reported in the R2 final report).
+
+---
+
+## Test baseline (after R2)
+
+Full suite: **457 passed, 1 skipped, 19 failed** (of 477).
+
+The **19 failures are all pre-existing** live-AI integration tests failing on `AI_APICallError: Insufficient credits` (OpenRouter credit exhaustion) — `assistant-router.integration.test.ts`, `clarification-wording.integration.test.ts`, `role-intelligence.integration.test.ts`. This is unchanged from the R1 baseline. Do **not** call any test "pre-existing" without checking it against the current run.
+
+`npm run build`, `npx tsc --noEmit`, `git diff --check`: all green after R2.
+
+## OpenRouter / AI provider limitation
+
+Some live AI integration tests/actions may fail because OpenRouter credits are exhausted. This is **not** a deterministic product regression. But: do not use provider failure to skip manual/non-AI paths — **manual-first Challenge creation must stay functional**, and the R2 fairness gate deliberately does not depend on AI evaluation succeeding.
+
+---
+
+## Design state (high-level, approved)
+
+**Student:** premium-consumer feel. Home / Explore / Applications / Profile. Profile is one continuous main surface (not card soup), sticky desktop left rail. Explore uses a permanent desktop split view. The Student Active Internship Workspace exists but is frozen from further expansion.
+
+**Company:** one Company Portal, one hiring workspace, permission + assignment driven. No separate apps for HR/reviewer/admin/supervisor. No giant hero/dashboard redesign.
+
+Full design spec: `design-system/internin/MASTER.md` (forbids gradients/glow/glassmorphism/generic SaaS card grids/fake browser mockups/big sparkle icons) and `.../pages/landing.md`.
+
+---
+
+## Canonical architecture docs
+
+- `docs/13-honesty-evidence-product-alignment.md` — **current HONESTY/evidence master alignment + delta report.** Read first for any evidence/credential/application-mode work. Contains the R1 (`§2.Q1`) and R2 (`§2.F1`) implementation status notes.
+- `docs/12-verified-challenge-credentials.md` — credential architecture (schema, issuance, endorsement, PDF, public verification). Carries the R1 correction note.
+- `docs/00-product-concept.md` … `docs/11-agentic-architecture-direction.md` — original negotiated product spec; still binding for scope/mechanics. `docs/11` is binding for all AI work.
+- `design-system/internin/MASTER.md` — UI direction; read before any UI change.
+
+---
+
+## Directions that are no longer current
+
+- Challenge is **NOT** universally mandatory. Application mode is per-opportunity (`quick_apply` / `optional_challenge` / `challenge_required`).
+- The old assumption "every published opportunity requires an approved challenge" is **overridden** — `quick_apply` publishes with none.
+- Company endorsement is **NOT** automatic (was a defect; fixed in R1).
+- "Verified" must not imply universal skill verification. Prefer "internIn Challenge Evidence Credential".
+- internIn is **NOT** anti-CV — profile evidence is a first-class input.
+- Do **NOT** build a global suitability score.
+- Do **NOT** claim external AI usage can be fully detected.
+- Do **NOT** use `programSupervisorAssignments` for pre-hire reviewer/certificate roles (use `opportunity_responsibility_assignments`).
+- Do **NOT** build a cohort migration for InternshipProgram.
+- Do **NOT** rewrite working Phase 6A/6B / R1 / R2 architecture.
+- Post-hire expansion is **frozen**.
+
+---
+
+## Dirty worktree / session state (at R2 handoff)
+
+- Branch: `main`. HEAD after R2 commit is the R2 implementation commit; pushed to `origin/main`.
+- Intentional unrelated dirty files that must be preserved (present since before R1, not part of any phase): `vault/.obsidian/graph.json` (modified), and untracked `.agents/`, `.codex/`, `.mcp.json`, `.playwright-cli/`, `.playwright-mcp/`, `seed.spec.ts`, `skills-lock.json`, `specs/`. Do not stage or commit these.
+- No migration pending — `0027` is applied to production.
+- No temporary QA scripts remain (R2 QA seed/cleanup/audit scripts were created under `scripts/` and deleted after use).
+- `AGENTS.md` may show as dirty — it is re-written by `next dev` on every run; commit it with your work if it appears, or leave it.
+
+## Database / production state (at R2 handoff)
+
+- Latest migration successfully applied to production: `0027_application_modes.sql` (verified idempotent; all 11 existing opportunities backfilled to `optional_challenge`).
+- Production URL: https://www.internin.app
+- Deployed SHA: verified by functional check post-deploy (see R2 final report for the exact SHA and the check used). Vercel CLI is not installed in this environment, so the deployment ID itself is not queried directly.
+
+---
+
+## If continuing with Codex / another agent
+
+- Do not ask the owner to re-explain internIn unless this file and the docs genuinely lack required information.
+- Read this file, then `docs/13-honesty-evidence-product-alignment.md`, then the architecture doc relevant to the active phase.
+- Inspect `git status` and `git log` before edits. Preserve unrelated dirty files.
+- Verify current schema/code instead of trusting stale prose.
+- Never undo completed phases because an older doc conflicts.
+- Current owner instructions always override this file.
+- Report uncertainty instead of fabricating implementation state.
+- This file must be updated **before the final commit** of every completed major phase — new work, schema/migrations, commit checkpoint, test baseline, deployment status, new limitations, what is frozen, and the exact NEXT TASK.
+
+---
+
+# NEXT TASK
+
+**Current phase: R2 — Application Modes + Fairness — COMPLETE.**
+
+- Schema: `application_mode` enum + `opportunities.application_mode` (migration `0027`) — applied to production, idempotent-verified, conservative backfill done.
+- Code: committed and pushed to `main` (R2 implementation commit). Production verified live by functional check.
+- Tests: 30 new tests (`application-mode-fairness.test.ts`, `application-status.test.ts`); full suite 457 passed / 1 skipped / 19 known-OpenRouter-failing.
+- Browser QA: complete (3 synthetic opportunities across all 3 modes, 2 synthetic students, all synthetic data + auth users cleaned up and verified gone).
+- Docs: `docs/13` §2.F1 added.
+
+**DO NOT automatically begin R3.** Wait for explicit owner approval.
+
+**Next planned phase: R3 — No-Free-Labor safeguards** (a Challenge Architect that detects/transforms requests to extract real production work into synthetic/sandboxed equivalents). Also still queued and explicitly not started: R4 (Challenge Architect redesign), objective-validation architecture, AI provenance, similarity/integrity, and any post-hire expansion.

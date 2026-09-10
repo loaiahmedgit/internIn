@@ -174,6 +174,64 @@ forces a challenge.
 3. The student-side challenge flow isn't framed as "optional bonus
    evidence" anywhere — it reads as the default path regardless of mode.
 
+### F1. R2 — IMPLEMENTED (status update)
+
+One canonical, opportunity-wide `application_mode` enum
+(`opportunities.application_mode`, migration `0027`) with three real
+product semantics — never per-candidate, never client-supplied at apply
+time, never AI-set:
+
+- **`quick_apply`** — student applies immediately; no Challenge exists for
+  the opportunity; the company evaluates on profile evidence. May publish
+  with no challenge at all.
+- **`optional_challenge`** (the locked default for every NEW opportunity)
+  — student applies immediately; completing the Challenge adds demonstrated
+  evidence; **not** completing it is never an incomplete/invalid/warning
+  state, never blocks shortlist or offer. Publishing this mode still
+  requires a real approved Challenge (the mode advertises one).
+- **`challenge_required`** — the application record is still created
+  immediately, but the company **cannot shortlist or send an offer** until
+  a valid final submission (`submissions` row) exists for that application.
+
+**Fairness rule, enforced server-side:** the requirement is a property of
+the *opportunity*, applied uniformly to its applicant flow. There is no
+"strong CV skips the Challenge / weak CV must prove itself" path anywhere
+— `assertChallengeRequirementMet` reads only the real opportunity row and
+the submission's existence, never any candidate-specific signal.
+
+**Where it's enforced (single shared checks, not per-button):**
+- `assertChallengeRequirementMet` — called from `shortlistApplicationAction`
+  and `inviteToInternshipAction`. Clears on a bare `submissions` row only;
+  a started-but-not-submitted session never clears it, and **AI evidence
+  evaluation is deliberately not required** (an OpenRouter/provider outage
+  must never block hiring).
+- `ensureChallengeReadyForPublish` — the shared publish-readiness gate used
+  by **both** real publish entry points (`publishOpportunityAction`, from
+  ChallengeBuilder; and `saveInternshipAction`'s `publish:true` path, from
+  the manual form — these were independent, and the manual form's path had
+  no challenge gate at all before R2). `quick_apply` skips it entirely.
+- `updateApplicationModeAction` — the one canonical place to change mode
+  after creation (a small settings panel on the opportunity page,
+  `ApplicationModeSettings`, reused by every creation flow). Switching a
+  published opportunity to optional/required is rejected unless a real
+  approved Challenge already exists; switching to `quick_apply`, or editing
+  a still-draft opportunity, is always safe and never deletes Challenge
+  data. Historical shortlists/hires are never retroactively re-gated.
+
+**Conservative production backfill (migration `0027`):** the read-only
+pre-migration audit found 11 opportunities, all published, all with a
+usable (approved/published) Challenge, zero applications on any
+challenge-less opportunity — so all 11 mapped to `optional_challenge`
+(most closely preserving current behavior). No opportunity is ever
+backfilled to `challenge_required`.
+
+**Student/company display (R2 §12):** hiring stage and Challenge state are
+now two separate rows everywhere. `applicationStage` is pure hiring
+pipeline; `challengeState` is a separate, mode-aware value that returns
+`null` for `quick_apply` (no Challenge row at all) and renders
+optional-not-attempted in a plain neutral badge — never the amber
+"Challenge to complete" warning the old single blended stage used.
+
 ### G. Challenge student UX — ALIGNED (largely)
 Real submission types, `SubmissionRequirementSchema.required` distinguishes
 must-hand-in from optional, `challengeStartedAt` genuinely marks "work

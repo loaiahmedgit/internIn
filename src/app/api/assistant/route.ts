@@ -839,6 +839,8 @@ async function applyExistingInternshipEdit(
     skills: patch.skills ?? opportunity.skills,
     requireCv: patch.requireCv ?? opportunity.requireCv,
     applicationQuestions: patch.applicationQuestions ?? opportunity.applicationQuestions,
+    // R2 — application mode is never AI-set; always preserved as-is here.
+    applicationMode: opportunity.applicationMode,
   };
 
   try {

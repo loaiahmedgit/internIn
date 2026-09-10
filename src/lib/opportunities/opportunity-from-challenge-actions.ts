@@ -53,6 +53,10 @@ export async function createOpportunityFromChallengeDraftAction(
     skills: validatedDraft.skills,
     requireCv: true,
     applicationQuestions: [],
+    // R2 — this flow always attaches a real challenge in the same step
+    // (saveChallengeDraftAction below), so the balanced default fits;
+    // the employer can change it later from the opportunity page.
+    applicationMode: "optional_challenge",
   };
 
   const opportunityId = await saveInternshipAction({ publish: false, form });
@@ -132,6 +136,10 @@ export async function publishOpportunityFromReviewAction(opportunityId: string, 
       skills: opportunity.skills,
       requireCv: opportunity.requireCv,
       applicationQuestions: opportunity.applicationQuestions,
+      // R2 — preserve whatever mode is already set on this row (e.g. via
+      // the opportunity page's own settings panel) rather than resetting
+      // it; saveInternshipAction's values object always writes this field.
+      applicationMode: opportunity.applicationMode,
     },
   });
 

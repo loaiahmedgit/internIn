@@ -185,7 +185,7 @@ export default async function CompanyCandidatesPage({
         <EmptyState
           icon={Users}
           title="No candidates yet"
-          description="Once students apply and submit a Challenge, they'll show up here for you to evaluate."
+          description="Once students apply, they'll show up here for you to evaluate."
         />
       ) : (
         <>

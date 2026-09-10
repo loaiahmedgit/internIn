@@ -16,6 +16,7 @@ function candidate(overrides: Partial<CandidateDetail> = {}): CandidateDetail {
     challengeStartedAt: new Date("2026-08-30T10:00:00.000Z"),
     opportunityId: "opportunity-1",
     role: "Data Analyst Intern",
+    applicationMode: "optional_challenge",
     companyId: "company-1",
     profile: {
       educationStage: "University",

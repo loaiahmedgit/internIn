@@ -6,7 +6,16 @@ import { requireCurrentStudent } from "@/lib/auth";
 import { StatusRail } from "@/components/dashboard/status-rail";
 import { Button } from "@/components/ui/button";
 import { SURFACE_CARD_CLASS, SURFACE_CARD_HOVER_CLASS } from "@/lib/ui-surface";
-import { applicationStage, applicationCtaLabel, APPLICATION_STAGE_LABEL, APPLICATION_STAGE_BADGE_CLASS } from "@/lib/opportunities/application-status";
+import {
+  applicationStage,
+  applicationCtaLabel,
+  APPLICATION_STAGE_LABEL,
+  APPLICATION_STAGE_BADGE_CLASS,
+  challengeState,
+  challengeCtaLabel,
+  CHALLENGE_STATE_LABEL,
+  CHALLENGE_STATE_BADGE_CLASS,
+} from "@/lib/opportunities/application-status";
 
 type ApplicationTab = "all" | "active" | "review" | "offers" | "past";
 
@@ -31,6 +40,7 @@ export default async function StudentApplicationsPage({ searchParams }: { search
       createdAt: schema.applications.createdAt,
       role: schema.opportunities.role,
       companyName: schema.companies.name,
+      applicationMode: schema.opportunities.applicationMode,
     })
     .from(schema.applications)
     .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
@@ -67,8 +77,9 @@ export default async function StudentApplicationsPage({ searchParams }: { search
     const offerStatus = offerByApplicationId.get(application.id)?.status;
     const hasSubmission = submittedIds.has(application.id);
     const challengeStarted = Boolean(application.challengeStartedAt);
-    const stage = applicationStage({ status: application.status, hasSubmission, challengeStarted, offerStatus });
-    return { ...application, offerStatus, hasSubmission, challengeStarted, stage };
+    const stage = applicationStage({ status: application.status, hasSubmission, offerStatus });
+    const challenge = challengeState({ applicationMode: application.applicationMode, hasSubmission, challengeStarted });
+    return { ...application, offerStatus, hasSubmission, challengeStarted, stage, challenge };
   });
   const counts: Record<ApplicationTab, number> = {
     all: enriched.length,
@@ -96,12 +107,18 @@ export default async function StudentApplicationsPage({ searchParams }: { search
       {visible.length === 0 ? <div className="mt-10 rounded-2xl border border-navy/10 bg-white px-6 py-12 text-center"><p className="font-medium text-navy">Nothing here right now</p><p className="mt-1 text-sm text-navy/52">Applications will appear here when their status changes.</p></div> : (
         <div className="mt-7 space-y-3.5">
           {visible.map((application) => {
-            const label = applicationCtaLabel(application.stage);
-            // Filled/primary style for the states that need real action from
-            // the student (start/continue the challenge, respond to an
-            // offer); outline for everything they're just reviewing or
-            // waiting on.
-            const isPrimaryAction = application.stage === "not_started" || application.stage === "in_progress" || application.stage === "offer_pending";
+            // The Challenge CTA (start/continue a required Challenge, or the
+            // "show what you can do" nudge for an optional one) takes
+            // priority over the generic stage CTA when one applies — R2
+            // §10/§11: never trap the student, but do surface the real next
+            // step when there is one.
+            const challengeCta = challengeCtaLabel(application.challenge);
+            const label = challengeCta ?? applicationCtaLabel(application.stage);
+            // Filled/primary style only for states that need real action
+            // from the student: a required Challenge not yet done, or an
+            // offer awaiting response. An optional Challenge nudge stays
+            // outline — it's an invitation, never a requirement (§10).
+            const isPrimaryAction = application.challenge === "required_not_started" || application.challenge === "required_in_progress" || application.stage === "offer_pending";
             return (
               <article key={application.id} className={`${SURFACE_CARD_CLASS} ${SURFACE_CARD_HOVER_CLASS} p-5 hover:border-teal/20 sm:p-6`}>
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
@@ -110,11 +127,16 @@ export default async function StudentApplicationsPage({ searchParams }: { search
                     <div className="min-w-0 flex-1">
                       <h2 className="truncate text-lg font-semibold tracking-[-0.02em] text-navy">{application.role}</h2>
                       <p className="mt-0.5 truncate text-sm text-navy/54">{application.companyName}</p>
-                      <span className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${APPLICATION_STAGE_BADGE_CLASS[application.stage]}`}>{APPLICATION_STAGE_LABEL[application.stage]}</span>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${APPLICATION_STAGE_BADGE_CLASS[application.stage]}`}>{APPLICATION_STAGE_LABEL[application.stage]}</span>
+                        {application.challenge && (
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${CHALLENGE_STATE_BADGE_CLASS[application.challenge]}`}>{CHALLENGE_STATE_LABEL[application.challenge]}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="min-w-0 flex-1 sm:max-w-sm">
-                    <StatusRail status={application.status} hasSubmission={application.hasSubmission} challengeStarted={application.challengeStarted} offerStatus={application.offerStatus} />
+                    <StatusRail status={application.status} applicationMode={application.applicationMode} hasSubmission={application.hasSubmission} challengeStarted={application.challengeStarted} offerStatus={application.offerStatus} />
                     <p className="mt-3 flex items-center gap-1.5 text-xs text-navy/45"><Clock3 className="size-3.5" aria-hidden="true" />Applied {dateFormatter.format(application.createdAt)}</p>
                   </div>
                   <Button render={<Link href={application.stage === "offer_accepted" ? "/student/internships" : `/student/applications/${application.id}`} />} nativeButton={false} variant={isPrimaryAction ? "default" : "outline"} className={`h-10 w-full px-4 sm:w-auto ${isPrimaryAction ? "bg-teal text-white hover:bg-teal-ink" : "border-navy/12 bg-white text-navy hover:bg-teal/5"}`}>{label}<ArrowRight className="size-4" aria-hidden="true" /></Button>

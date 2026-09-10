@@ -11,6 +11,7 @@ import { InternshipStatusBadge, ChallengeStatusBadge } from "@/components/compan
 import { CandidateTableRow } from "@/components/company/candidate-table-row";
 import { ChallengeCredentialSettings } from "@/components/company/challenge-credential-settings";
 import { OpportunityResponsibilityPanel } from "@/components/company/opportunity-responsibility-panel";
+import { ApplicationModeSettings } from "@/components/company/application-mode-settings";
 import { getOpportunityResponsibilitiesAction } from "@/lib/opportunities/responsibility-assignments";
 import { AskInternshipPanel } from "@/components/opportunities/ask-internship-panel";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -433,6 +434,9 @@ export default async function OpportunityDetailPage({
               </div>
             </section>
           ) : null}
+          <div className="mt-5">
+            <ApplicationModeSettings opportunityId={id} initial={opportunity.applicationMode} />
+          </div>
           {hasChallenge && (
             <div className="mt-5">
               <ChallengeCredentialSettings

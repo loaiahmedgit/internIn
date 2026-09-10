@@ -409,7 +409,13 @@ export default async function CandidateProfilePage({
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-navy/50">No challenge submission yet.</p>
+                <p className="text-sm text-navy/50">
+                  {candidate.applicationMode === "quick_apply"
+                    ? "No challenge for this internship — Quick Apply."
+                    : candidate.applicationMode === "challenge_required"
+                      ? "Required Challenge — not yet started."
+                      : "Optional Challenge — not yet attempted. This is not a failure; the candidate can still be shortlisted or offered."}
+                </p>
               )}
             </section>
           )}
@@ -508,6 +514,7 @@ export default async function CandidateProfilePage({
                 status={candidate.status}
                 offerStatus={candidate.offer?.status ?? null}
                 hasEvidence={!!candidate.evidence}
+                challengeRequirementMet={candidate.applicationMode !== "challenge_required" || !!candidate.submission}
               />
             </div>
           </section>

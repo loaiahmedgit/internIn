@@ -37,6 +37,7 @@ export default async function EditOpportunityPage({ params }: { params: Promise<
     skills: opportunity.skills,
     requireCv: opportunity.requireCv,
     applicationQuestions: opportunity.applicationQuestions,
+    applicationMode: opportunity.applicationMode,
   };
 
   return <CreateInternshipForm opportunityId={id} initial={initial} />;

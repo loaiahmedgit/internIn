@@ -8,6 +8,7 @@ import { Navbar } from "@/components/marketing/navbar";
 import { Footer } from "@/components/marketing/footer";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { STUDENT_NAV_ITEMS } from "@/lib/dashboard-nav";
+import { APPLICATION_MODE_LABEL, APPLICATION_MODE_STUDENT_DESCRIPTION } from "@/lib/opportunities/application-mode";
 import { BadgeCheck, Clock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,7 @@ export default async function OpportunityDetailPage({
       location: schema.opportunities.location,
       skills: schema.opportunities.skills,
       status: schema.opportunities.status,
+      applicationMode: schema.opportunities.applicationMode,
       companyName: schema.companies.name,
       companyVerified: schema.companies.verified,
     })
@@ -113,14 +115,27 @@ export default async function OpportunityDetailPage({
 
       <h2 className="mt-8 text-lg font-semibold text-navy">Who can apply</h2>
       <p className="mt-2 text-navy/80">
-        Any student or recent graduate. internIn doesn&apos;t require years of prior experience — you show {opportunity.companyName} what you
-        can do directly, through the Challenge below.
+        Any student or recent graduate. internIn doesn&apos;t require years of prior experience
+        {opportunity.applicationMode === "quick_apply"
+          ? ` — apply with your internIn profile.`
+          : ` — you can show ${opportunity.companyName} what you can do directly, through the Challenge below.`}
       </p>
+
+      <div className="mt-8 flex items-center gap-2">
+        <span className="rounded-full bg-teal/10 px-2.5 py-1 text-xs font-semibold text-teal-ink">{APPLICATION_MODE_LABEL[opportunity.applicationMode]}</span>
+        <p className="text-sm text-navy/60">{APPLICATION_MODE_STUDENT_DESCRIPTION[opportunity.applicationMode]}</p>
+      </div>
 
       <h2 className="mt-8 text-lg font-semibold text-navy">How selection works</h2>
       <ol className="mt-2 list-decimal space-y-1 pl-5 text-navy/80">
-        <li>Apply and complete the Challenge for this role.</li>
-        <li>{opportunity.companyName} reviews your submission as real evidence of your ability.</li>
+        <li>
+          {opportunity.applicationMode === "quick_apply"
+            ? "Apply with your internIn profile — no Challenge for this role."
+            : opportunity.applicationMode === "challenge_required"
+              ? "Apply, then complete the Challenge for this role before your application can progress."
+              : "Apply now — completing the Challenge for this role is optional and adds demonstrated evidence."}
+        </li>
+        <li>{opportunity.companyName} reviews your application{opportunity.applicationMode !== "quick_apply" ? " and any Challenge evidence" : ""} as real evidence of your ability.</li>
         <li>Strong candidates move to interview and offer.</li>
       </ol>
 

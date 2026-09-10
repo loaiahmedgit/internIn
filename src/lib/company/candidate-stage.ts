@@ -32,7 +32,12 @@ export function stageKeyOf(row: {
 }
 
 export const STAGE_LABEL: Record<string, string> = {
-  applied: "Awaiting submission",
+  // R2 §16 — "Awaiting submission" assumed every applicant owes one; that's
+  // only ever true for challenge_required. The accurate per-mode Challenge
+  // context (Required/Optional/No challenge, Not started/Submitted) lives
+  // in its own separate row on the candidate detail page, never folded
+  // into this hiring-stage label.
+  applied: "Applied",
   to_review: "To review",
   shortlisted: "Shortlisted",
   invited: "Offer sent",

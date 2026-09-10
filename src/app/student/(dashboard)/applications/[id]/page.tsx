@@ -58,6 +58,7 @@ export default async function ApplicationWorkspacePage({
       location: schema.opportunities.location,
       workMode: schema.opportunities.workMode,
       companyName: schema.companies.name,
+      applicationMode: schema.opportunities.applicationMode,
     })
     .from(schema.applications)
     .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
@@ -366,7 +367,18 @@ export default async function ApplicationWorkspacePage({
             <span className="flex items-center gap-1.5"><Clock3 className="size-4" aria-hidden="true" />{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</span>
             <span className="flex items-center gap-1.5"><ListChecks className="size-4" aria-hidden="true" />{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</span>
             <span className="rounded-full bg-gray-light px-2.5 py-0.5 text-xs font-medium text-navy/55">Not started</span>
+            {application.applicationMode === "challenge_required" ? (
+              <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">Required</span>
+            ) : (
+              <span className="rounded-full bg-navy/6 px-2.5 py-0.5 text-xs font-medium text-navy/55">Optional</span>
+            )}
           </div>
+
+          <p className="mt-2 text-sm text-navy/60">
+            {application.applicationMode === "challenge_required"
+              ? "Apply now, then complete this Challenge before your application can progress."
+              : "Optional — show what you can do. Completing this Challenge adds demonstrated evidence to your application; not completing it doesn't affect your application."}
+          </p>
 
           <p className="mt-4 text-[15px] leading-6 text-navy/70">{firstSentence(currentVersion.scenario)}</p>
 

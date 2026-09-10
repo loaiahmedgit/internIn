@@ -21,6 +21,7 @@ import {
 } from "@/lib/ai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateResourceFile } from "@/lib/challenges/resource-generation";
+import { ApplicationModeSchema, type ApplicationMode } from "@/lib/opportunities/application-mode";
 
 const IdSchema = z.string().uuid();
 const VersionSourceSchema = z.enum(["ai_generated", "human_edited", "approved"]);
@@ -181,8 +182,16 @@ async function assertChallengeResourcesReady(versionId: string) {
   }
 }
 
-export async function createOpportunityAction(internship: InternshipDraft) {
+/**
+ * R2 — applicationMode is never part of InternshipDraftSchema (that schema
+ * doubles as the AI generateInternship structured-output contract —
+ * gemma-provider.ts:68 — so the model must never be able to set it). It's a
+ * separate, explicit company decision, validated on its own and defaulted
+ * to the locked owner default here, matching the column default.
+ */
+export async function createOpportunityAction(internship: InternshipDraft, applicationMode: ApplicationMode = "optional_challenge") {
   const validated = InternshipDraftSchema.parse(internship);
+  const validatedMode = ApplicationModeSchema.parse(applicationMode);
   const { companyId, userId } = await getCompanyIdForCurrentUser();
   const db = getDb();
 
@@ -200,6 +209,7 @@ export async function createOpportunityAction(internship: InternshipDraft) {
       slots: validated.slots,
       skills: validated.skills,
       status: "draft",
+      applicationMode: validatedMode,
     })
     .returning();
 
@@ -318,29 +328,31 @@ export async function saveChallengeVersionAction(
   return { challengeId: challengeRow.id as string, versionId: version.id as string };
 }
 
-export async function publishOpportunityAction(opportunityId: string) {
-  const validatedOpportunityId = IdSchema.parse(opportunityId);
-  const { companyId, userId, canPublish } = await getCompanyIdForCurrentUser();
-  if (!canPublish) throw new Error("Ask a Workspace Admin to grant Hiring Access before publishing.");
-  await assertCompanyVerified(companyId);
-  await assertOwnsOpportunity(validatedOpportunityId, companyId);
+/**
+ * R2 §4 — the single shared publish-readiness gate, used by BOTH real
+ * publish entry points in this codebase (publishOpportunityAction, reached
+ * from ChallengeBuilder, and saveInternshipAction's publish=true path,
+ * reached from the manual Create/Edit Internship form — these are
+ * independent code paths that must never disagree). `quick_apply` skips the
+ * challenge requirement entirely; `optional_challenge`/`challenge_required`
+ * both require a real approved challenge before publish (the two modes
+ * differ only in whether completing it later is required, never in
+ * publish-time readiness). Flips the challenge's own status to `published`
+ * when one exists and isn't already — mirrors the exact checks
+ * publishOpportunityAction always ran, just gated on mode first.
+ */
+async function ensureChallengeReadyForPublish(opportunityId: string, applicationMode: ApplicationMode, actorUserId: string) {
+  if (applicationMode === "quick_apply") return;
   const db = getDb();
-
-  // Every internIn internship has a real challenge — there is no "no
-  // challenge" path. An opportunity cannot publish without one approved
-  // (real scenario, tasks, a required submission requirement, a rubric,
-  // and every resource actually ready) — re-verified here even though
-  // saveChallengeVersionAction already checked at approval time, since
-  // this is the last real gate before applicants can see the listing.
   const [challengeRow] = await db
     .select()
     .from(schema.challenges)
-    .where(eq(schema.challenges.opportunityId, validatedOpportunityId))
+    .where(eq(schema.challenges.opportunityId, opportunityId))
     .limit(1);
   if (!challengeRow) {
-    throw new Error("Add and approve a work challenge before publishing — every internIn internship needs one.");
+    throw new Error("Add and approve a work challenge before publishing this mode — or switch application mode to Quick Apply.");
   }
-  if (challengeRow.status !== "approved") {
+  if (challengeRow.status !== "approved" && challengeRow.status !== "published") {
     throw new Error("Approve the current challenge version before publishing.");
   }
   if (!challengeRow.currentVersionId) {
@@ -368,10 +380,30 @@ export async function publishOpportunityAction(opportunityId: string) {
   });
   await assertChallengeResourcesReady(challengeRow.currentVersionId);
 
-  await db
-    .update(schema.challenges)
-    .set({ status: "published", updatedAt: new Date() })
-    .where(eq(schema.challenges.id, challengeRow.id));
+  if (challengeRow.status !== "published") {
+    await db
+      .update(schema.challenges)
+      .set({ status: "published", updatedAt: new Date() })
+      .where(eq(schema.challenges.id, challengeRow.id));
+    await db.insert(schema.eventLog).values({
+      entityType: "challenge",
+      entityId: challengeRow.id,
+      eventType: "challenge_published",
+      actorUserId,
+    });
+  }
+}
+
+export async function publishOpportunityAction(opportunityId: string) {
+  const validatedOpportunityId = IdSchema.parse(opportunityId);
+  const { companyId, userId, canPublish } = await getCompanyIdForCurrentUser();
+  if (!canPublish) throw new Error("Ask a Workspace Admin to grant Hiring Access before publishing.");
+  await assertCompanyVerified(companyId);
+  const opportunity = await assertOwnsOpportunity(validatedOpportunityId, companyId);
+  const db = getDb();
+
+  await ensureChallengeReadyForPublish(validatedOpportunityId, opportunity.applicationMode, userId);
+
   await db
     .update(schema.opportunities)
     .set({ status: "published", updatedAt: new Date() })
@@ -382,6 +414,41 @@ export async function publishOpportunityAction(opportunityId: string) {
     entityId: validatedOpportunityId,
     eventType: "challenge_published",
     actorUserId: userId,
+  });
+}
+
+/**
+ * R2 §5/§7 — the canonical place to change an existing opportunity's
+ * application mode after creation, reused by both the AI-wizard and
+ * manual-form creation paths (neither owns mode editing itself). Switching
+ * to quick_apply, or editing a still-draft opportunity to any mode, is
+ * always safe — draft opportunities are re-gated at actual publish time.
+ * Switching an already-published opportunity to optional/required must not
+ * silently leave it advertising a Challenge it doesn't have.
+ */
+export async function updateApplicationModeAction(opportunityId: string, applicationMode: ApplicationMode) {
+  const validatedId = IdSchema.parse(opportunityId);
+  const validatedMode = ApplicationModeSchema.parse(applicationMode);
+  const { companyId, userId, canPublish } = await getCompanyIdForCurrentUser();
+  if (!canPublish) throw new Error("Ask a Workspace Admin to grant Hiring Access before changing how students apply.");
+  const opportunity = await assertOwnsOpportunity(validatedId, companyId);
+
+  if (opportunity.status === "published") {
+    await ensureChallengeReadyForPublish(validatedId, validatedMode, userId);
+  }
+
+  const db = getDb();
+  await db
+    .update(schema.opportunities)
+    .set({ applicationMode: validatedMode, updatedAt: new Date() })
+    .where(eq(schema.opportunities.id, validatedId));
+
+  await db.insert(schema.eventLog).values({
+    entityType: "opportunity",
+    entityId: validatedId,
+    eventType: "application_mode_updated",
+    actorUserId: userId,
+    metadata: { applicationMode: validatedMode },
   });
 }
 
@@ -483,6 +550,7 @@ const InternshipFormSchema = z.object({
   skills: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
   requireCv: z.boolean().default(true),
   applicationQuestions: z.array(z.string().trim().min(1).max(300)).max(10).default([]),
+  applicationMode: ApplicationModeSchema.default("optional_challenge"),
 });
 export type InternshipFormInput = z.infer<typeof InternshipFormSchema>;
 
@@ -490,9 +558,11 @@ export type InternshipFormInput = z.infer<typeof InternshipFormSchema>;
  * The manual-first Create/Edit Internship form's single save path — Save
  * draft and Publish both call this, `publish` just decides the resulting
  * status. Creates a new posting when `opportunityId` is omitted, otherwise
- * updates the caller's own existing one. A challenge is never required
- * here; that's a separate, optional step from the internship's Challenge
- * tab.
+ * updates the caller's own existing one. A challenge is only required when
+ * publishing a non-quick_apply mode (R2 §4) — this is a genuinely separate,
+ * independent publish entry point from publishOpportunityAction
+ * (ChallengeBuilder's own path), so it runs the exact same shared gate
+ * rather than trusting the other path to have already checked.
  */
 export async function saveInternshipAction(input: {
   opportunityId?: string;
@@ -525,12 +595,14 @@ export async function saveInternshipAction(input: {
     skills: validated.skills,
     requireCv: validated.requireCv,
     applicationQuestions: validated.applicationQuestions,
+    applicationMode: validated.applicationMode,
   };
 
   if (input.opportunityId) {
     const validatedId = IdSchema.parse(input.opportunityId);
     const existing = await assertOwnsOpportunity(validatedId, companyId);
     const nowPublishing = input.publish && existing.status !== "published";
+    if (input.publish) await ensureChallengeReadyForPublish(validatedId, validated.applicationMode, userId);
     await db
       .update(schema.opportunities)
       .set({ ...values, status: input.publish ? "published" : existing.status, updatedAt: new Date() })
@@ -544,14 +616,34 @@ export async function saveInternshipAction(input: {
     return validatedId;
   }
 
+  if (input.publish) {
+    // No opportunity row exists yet to gate against — insert as a draft
+    // first so ensureChallengeReadyForPublish (and any future challenge on
+    // it) has a real opportunityId, exactly like the create-then-publish
+    // wizard flow already does. A brand-new listing can never have an
+    // approved challenge yet anyway (no challenge row exists at all), so
+    // this only ever succeeds today for quick_apply — expected: a
+    // non-quick_apply mode's challenge is a separate step after creation.
+    const [draft] = await db.insert(schema.opportunities).values({ ...values, companyId, createdByUserId: userId, status: "draft" }).returning();
+    await ensureChallengeReadyForPublish(draft.id, validated.applicationMode, userId);
+    await db.update(schema.opportunities).set({ status: "published", updatedAt: new Date() }).where(eq(schema.opportunities.id, draft.id));
+    await db.insert(schema.eventLog).values({
+      entityType: "opportunity",
+      entityId: draft.id,
+      eventType: "opportunity_published",
+      actorUserId: userId,
+    });
+    return draft.id as string;
+  }
+
   const [opportunity] = await db
     .insert(schema.opportunities)
-    .values({ ...values, companyId, createdByUserId: userId, status: input.publish ? "published" : "draft" })
+    .values({ ...values, companyId, createdByUserId: userId, status: "draft" })
     .returning();
   await db.insert(schema.eventLog).values({
     entityType: "opportunity",
     entityId: opportunity.id,
-    eventType: input.publish ? "opportunity_published" : "opportunity_created",
+    eventType: "opportunity_created",
     actorUserId: userId,
   });
   return opportunity.id as string;
@@ -575,13 +667,36 @@ export async function deleteOpportunityAction(opportunityId: string) {
   });
 }
 
+/**
+ * R2 §13/§14/§15 — the one canonical server-side fairness check, called
+ * from every action capable of progressing an application past its
+ * required Challenge (shortlist, offer). Gates on a real FINAL submission
+ * row existing (submissions.applicationId) — never on AI evaluation having
+ * run (an OpenRouter/provider outage must never block hiring), never on
+ * challengeStartedAt alone (a started-but-not-submitted session doesn't
+ * clear it), and never on candidate-specific signals like CV strength — the
+ * mode is opportunity-wide, so this reads only the real opportunity row.
+ */
+async function assertChallengeRequirementMet(applicationId: string, applicationMode: ApplicationMode, blockedActionClause: string) {
+  if (applicationMode !== "challenge_required") return;
+  const db = getDb();
+  const [submission] = await db
+    .select({ id: schema.submissions.id })
+    .from(schema.submissions)
+    .where(eq(schema.submissions.applicationId, applicationId))
+    .limit(1);
+  if (!submission) {
+    throw new Error(`This internship requires a completed Challenge before ${blockedActionClause}.`);
+  }
+}
+
 export async function shortlistApplicationAction(applicationId: string) {
   const validatedApplicationId = IdSchema.parse(applicationId);
   const { companyId, userId } = await getCompanyIdForCurrentUser("hiring_reviewer");
   const db = getDb();
 
   const [application] = await db
-    .select({ id: schema.applications.id, opportunityCompanyId: schema.opportunities.companyId })
+    .select({ id: schema.applications.id, opportunityCompanyId: schema.opportunities.companyId, applicationMode: schema.opportunities.applicationMode })
     .from(schema.applications)
     .innerJoin(schema.opportunities, eq(schema.applications.opportunityId, schema.opportunities.id))
     .where(eq(schema.applications.id, validatedApplicationId))
@@ -589,6 +704,7 @@ export async function shortlistApplicationAction(applicationId: string) {
   if (!application || application.opportunityCompanyId !== companyId) {
     throw new Error("Not authorized for this application.");
   }
+  await assertChallengeRequirementMet(validatedApplicationId, application.applicationMode, "the candidate can be shortlisted");
 
   await db
     .update(schema.applications)
@@ -648,6 +764,7 @@ export async function inviteToInternshipAction(applicationId: string) {
     .select({
       id: schema.applications.id,
       opportunityCompanyId: schema.opportunities.companyId,
+      applicationMode: schema.opportunities.applicationMode,
       role: schema.opportunities.role,
       companyName: schema.companies.name,
       studentEmail: schema.users.email,
@@ -662,6 +779,7 @@ export async function inviteToInternshipAction(applicationId: string) {
   if (!application || application.opportunityCompanyId !== companyId) {
     throw new Error("Not authorized for this application.");
   }
+  await assertChallengeRequirementMet(validatedApplicationId, application.applicationMode, "you can send an offer");
 
   const [existingOffer] = await db
     .select()

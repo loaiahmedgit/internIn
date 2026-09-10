@@ -12,7 +12,10 @@ import { Separator } from "@/components/ui/separator";
 import { TagListEditor } from "@/components/opportunities/tag-list-editor";
 import { saveInternshipAction, assistInternshipCopyAction, type InternshipFormInput } from "@/lib/opportunities/actions";
 import { toDateInputValue } from "@/lib/format-date";
+import { APPLICATION_MODE_LABEL, APPLICATION_MODE_COMPANY_DESCRIPTION, type ApplicationMode } from "@/lib/opportunities/application-mode";
 import { Sparkles, Building2, Home, Laptop } from "lucide-react";
+
+const APPLICATION_MODE_OPTIONS: ApplicationMode[] = ["quick_apply", "optional_challenge", "challenge_required"];
 
 type FormState = InternshipFormInput & { applicationDeadlineInput: string; startDateInput: string };
 
@@ -37,6 +40,7 @@ function toFormState(initial?: Partial<InternshipFormInput>): FormState {
     skills: initial?.skills ?? [],
     requireCv: initial?.requireCv ?? true,
     applicationQuestions: initial?.applicationQuestions ?? [],
+    applicationMode: initial?.applicationMode ?? "optional_challenge",
   };
 }
 
@@ -269,12 +273,25 @@ export function CreateInternshipForm({
             </div>
             <Separator />
             <div>
-              <p className="text-sm font-medium text-navy">Include challenge</p>
-              <p className="text-xs text-navy/50">
-                {opportunityId
-                  ? "Add or manage the challenge from the Challenge tab after saving."
-                  : "You'll be able to build a challenge from the internship's Challenge tab right after saving."}
-              </p>
+              <p className="text-sm font-medium text-navy">How should students apply?</p>
+              <div className="mt-2.5 space-y-2">
+                {APPLICATION_MODE_OPTIONS.map((mode) => (
+                  <label key={mode} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${form.applicationMode === mode ? "border-teal/40 bg-teal/5" : "border-navy/10"}`}>
+                    <input type="radio" name="applicationMode" value={mode} checked={form.applicationMode === mode} onChange={() => update("applicationMode", mode)} className="mt-1 size-4 shrink-0 accent-teal-ink" />
+                    <span>
+                      <span className="block text-sm font-medium text-navy">{APPLICATION_MODE_LABEL[mode]}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-navy/60">{APPLICATION_MODE_COMPANY_DESCRIPTION[mode]}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {form.applicationMode !== "quick_apply" && (
+                <p className="mt-2 text-xs text-navy/50">
+                  {opportunityId
+                    ? "Add or manage the challenge from the Challenge tab after saving."
+                    : "You'll be able to build a challenge from the internship's Challenge tab right after saving. Publishing this mode requires an approved challenge."}
+                </p>
+              )}
             </div>
             <Separator />
             <Field label="Additional application questions" hint="optional">

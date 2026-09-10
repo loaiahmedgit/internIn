@@ -51,6 +51,13 @@ export const educationStageEnum = pgEnum("education_stage", [
   "other",
 ]);
 export const opportunityStatusEnum = pgEnum("opportunity_status", ["draft", "published", "closed"]);
+/**
+ * R2 — one canonical, opportunity-wide application mode (never per-candidate,
+ * never client-supplied at apply time). Locked owner decision: new
+ * opportunities default to `optional_challenge` (docs/13 §2.Q2). See
+ * src/lib/opportunities/application-mode.ts for the shared Zod schema/labels.
+ */
+export const applicationModeEnum = pgEnum("application_mode", ["quick_apply", "optional_challenge", "challenge_required"]);
 export const workModeEnum = pgEnum("work_mode", ["remote", "onsite", "hybrid"]);
 export const challengeStatusEnum = pgEnum("challenge_status", [
   "draft",
@@ -452,6 +459,11 @@ export const opportunities = pgTable(
     slots: integer("slots").notNull().default(1),
     skills: jsonb("skills").$type<string[]>().notNull().default([]),
     status: opportunityStatusEnum("status").notNull().default("draft"),
+    /** R2 — see applicationModeEnum's own comment. New-row default matches
+     * the locked owner decision; existing rows are backfilled conservatively
+     * (see migration 0027's own comment), never blindly set to
+     * challenge_required. */
+    applicationMode: applicationModeEnum("application_mode").notNull().default("optional_challenge"),
     /** Who created this posting — shown in Overview. Null for postings created before this column existed, or if that user's account is later removed. */
     createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
     ...timestamps,

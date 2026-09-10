@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -9,11 +10,14 @@ import { ThinkingIndicator } from "@/components/ai/thinking-indicator";
 import { ChallengeBuilder } from "@/components/challenges/challenge-builder";
 import type { Challenge, InternshipDraft } from "@/lib/ai";
 import { generateInternshipAction, generateChallengeAction } from "@/lib/ai/actions";
-import { createOpportunityAction, saveChallengeVersionAction } from "@/lib/opportunities/actions";
+import { createOpportunityAction, saveChallengeVersionAction, publishOpportunityAction } from "@/lib/opportunities/actions";
 import { toDateInputValue } from "@/lib/format-date";
+import { APPLICATION_MODE_LABEL, APPLICATION_MODE_COMPANY_DESCRIPTION, type ApplicationMode } from "@/lib/opportunities/application-mode";
 import { ArrowRight, ArrowLeft, Sparkles, X, Plus } from "lucide-react";
 
-type Step = "describe-role" | "review-internship" | "describe-work" | "challenge";
+const APPLICATION_MODE_OPTIONS: ApplicationMode[] = ["quick_apply", "optional_challenge", "challenge_required"];
+
+type Step = "describe-role" | "review-internship" | "describe-work" | "challenge" | "quick-apply-done";
 
 /** Minimum viable Challenge per ChallengeSchema — obvious "replace me"
  * placeholder text in every required field, so a company can reach
@@ -66,6 +70,7 @@ export function CreateInternshipWizard({
   const [loading, setLoading] = useState(false);
   const [opportunityId, setOpportunityId] = useState<string | null>(() => initial?.opportunityId ?? null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [applicationMode, setApplicationMode] = useState<ApplicationMode>("optional_challenge");
 
   async function handleGenerateInternship() {
     if (!roleDescription.trim()) return;
@@ -84,9 +89,18 @@ export function CreateInternshipWizard({
     setSaveError(null);
     setLoading(true);
     try {
-      const id = await createOpportunityAction(internship);
+      const id = await createOpportunityAction(internship, applicationMode);
       setOpportunityId(id);
-      setStep("describe-work");
+      // R2 §6/§9 — quick_apply never forces Challenge configuration; publish
+      // immediately (the shared publish gate skips the challenge check
+      // entirely for this mode) instead of routing through the wizard's
+      // Challenge steps.
+      if (applicationMode === "quick_apply") {
+        await publishOpportunityAction(id);
+        setStep("quick-apply-done");
+      } else {
+        setStep("describe-work");
+      }
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Couldn't save this internship listing.");
     } finally {
@@ -143,7 +157,7 @@ export function CreateInternshipWizard({
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-16">
-      <Stepper step={step} />
+      {step !== "quick-apply-done" && <Stepper step={step} />}
 
       {step === "describe-role" && (
         <div className="mt-10">
@@ -260,6 +274,21 @@ export function CreateInternshipWizard({
             </Field>
           </div>
 
+          <div className="mt-4 rounded-xl border border-gray-cool/60 bg-white p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">How should students apply?</p>
+            <div className="mt-2.5 space-y-2">
+              {APPLICATION_MODE_OPTIONS.map((mode) => (
+                <label key={mode} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${applicationMode === mode ? "border-teal/40 bg-teal/5" : "border-navy/10"}`}>
+                  <input type="radio" name="applicationMode" value={mode} checked={applicationMode === mode} onChange={() => setApplicationMode(mode)} className="mt-1 size-4 shrink-0 accent-teal-ink" />
+                  <span>
+                    <span className="block text-sm font-medium text-navy">{APPLICATION_MODE_LABEL[mode]}</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-navy/60">{APPLICATION_MODE_COMPANY_DESCRIPTION[mode]}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           {saveError && <p className="mt-4 text-sm text-red-600">{saveError}</p>}
 
           <div className="mt-6 flex items-center justify-between">
@@ -271,10 +300,32 @@ export function CreateInternshipWizard({
               disabled={loading}
               className="bg-teal text-white hover:bg-teal/90"
             >
-              {loading ? "Saving..." : "Continue to Challenge Builder"}
+              {loading
+                ? applicationMode === "quick_apply"
+                  ? "Publishing..."
+                  : "Saving..."
+                : applicationMode === "quick_apply"
+                  ? "Publish"
+                  : "Continue to Challenge Builder"}
               {!loading && <ArrowRight className="ml-1.5 size-4" />}
             </Button>
           </div>
+        </div>
+      )}
+
+      {step === "quick-apply-done" && opportunityId && (
+        <div className="mt-10">
+          <h1 className="text-2xl font-bold text-navy">Published</h1>
+          <p className="mt-2 text-sm text-navy/60">
+            {internship?.role} is live with Quick Apply — students can apply now with their internIn profile, no Challenge required.
+          </p>
+          <Button
+            className="mt-6 bg-teal text-white hover:bg-teal/90"
+            render={<Link href={`/company/opportunities/${opportunityId}`} />}
+            nativeButton={false}
+          >
+            View internship
+          </Button>
         </div>
       )}
 

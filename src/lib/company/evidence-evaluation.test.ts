@@ -36,6 +36,7 @@ function detail(): CandidateDetail {
     appliedAt: new Date("2026-08-29"),
     opportunityId: "posting",
     role: "Data Analyst Intern",
+    applicationMode: "optional_challenge",
     profile: null,
     challenge: null,
     evidence: null,
