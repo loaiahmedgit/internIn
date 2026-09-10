@@ -14,6 +14,10 @@
 
 ---
 
+## Owner-approved execution override — 2026-09-10
+
+The full current owner brief is preserved in `docs/14-owner-approved-completion-roadmap.md`. It supersedes older freeze/approval/phase-order statements below. R4 → R5 Resource Factory + Fair Variants → R6 Evidence Engine + Fast Review → R7 Provenance + Integrity → post-hire workspaces/check-ins/experience/attendance/grounded intelligence → measured performance → final design are authorized, including safe migrations, focused commits, push to main, deployment and production QA. Continue automatically; do not ask whether to continue. Preserve the existing stack and unrelated dirty files.
+
 ## Current master product direction: HONESTY
 
 internIn helps companies evaluate early-career candidates using **profile evidence + demonstrated evidence + human verification** — not only prior experience.
@@ -246,14 +250,16 @@ Full design spec: `design-system/internin/MASTER.md` (forbids gradients/glow/gla
 
 # NEXT TASK
 
-**Current phase: R3 — No-Free-Labor Safeguards — COMPLETE in implementation and deterministic verification; release steps pending at this pre-commit checkpoint.**
+**R3 — No-Free-Labor Safeguards — COMPLETE.**
 
-- Scope: bounded safeguards on the current Challenge system only. This is not the full Challenge Architect / ten-characteristic redesign.
-- Schema: additive migration `0028`; no destructive or fabricated historical backfill.
-- Code: structured AI production-work concern/transformation output without exposing or requesting chain-of-thought; manual assessment-basis and attestation controls; explicit version-bound company confirmation; one canonical publish gate; and 90/120-minute active-work rules. Students receive only a concise “Assessment exercise” basis indicator.
-- Tests: final full suite 475 passed / 1 skipped / 19 known OpenRouter-credit failures. The 19 failures exactly match the R2 live-provider baseline and are blocked by the account's explicit `Insufficient credits` response; deterministic, database-backed, and R3 safeguard coverage passed.
-- Provider limitation: live OpenRouter transformation QA unavailable due exhausted credits; manual/deterministic path verified without AI.
+- Shipped R3 commit: `2dad42a`; migration `0028` verified present in production on 2026-09-10.
+- Current deployed production SHA verified via Vercel API: `b78e60fc5659bb9a631c4d12efd79c58ec46d729`, deployment `dpl_HY3ipaNAfBgbFAuHWg8KiEZb1ddN`, state READY.
+- Owner-authorized cleanup completed transactionally: exactly `R3 QA Quick Apply Intern` (`24015f80-0372-4daf-b1c9-d214c7a49e0e`) and `R3 QA Safeguarded Challenge Intern` (`0069da91-9ae9-46e5-975c-0777abd64243`), one related challenge, three versions, eleven related event rows. Read-only inspection confirmed zero associated applications and zero resource rows before deletion. No auth users or storage artifacts were created by this cleanup.
+- Verification: both QA postings/challenge/versions absent. Remaining aggregate counts unchanged except the two postings: 11 opportunities, 46 users, 2 companies, 45 applications, 0 credentials, 6 programs.
+- The pre-release historical notes above are superseded by this verified checkpoint.
 
-**DO NOT automatically begin R4.**
+**Current phase: R4 — Universal Challenge Architect — IN PROGRESS.**
 
-**Next planned phase: R4 — Challenge Architect + role reality + ten-characteristic + can/cannot-establish framework — AWAITING OWNER APPROVAL.** Objective validation, AI provenance, similarity/integrity, and post-hire expansion also remain out of scope/not started.
+Startup documents read completely; code/schema audit started. Existing `(opportunity_id, student_id)` uniqueness is real, but the application action uses check-then-insert without conflict recovery. Challenge starts currently record a timestamp only: no version pin exists until submission, so refresh after an employer edit can change the assigned content. Fix canonical application/start/submission handling before layering variants. Existing `requireCv` defaults/copy contradict the owner brief even though the apply action does not enforce a CV gate. Baseline evidence can evolve the existing `application_questions` array; objective eligibility needs additive structured fields.
+
+Next exact action: finish R4 implementation and validate against the fresh test run, then release. No R4 migration has been created or applied at this checkpoint. No R4 feature is declared complete. No new external repository or paid integration is required by the current plan.
