@@ -1,4 +1,3 @@
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { AIProvider } from "./provider";
@@ -26,7 +25,7 @@ import {
 import { assertGeneratedNonProductionMetadata } from "@/lib/challenges/no-free-labor";
 
 /**
- * Real provider — OpenRouter via the Vercel AI SDK's generateObject (the
+ * Real provider — Groq or OpenRouter via the Vercel AI SDK's generateObject (the
  * SDK's current recommended structured-output API as of the installed
  * version; not an architectural requirement — swap it if a future SDK
  * version recommends something else). Model comes from AI_MODEL, never
@@ -38,18 +37,8 @@ import { assertGeneratedNonProductionMetadata } from "@/lib/challenges/no-free-l
  * convention.
  */
 
-const DEFAULT_MODEL = "google/gemma-4-31b-it-20260402";
-
-export function getModel() {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "OPENROUTER_API_KEY is not set. Add it to .env.local to use the real AI provider (see .env.local.example).",
-    );
-  }
-  const openrouter = createOpenRouter({ apiKey });
-  return openrouter(process.env.AI_MODEL ?? DEFAULT_MODEL);
-}
+import { getModel } from "./model";
+export { getModel } from "./model";
 
 // AI output shapes omit app-managed control fields (ids, status).
 const ChallengeContentSchema = ChallengeSchema.omit({

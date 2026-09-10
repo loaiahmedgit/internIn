@@ -406,7 +406,7 @@ export async function POST(req: Request) {
             model: getModel(),
             system: `${SCOPE_POLICY}\n\nThis request is clearly unrelated to internship hiring. Decline briefly (one sentence) and redirect toward what you can actually help with — do not fulfill the unrelated request.`,
             messages: await convertToModelMessages(messages),
-          }).toUIMessageStream(),
+          }).toUIMessageStream({ sendReasoning: false }),
         );
         return;
       }
@@ -417,7 +417,7 @@ export async function POST(req: Request) {
             model: getModel(),
             system: SCOPE_POLICY,
             messages: await convertToModelMessages(messages),
-          }).toUIMessageStream(),
+          }).toUIMessageStream({ sendReasoning: false }),
         );
         return;
       }
@@ -432,7 +432,7 @@ export async function POST(req: Request) {
             model: getModel(),
             system: `${SCOPE_POLICY}\n\nAnswer using ONLY the real data below — never invent, estimate, or round a figure it doesn't give you.\n\nReal data about ${scopeLabel}:\n${facts}`,
             messages: await convertToModelMessages(messages),
-          }).toUIMessageStream(),
+          }).toUIMessageStream({ sendReasoning: false }),
         );
         return;
       }

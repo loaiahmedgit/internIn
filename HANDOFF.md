@@ -18,6 +18,14 @@
 
 The full current owner brief is preserved in `docs/14-owner-approved-completion-roadmap.md`. It supersedes older freeze/approval/phase-order statements below. R4 → R5 Resource Factory + Fair Variants → R6 Evidence Engine + Fast Review → R7 Provenance + Integrity → post-hire workspaces/check-ins/experience/attendance/grounded intelligence → measured performance → final design are authorized, including safe migrations, focused commits, push to main, deployment and production QA. Continue automatically; do not ask whether to continue. Preserve the existing stack and unrelated dirty files.
 
+## Active implementation checkpoint — 2026-09-10
+
+The owner selected Groq and provided a temporary test key. `.env.local` now explicitly selects Groq with `openai/gpt-oss-120b`; the official `@ai-sdk/groq` adapter is installed. Provider keys stay server-side and are never committed. Matching Vercel production environment settings have been saved, but they become active on the next deployment. OpenRouter remains an explicitly selectable alternative; it returned HTTP 402 on this account. A missing key or provider outage never produces mock evidence in production.
+
+Groq compatibility validation: one isolated run passed all 24 live router, role-intelligence and clarification-wording regression cases together. Subsequent full runs exposed rate-limit timeouts and intermittent extraction/wording quality failures; these remain under investigation and are not waived. The extraction prompt now preserves only stated duties/tools and correctly handles a title conflicting with actual work. Nine provider selection/transport tests cover schema validation, hidden reasoning and no mock fallback. Full-suite and deployment verification are still in progress; do not claim the Groq code is live until its exact commit is verified.
+
+R4 application foundation is in the working tree: profile + short work responses, transparent company-defined major/education/certification prerequisites, optional CV, canonical application retries, immutable started Challenge version, student/company evidence display, and matching resource authorization. Migration `0029_application_evidence_and_attempts.sql` has **not** been applied. Its rolled-back database verification passed 21 assertions (including idempotency, duplicate constraints, frozen evidence/assignment and student/company RLS); the entire migration and synthetic fixtures were rolled back. No historical application was assigned fabricated evidence. Full Architect authoring, R5–R7 and post-hire expansion remain outstanding. Continue the owner roadmap automatically.
+
 ## Current master product direction: HONESTY
 
 internIn helps companies evaluate early-career candidates using **profile evidence + demonstrated evidence + human verification** — not only prior experience.
