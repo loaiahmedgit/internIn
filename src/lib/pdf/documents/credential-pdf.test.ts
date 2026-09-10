@@ -21,6 +21,7 @@ function baseInput(overrides: Partial<CredentialPdfInput> = {}): CredentialPdfIn
     displayTitle: "Customer Onboarding Review",
     companyDisplayName: "Skyline Logistics",
     companyEndorsed: false,
+    companyEndorsedCapabilities: [],
     issuedAt: new Date("2026-08-02T00:00:00Z"),
     demonstratedCriteria: ["Customer reasoning", "Practicality"],
     verificationCode: "INTERNIN-CH-ABCDEF",
@@ -49,12 +50,15 @@ describe("renderCredentialPdf", () => {
     expect(text).toContain("Practicality");
   });
 
-  it("company branding (Company Endorsed) only renders when authorized", async () => {
+  it("company endorsement section only renders when authorized, and shows the specific recognized capabilities", async () => {
     const notEndorsed = await extractText(await renderCredentialPdf(baseInput({ companyEndorsed: false })));
-    expect(notEndorsed).not.toContain("Company Endorsed");
+    expect(notEndorsed).not.toContain("Company endorsed");
 
-    const endorsed = await extractText(await renderCredentialPdf(baseInput({ companyEndorsed: true })));
-    expect(endorsed).toContain("Company Endorsed");
+    const endorsed = await extractText(
+      await renderCredentialPdf(baseInput({ companyEndorsed: true, companyEndorsedCapabilities: ["Customer reasoning"] })),
+    );
+    expect(endorsed).toContain("Company endorsed");
+    expect(endorsed).toContain("Customer reasoning");
   });
 
   it("never contains a private id — the input type has no slot for one (structural guarantee)", async () => {
@@ -68,7 +72,11 @@ describe("renderCredentialPdf", () => {
   it("uses factual, non-inflated wording — never 'certified expert' or similar", async () => {
     const bytes = await renderCredentialPdf(baseInput());
     const text = await extractText(bytes);
-    expect(text.toLowerCase()).not.toMatch(/certified expert|guarantee|approved employee|mastered/);
+    // "guarantee" is intentionally present — it only ever appears in the
+    // honesty disclaimer's negation ("not... a guarantee of future
+    // performance"), never as an unqualified claim.
+    expect(text.toLowerCase()).not.toMatch(/certified expert|approved employee|mastered/);
+    expect(text.toLowerCase()).toContain("a guarantee of future performance");
     expect(text).toContain("does not represent an employment decision");
   });
 });

@@ -72,6 +72,10 @@ export const submissionStatusEnum = pgEnum("submission_status", ["submitted", "r
 export const offerStatusEnum = pgEnum("offer_status", ["pending", "accepted", "declined"]);
 export const placementFeeStatusEnum = pgEnum("placement_fee_status", ["unpaid", "stubbed_paid", "paid"]);
 export const programStatusEnum = pgEnum("program_status", ["draft", "active", "completed"]);
+/** R1 honesty fix — pre-hire responsibility on a specific opportunity/
+ * challenge. Deliberately separate from programSupervisorAssignments
+ * (Phase 6A, post-hire only) — never reused for this. */
+export const opportunityResponsibilityTypeEnum = pgEnum("opportunity_responsibility_type", ["hiring_owner", "challenge_owner", "reviewer", "certificate_approver"]);
 // "blocked" added Phase 6B — a real student-reportable state ("I'm blocked
 // because..."), not previously representable.
 export const internshipTaskStatusEnum = pgEnum("internship_task_status", ["pending", "in_progress", "blocked", "done"]);
@@ -720,10 +724,19 @@ export const challengeCredentials = pgTable(
       requireHumanConfirmation: boolean;
       showCompanyLogo: boolean;
     }>().notNull(),
-    /** Live, mutable fact — true once endorsed, flips back to false on withdrawal. See this table's own comment. */
+    /** Live, mutable fact — true ONLY after an explicit human grant action
+     * (R1 honesty fix — never set by policy/issuance/confirmation alone).
+     * Flips back to false on withdrawal. See this table's own comment. */
     companyEndorsed: boolean("company_endorsed").notNull().default(false),
     companyEndorsedAt: timestamp("company_endorsed_at", { withTimezone: true }),
+    /** WHO granted it — the authorized certificate_approver, real audit trail (R1 §9). */
+    companyEndorsedByUserId: uuid("company_endorsed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    /** WHICH demonstrated criteria the company chose to recognize — always
+     * a subset of this row's own rubricSnapshot (strong/solid entries),
+     * server-validated, never arbitrary reviewer-typed text (R1 §8). */
+    companyEndorsedCapabilities: jsonb("company_endorsed_capabilities").$type<string[]>().notNull().default([]),
     endorsementWithdrawnAt: timestamp("endorsement_withdrawn_at", { withTimezone: true }),
+    endorsementWithdrawnByUserId: uuid("endorsement_withdrawn_by_user_id").references(() => users.id, { onDelete: "set null" }),
     endorsementWithdrawalReason: text("endorsement_withdrawal_reason"),
     displayTitle: text("display_title").notNull(),
     companyDisplayName: text("company_display_name").notNull(),
@@ -871,6 +884,41 @@ export const programSupervisorAssignments = pgTable(
   (t) => [
     uniqueIndex("program_supervisor_assignments_program_member_uidx").on(t.programId, t.companyMemberId),
     index("program_supervisor_assignments_member_idx").on(t.companyMemberId),
+  ],
+);
+
+/**
+ * PRE-HIRE responsibility on a specific opportunity/challenge — R1 honesty
+ * fix (§4/§5). Answers "are they responsible for THIS internship", never a
+ * job title or a company-wide role. companyMemberId, not userId — same
+ * reasoning as programSupervisorAssignments: a user can belong to more
+ * than one company. One member may hold multiple responsibility types on
+ * the same opportunity (each its own row) — e.g. both challenge_owner and
+ * certificate_approver. `certificate_approver` specifically gates
+ * company-endorsement grant/withdraw (credentials/company-endorsement.ts)
+ * — company-level permission (hiring_reviewer) alone is never sufficient,
+ * and there is no workspace_admin bypass for this one check, unlike
+ * programSupervisorAssignments's assertAssignedOrAdmin (R1 §5 explicitly:
+ * "do not allow company permission alone to grant endorsement everywhere").
+ */
+export const opportunityResponsibilityAssignments = pgTable(
+  "opportunity_responsibility_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    opportunityId: uuid("opportunity_id")
+      .notNull()
+      .references(() => opportunities.id, { onDelete: "cascade" }),
+    companyMemberId: uuid("company_member_id")
+      .notNull()
+      .references(() => companyMembers.id, { onDelete: "cascade" }),
+    responsibilityType: opportunityResponsibilityTypeEnum("responsibility_type").notNull(),
+    assignedByUserId: uuid("assigned_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("opportunity_responsibility_assignments_uidx").on(t.opportunityId, t.companyMemberId, t.responsibilityType),
+    index("opportunity_responsibility_assignments_member_idx").on(t.companyMemberId),
+    index("opportunity_responsibility_assignments_opportunity_idx").on(t.opportunityId),
   ],
 );
 

@@ -41,6 +41,11 @@ export async function issueCredentialForSubmission(submissionId: string, actorUs
   }
 
   const status: "issued" | "pending_human_confirmation" = eligibility.state === "eligible" ? "issued" : "pending_human_confirmation";
+  // isEndorsedPolicy records only that company endorsement is AVAILABLE
+  // for this challenge (frozen into policySnapshot for history/display) —
+  // it must never, by itself, cause companyEndorsed to become true. R1
+  // honesty fix: that requires a separate, explicit human grant action
+  // (credentials/company-endorsement.ts), never automatic issuance.
   const isEndorsedPolicy = context.challenge.credentialPolicy === "company_endorsed";
   const policySnapshot: CredentialPolicySnapshot = {
     policy: isEndorsedPolicy ? "company_endorsed" : "internin_verified",
@@ -63,8 +68,9 @@ export async function issueCredentialForSubmission(submissionId: string, actorUs
         companyId: context.companyId,
         status,
         policySnapshot,
-        companyEndorsed: status === "issued" && isEndorsedPolicy,
-        companyEndorsedAt: status === "issued" && isEndorsedPolicy ? now : null,
+        // R1 — never automatic, regardless of policy. companyEndorsed
+        // stays at its column default (false) until an authorized
+        // certificate_approver explicitly grants it.
         // v1 privacy model (Phase 4B, locked decision): "unlisted by link" —
         // the random verification_code is the only gate, no separate
         // opt-in toggle exists yet. Set true at creation so the row is

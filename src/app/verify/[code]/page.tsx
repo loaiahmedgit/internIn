@@ -15,8 +15,8 @@ const monthYear = new Intl.DateTimeFormat("en", { month: "long", year: "numeric"
 export async function generateMetadata({ params }: { params: Promise<{ code: string }> }): Promise<Metadata> {
   const { code } = await params;
   return {
-    title: `Verified Challenge Credential — ${code}`,
-    description: "internIn Verified Challenge Credential verification.",
+    title: `internIn Challenge Evidence Credential — ${code}`,
+    description: "internIn Challenge Evidence Credential verification.",
     robots: { index: false, follow: false },
   };
 }
@@ -41,7 +41,7 @@ export default async function VerifyCredentialPage({ params }: { params: Promise
 
       <main className="flex flex-1 justify-center px-5 py-10 sm:py-16">
         <div className="w-full max-w-lg rounded-2xl border border-navy/8 bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:p-8">
-          <p className="text-xs font-semibold tracking-wide text-teal-ink uppercase">Verified Challenge Credential</p>
+          <p className="text-xs font-semibold tracking-wide text-teal-ink uppercase">internIn Challenge Evidence Credential</p>
           <h1 className="mt-1.5 text-xl leading-tight font-semibold text-balance text-navy">{credential.displayTitle}</h1>
 
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-navy/60">
@@ -50,20 +50,32 @@ export default async function VerifyCredentialPage({ params }: { params: Promise
             <span>Challenge associated with {credential.companyDisplayName}</span>
           </div>
 
-          {credential.companyEndorsed && (
-            <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-teal/10 px-2.5 py-1 text-xs font-medium text-teal-ink">Company Endorsed</span>
-          )}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                isValid ? "bg-teal/10 text-teal-ink" : "bg-navy/6 text-navy/60"
+              }`}
+            >
+              {isValid ? <BadgeCheck className="size-3.5" aria-hidden="true" /> : <Ban className="size-3.5" aria-hidden="true" />}
+              Evidence credential: {isValid ? "Valid" : "Revoked"}
+            </div>
 
-          <div
-            className={`mt-4 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-              isValid ? "bg-teal/10 text-teal-ink" : "bg-navy/6 text-navy/60"
-            }`}
-          >
-            {isValid ? <BadgeCheck className="size-3.5" aria-hidden="true" /> : <Ban className="size-3.5" aria-hidden="true" />}
-            {isValid ? "Valid" : "Revoked"}
+            <div
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                credential.companyEndorsed
+                  ? "bg-teal/10 text-teal-ink"
+                  : credential.endorsementWithdrawnAt
+                    ? "bg-navy/6 text-navy/60"
+                    : "bg-navy/4 text-navy/45"
+              }`}
+            >
+              Company endorsement: {credential.companyEndorsed ? "Granted" : credential.endorsementWithdrawnAt ? "Withdrawn" : "Not granted"}
+            </div>
           </div>
 
           {credential.issuedAt && <p className="mt-3 text-sm text-navy/55">Issued {monthYear.format(new Date(credential.issuedAt))}</p>}
+
+          <p className="mt-3 text-xs leading-5 text-navy/50">Evidence from this Challenge met internIn&apos;s defined validation criteria. This is not an employment decision or a guarantee of future performance.</p>
 
           {credential.demonstratedCriteria.length > 0 && (
             <div className="mt-5">
@@ -78,6 +90,22 @@ export default async function VerifyCredentialPage({ params }: { params: Promise
             </div>
           )}
 
+          {credential.companyEndorsed && credential.companyEndorsedCapabilities.length > 0 && (
+            <div className="mt-5">
+              <p className="text-xs font-semibold tracking-wide text-navy/45 uppercase">Company-recognized evidence</p>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {credential.companyEndorsedCapabilities.map((capability) => (
+                  <li key={capability} className="rounded-full border border-teal/20 bg-teal/6 px-2.5 py-1 text-xs text-teal-ink">
+                    {capability}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs leading-5 text-navy/45">
+                {credential.companyDisplayName} recognizes evidence in the capabilities above, demonstrated in this Challenge. This is not an employment decision or a guarantee of future performance.
+              </p>
+            </div>
+          )}
+
           {!isValid && credential.revocationReasonPublic && <p className="mt-4 text-xs leading-5 text-navy/50">{credential.revocationReasonPublic}</p>}
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-navy/8 pt-4 text-xs text-navy/45">
@@ -85,7 +113,7 @@ export default async function VerifyCredentialPage({ params }: { params: Promise
           </div>
 
           <p className="mt-4 text-xs leading-5 text-navy/45">
-            This credential verifies that the named student demonstrated evidence against the published challenge rubric. It does not represent an employment decision. Verified through internIn.
+            This credential confirms the named student&apos;s evidence against the published challenge rubric met internIn&apos;s validation criteria. It does not represent an employment decision or a guarantee of future performance. Issued through internIn.
           </p>
         </div>
       </main>

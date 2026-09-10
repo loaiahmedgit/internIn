@@ -12,6 +12,7 @@ export interface CredentialSummary {
   displayTitle: string;
   companyDisplayName: string;
   companyEndorsed: boolean;
+  companyEndorsedCapabilities: string[];
   issuedAt: Date | null;
   demonstratedCriteria: string[];
 }
@@ -41,6 +42,7 @@ export async function getStudentCredentialSummaries(studentId: string): Promise<
       displayTitle: schema.challengeCredentials.displayTitle,
       companyDisplayName: schema.challengeCredentials.companyDisplayName,
       companyEndorsed: schema.challengeCredentials.companyEndorsed,
+      companyEndorsedCapabilities: schema.challengeCredentials.companyEndorsedCapabilities,
       issuedAt: schema.challengeCredentials.issuedAt,
       revokedAt: schema.challengeCredentials.revokedAt,
       rubricSnapshot: schema.challengeCredentials.rubricSnapshot,
@@ -56,6 +58,7 @@ export async function getStudentCredentialSummaries(studentId: string): Promise<
     displayTitle: row.displayTitle,
     companyDisplayName: row.companyDisplayName,
     companyEndorsed: row.companyEndorsed,
+    companyEndorsedCapabilities: row.companyEndorsedCapabilities,
     issuedAt: row.issuedAt,
     demonstratedCriteria: row.rubricSnapshot.filter((entry) => DEMONSTRATED_LEVELS.has(entry.level)).map((entry) => entry.criterion),
   }));

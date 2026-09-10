@@ -20,7 +20,7 @@ export async function withdrawCredentialEndorsement(credentialId: string, actorU
   const now = new Date();
   const [updated] = await db
     .update(schema.challengeCredentials)
-    .set({ companyEndorsed: false, endorsementWithdrawnAt: now, endorsementWithdrawalReason: reason, updatedAt: now })
+    .set({ companyEndorsed: false, endorsementWithdrawnAt: now, endorsementWithdrawnByUserId: actorUserId, endorsementWithdrawalReason: reason, updatedAt: now })
     .where(eq(schema.challengeCredentials.id, credentialId))
     .returning();
 

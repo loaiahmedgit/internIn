@@ -33,6 +33,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cre
     displayTitle: credential.displayTitle,
     companyDisplayName: credential.companyDisplayName,
     companyEndorsed: credential.companyEndorsed,
+    companyEndorsedCapabilities: credential.companyEndorsedCapabilities,
     issuedAt: credential.issuedAt,
     demonstratedCriteria,
     verificationCode: credential.verificationCode,

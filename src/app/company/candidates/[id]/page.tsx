@@ -7,6 +7,7 @@ import { AiEvidenceSummary } from "@/components/company/ai-evidence-summary";
 import { CredentialReviewPanel } from "@/components/company/credential-review-panel";
 import { loadCredentialContext, toEligibilityInput } from "@/lib/credentials/credential-data";
 import { computeCredentialEligibility } from "@/lib/credentials/eligibility";
+import { hasOpportunityResponsibility } from "@/lib/opportunities/responsibility-assignments";
 import { stageKeyOf, STAGE_LABEL, STAGE_CLASS } from "@/lib/company/candidate-stage";
 import { CompanyPageContainer } from "@/components/company/page-shell";
 import { CandidateActionsPanel } from "@/components/company/candidate-actions-panel";
@@ -95,10 +96,20 @@ export default async function CandidateProfilePage({
   // re-evaluation) — but the reviewer's confirm dialog needs the real
   // list before confirming. Recompute once more, forcing existingCredential
   // to null, exactly like confirmPendingCredential's own re-check does.
+  const DEMONSTRATED_LEVELS = new Set(["strong", "solid"]);
   const credentialDemonstratedCriteria =
     credentialEligibility?.state === "pending_human_confirmation" && credentialContext
       ? computeCredentialEligibility({ ...toEligibilityInput(credentialContext), existingCredential: null }).demonstratedCriteria.map((c) => c.criterion)
-      : (credentialEligibility?.demonstratedCriteria.map((c) => c.criterion) ?? []);
+      : credentialEligibility?.state === "issued" && credentialContext?.existingActiveCredential
+        ? credentialContext.existingActiveCredential.rubricSnapshot.filter((entry) => DEMONSTRATED_LEVELS.has(entry.level)).map((entry) => entry.criterion)
+        : (credentialEligibility?.demonstratedCriteria.map((c) => c.criterion) ?? []);
+  // R1 §5 — real double-gate check, computed server-side so the Grant
+  // certificate action is never offered to a member who'd just have it
+  // rejected server-side anyway. No workspace_admin bypass here either,
+  // matching loadCompanyOwnedCredentialForEndorsement's own rule.
+  const canGrantCertificate = credentialContext
+    ? await hasOpportunityResponsibility(credentialContext.application.opportunityId, membership.membership.id, "certificate_approver")
+    : false;
 
   const stage = stageKeyOf({ status: candidate.status, hasSubmission: !!candidate.submission, offer: candidate.offer });
   const insights = candidateInsights(candidate);
@@ -477,8 +488,11 @@ export default async function CandidateProfilePage({
               policyOff={credentialContext!.challenge.credentialPolicy === "off"}
               state={credentialEligibility.state}
               companyEndorsed={credentialContext!.existingActiveCredential?.companyEndorsed ?? false}
+              companyEndorsedCapabilities={credentialContext!.existingActiveCredential?.companyEndorsedCapabilities ?? []}
               credentialId={credentialEligibility.existingCredentialId}
               demonstratedCriteria={credentialDemonstratedCriteria}
+              endorsementAvailable={credentialContext!.challenge.credentialPolicy === "company_endorsed"}
+              canGrantCertificate={canGrantCertificate}
             />
           )}
 

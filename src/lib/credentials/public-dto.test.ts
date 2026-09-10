@@ -14,7 +14,10 @@ function row(overrides: Partial<ChallengeCredentialRow> = {}): ChallengeCredenti
     policySnapshot: { policy: "internin_verified", requireHumanConfirmation: false, showCompanyLogo: false },
     companyEndorsed: false,
     companyEndorsedAt: null,
+    companyEndorsedByUserId: null,
+    companyEndorsedCapabilities: [],
     endorsementWithdrawnAt: null,
+    endorsementWithdrawnByUserId: null,
     endorsementWithdrawalReason: null,
     displayTitle: "Customer Onboarding Review",
     companyDisplayName: "Skyline Logistics",
@@ -66,6 +69,26 @@ describe("toPublicCredentialDto", () => {
     expect(revokedNeverEndorsed.status).toBe("revoked");
   });
 
+  it("exposes the granted capability subset, never a blanket endorsement", () => {
+    const dto = toPublicCredentialDto(
+      row({ companyEndorsed: true, companyEndorsedCapabilities: ["Customer reasoning"], companyEndorsedAt: new Date("2026-08-05T00:00:00Z") }),
+      "Amina K.",
+    );
+    expect(dto.companyEndorsedCapabilities).toEqual(["Customer reasoning"]);
+    expect(dto.companyEndorsedAt).toBe("2026-08-05T00:00:00.000Z");
+    expect(dto.endorsementWithdrawnAt).toBeNull();
+  });
+
+  it("distinguishes never-granted from granted-then-withdrawn", () => {
+    const neverGranted = toPublicCredentialDto(row(), "Amina K.");
+    expect(neverGranted.companyEndorsed).toBe(false);
+    expect(neverGranted.endorsementWithdrawnAt).toBeNull();
+
+    const withdrawn = toPublicCredentialDto(row({ companyEndorsed: false, endorsementWithdrawnAt: new Date("2026-08-06T00:00:00Z") }), "Amina K.");
+    expect(withdrawn.companyEndorsed).toBe(false);
+    expect(withdrawn.endorsementWithdrawnAt).toBe("2026-08-06T00:00:00.000Z");
+  });
+
   it("mutable challenge/company changes cannot alter this presentation — only the row's own snapshot columns are read, nothing is re-derived", () => {
     // The mapper takes no challenge/company/rubric argument at all — its
     // only inputs are the row and a display name. This is a structural
@@ -83,7 +106,19 @@ describe("toPublicCredentialDto", () => {
   it("excludes every private id field by construction", () => {
     const dto = toPublicCredentialDto(row(), "Amina K.");
     const keys = Object.keys(dto);
-    for (const forbidden of ["id", "studentId", "applicationId", "submissionId", "companyId", "revokedByUserId", "policySnapshot", "metadata"]) {
+    for (const forbidden of [
+      "id",
+      "studentId",
+      "applicationId",
+      "submissionId",
+      "companyId",
+      "revokedByUserId",
+      "policySnapshot",
+      "metadata",
+      "companyEndorsedByUserId",
+      "endorsementWithdrawnByUserId",
+      "endorsementWithdrawalReason",
+    ]) {
       expect(keys).not.toContain(forbidden);
     }
   });

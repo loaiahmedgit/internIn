@@ -10,6 +10,8 @@ import { CompanyPageContainer } from "@/components/company/page-shell";
 import { InternshipStatusBadge, ChallengeStatusBadge } from "@/components/company/status-badges";
 import { CandidateTableRow } from "@/components/company/candidate-table-row";
 import { ChallengeCredentialSettings } from "@/components/company/challenge-credential-settings";
+import { OpportunityResponsibilityPanel } from "@/components/company/opportunity-responsibility-panel";
+import { getOpportunityResponsibilitiesAction } from "@/lib/opportunities/responsibility-assignments";
 import { AskInternshipPanel } from "@/components/opportunities/ask-internship-panel";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -120,6 +122,7 @@ export default async function OpportunityDetailPage({
     : [];
 
   const hasChallenge = !!challengeVersion;
+  const responsibilities = hasChallenge && tab === "challenge" ? await getOpportunityResponsibilitiesAction(id) : null;
 
   return (
     <CompanyPageContainer>
@@ -436,6 +439,11 @@ export default async function OpportunityDetailPage({
                 opportunityId={id}
                 initial={{ credentialPolicy: challenge!.credentialPolicy, requireHumanConfirmation: challenge!.requireHumanConfirmation, showCompanyLogo: challenge!.showCompanyLogo }}
               />
+            </div>
+          )}
+          {hasChallenge && responsibilities && (
+            <div className="mt-5">
+              <OpportunityResponsibilityPanel opportunityId={id} initial={responsibilities} />
             </div>
           )}
           {!hasChallenge && (

@@ -516,7 +516,7 @@ export default async function ApplicationWorkspacePage({
                 {credentialPanel.kind === "issued" && (
                   <>
                     <p className="mt-1.5 text-sm text-navy/64">
-                      {isNonSelected ? "Your challenge credential remains part of your verified work." : "You earned a Verified Challenge Credential."}
+                      {isNonSelected ? "Your challenge evidence credential remains part of your verified work." : "You earned an internIn Challenge Evidence Credential."}
                     </p>
                     {credentialPanel.demonstratedCriteria && credentialPanel.demonstratedCriteria.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">

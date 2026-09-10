@@ -37,21 +37,27 @@ export default async function StudentCredentialDetailPage({ params }: { params: 
       </Link>
 
       <div className="mt-5 rounded-2xl border border-black/[0.05] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-4px_rgba(16,24,40,0.10)] sm:p-8">
-        <p className="text-xs font-semibold tracking-wide text-teal-ink uppercase">Verified Challenge Credential</p>
+        <p className="text-xs font-semibold tracking-wide text-teal-ink uppercase">internIn Challenge Evidence Credential</p>
         <h1 className="mt-1.5 text-2xl leading-tight font-semibold text-balance text-navy">{credential.displayTitle}</h1>
         <p className="mt-1.5 text-sm text-navy/60">Challenge associated with {credential.companyDisplayName}</p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {credential.companyEndorsed && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-teal/10 px-2.5 py-1 text-xs font-medium text-teal-ink">Company Endorsed</span>
-          )}
           <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${isValid ? "bg-teal/10 text-teal-ink" : "bg-navy/6 text-navy/60"}`}>
             {isValid ? <BadgeCheck className="size-3.5" aria-hidden="true" /> : <Ban className="size-3.5" aria-hidden="true" />}
-            {isValid ? "Verified by internIn" : "Revoked"}
+            Evidence credential: {isValid ? "Valid" : "Revoked"}
+          </div>
+          <div
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+              credential.companyEndorsed ? "bg-teal/10 text-teal-ink" : credential.endorsementWithdrawnAt ? "bg-navy/6 text-navy/60" : "bg-navy/4 text-navy/45"
+            }`}
+          >
+            Company endorsement: {credential.companyEndorsed ? "Granted" : credential.endorsementWithdrawnAt ? "Withdrawn" : "Not granted"}
           </div>
         </div>
 
         {credential.issuedAt && <p className="mt-3 text-sm text-navy/55">Issued {monthYear.format(credential.issuedAt)}</p>}
+
+        <p className="mt-3 text-xs leading-5 text-navy/50">Evidence from this Challenge met internIn&apos;s defined validation criteria. This is not an employment decision or a guarantee of future performance.</p>
 
         {demonstratedCriteria.length > 0 && (
           <div className="mt-6 border-t border-navy/8 pt-5">
@@ -60,6 +66,22 @@ export default async function StudentCredentialDetailPage({ params }: { params: 
               {demonstratedCriteria.map((entry) => (
                 <li key={entry.criterion} className="rounded-full border border-navy/10 bg-[#fafcfc] px-2.5 py-1 text-xs text-navy/72">
                   {entry.criterion}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {credential.companyEndorsed && credential.companyEndorsedCapabilities.length > 0 && (
+          <div className="mt-6 border-t border-navy/8 pt-5">
+            <h2 className="text-sm font-semibold text-navy">Company-recognized evidence</h2>
+            <p className="mt-1 text-xs text-navy/50">
+              {credential.companyDisplayName} recognizes evidence in these capabilities, demonstrated in this Challenge. Not an employment decision or a guarantee of future performance.
+            </p>
+            <ul className="mt-2.5 flex flex-wrap gap-1.5">
+              {credential.companyEndorsedCapabilities.map((capability) => (
+                <li key={capability} className="rounded-full border border-teal/20 bg-teal/6 px-2.5 py-1 text-xs text-teal-ink">
+                  {capability}
                 </li>
               ))}
             </ul>
@@ -103,7 +125,7 @@ export default async function StudentCredentialDetailPage({ params }: { params: 
                   Download PDF
                 </a>
                 <AddToLinkedInDialog
-                  credentialName={`Verified Challenge Credential — ${credential.displayTitle}`}
+                  credentialName={`internIn Challenge Evidence Credential — ${credential.displayTitle}`}
                   issueDateLabel={monthYear.format(credential.issuedAt)}
                   credentialId={credential.verificationCode}
                   credentialUrl={verificationUrl}

@@ -34,6 +34,7 @@ function issuedRow(overrides: Record<string, unknown> = {}) {
     displayTitle: "Customer Onboarding Review",
     companyDisplayName: "Skyline Logistics",
     companyEndorsed: false,
+    companyEndorsedCapabilities: [],
     issuedAt: new Date("2026-08-02T00:00:00Z"),
     rubricSnapshot: [
       { criterion: "Customer reasoning", level: "strong" },
@@ -56,6 +57,12 @@ describe("getStudentCredentialSummaries", () => {
     expect(summaries[0].displayTitle).toBe("Customer Onboarding Review");
     // Only demonstrated (strong/solid) criteria surface — the weak one is filtered out.
     expect(summaries[0].demonstratedCriteria).toEqual(["Customer reasoning"]);
+  });
+
+  it("surfaces the company-endorsed capability subset, empty when never granted", async () => {
+    mocks.selectResults = [[issuedRow({ companyEndorsed: true, companyEndorsedCapabilities: ["Customer reasoning"] })]];
+    const summaries = await getStudentCredentialSummaries("student-1");
+    expect(summaries[0].companyEndorsedCapabilities).toEqual(["Customer reasoning"]);
   });
 
   it("is a single flat query — no extra round trip per credential (no N+1)", async () => {

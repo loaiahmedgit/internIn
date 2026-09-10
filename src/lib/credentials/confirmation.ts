@@ -32,15 +32,17 @@ export async function confirmPendingCredential(credentialId: string, actorUserId
   }
 
   const now = new Date();
-  const isEndorsed = credential.policySnapshot.policy === "company_endorsed";
   const db = getDb();
+  // R1 honesty fix: confirming the base evidence credential means only
+  // "the evidence credential may be issued" — it never implies company
+  // endorsement, even when this challenge's policy is company_endorsed.
+  // companyEndorsed is untouched here; it only ever changes via the
+  // separate, explicit grantCredentialCompanyEndorsement action.
   const [updated] = await db
     .update(schema.challengeCredentials)
     .set({
       status: "issued",
       issuedAt: now,
-      companyEndorsed: isEndorsed,
-      companyEndorsedAt: isEndorsed ? now : null,
       updatedAt: now,
     })
     .where(eq(schema.challengeCredentials.id, credentialId))

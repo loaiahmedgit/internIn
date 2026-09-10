@@ -16,6 +16,8 @@ export interface CredentialPdfInput {
   displayTitle: string;
   companyDisplayName: string;
   companyEndorsed: boolean;
+  /** R1 §16 — the specific recognized capabilities, never a blanket claim. */
+  companyEndorsedCapabilities: string[];
   issuedAt: Date;
   demonstratedCriteria: string[];
   verificationCode: string;
@@ -40,13 +42,13 @@ export async function renderCredentialPdf(input: CredentialPdfInput): Promise<Ui
             the page header's own bottom rule (found via real PDF visual
             inspection, not just byte-validity checks). */}
         <Text variant="sm" weight="semibold" color="primary" transform="uppercase" style={{ marginTop: interninTheme.spacing.sectionGap }}>
-          Verified Challenge Credential
+          internIn Challenge Evidence Credential
         </Text>
         <Heading level={1} noMargin>
           {input.studentDisplayName}
         </Heading>
         <Text color="mutedForeground" style={{ marginTop: 4 }}>
-          has demonstrated evidence against the challenge rubric for
+          demonstrated evidence that met internIn&apos;s validation criteria for
         </Text>
         <Heading level={2}>{input.displayTitle}</Heading>
         <Text color="mutedForeground" noMargin>
@@ -56,10 +58,18 @@ export async function renderCredentialPdf(input: CredentialPdfInput): Promise<Ui
         {input.companyEndorsed && (
           <Section variant="highlight" accentColor="primary" spacing="md">
             <Text weight="semibold" color="primary" noMargin>
-              Company Endorsed
+              Company endorsed
             </Text>
             <Text variant="xs" color="mutedForeground" noMargin>
-              {input.companyDisplayName} has endorsed this credential, alongside internIn&apos;s own verification below.
+              Granted by an authorized reviewer at {input.companyDisplayName}. Recognized capabilities:
+            </Text>
+            {input.companyEndorsedCapabilities.map((capability) => (
+              <Text key={capability} variant="xs" noMargin style={{ marginTop: 2 }}>
+                — {capability}
+              </Text>
+            ))}
+            <Text variant="xs" color="mutedForeground" noMargin style={{ marginTop: 4 }}>
+              This is not an employment decision or a guarantee of future performance.
             </Text>
           </Section>
         )}
@@ -93,7 +103,7 @@ export async function renderCredentialPdf(input: CredentialPdfInput): Promise<Ui
         </Section>
 
         <Text variant="xs" color="mutedForeground" style={{ marginTop: interninTheme.spacing.sectionGap }}>
-          This credential verifies that the named student demonstrated evidence against the published challenge rubric. It does not represent an employment decision. Verified through internIn.
+          This credential confirms the named student&apos;s evidence against the published challenge rubric met internIn&apos;s validation criteria. It does not represent an employment decision or a guarantee of future performance. Issued through internIn.
         </Text>
       </View>
     </PdfcnThemeProvider>,
@@ -102,7 +112,7 @@ export async function renderCredentialPdf(input: CredentialPdfInput): Promise<Ui
       margin: { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft },
       header: (
         <PdfcnThemeProvider theme={interninTheme}>
-          <PageHeader title="internIn" rightText="Verified Challenge Credential" variant="minimal" />
+          <PageHeader title="internIn" rightText="Challenge Evidence Credential" variant="minimal" />
         </PdfcnThemeProvider>
       ),
       footer: (
@@ -112,8 +122,8 @@ export async function renderCredentialPdf(input: CredentialPdfInput): Promise<Ui
       ),
       outline: true,
       metadata: {
-        title: `Verified Challenge Credential — ${input.displayTitle}`,
-        description: "internIn Verified Challenge Credential",
+        title: `internIn Challenge Evidence Credential — ${input.displayTitle}`,
+        description: "internIn Challenge Evidence Credential",
         creator: "internIn",
       },
     },

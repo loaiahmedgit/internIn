@@ -54,6 +54,12 @@ describe("withdrawCredentialEndorsement", () => {
     expect(payload.endorsementWithdrawalReason).toBe("No longer accurate.");
   });
 
+  it("records who withdrew it (R1 §13 audit trail)", async () => {
+    mocks.selectResults = [[credentialRow()]];
+    await withdrawCredentialEndorsement("credential-1", "reviewer-1", "No longer accurate.");
+    expect(mocks.setPayloads[0].endorsementWithdrawnByUserId).toBe("reviewer-1");
+  });
+
   it("logs credential_endorsement_withdrawn, not credential_revoked", async () => {
     mocks.selectResults = [[credentialRow()]];
     await withdrawCredentialEndorsement("credential-1", "reviewer-1", "No longer accurate.");

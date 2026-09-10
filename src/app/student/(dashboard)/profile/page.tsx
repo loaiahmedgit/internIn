@@ -413,7 +413,7 @@ export default async function StudentProfilePage() {
                           {/* A revoked credential never shows endorsement or demonstrated
                               chips — those read as active proof, which this deliberately is not. */}
                           {!isRevoked && item.kind === "credential" && item.companyEndorsed && (
-                            <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-medium text-teal-ink">Company Endorsed</span>
+                            <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-medium text-teal-ink">Company endorsed</span>
                           )}
                           {!isRevoked && item.kind === "credential" && item.demonstratedCriteria && item.demonstratedCriteria.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1">

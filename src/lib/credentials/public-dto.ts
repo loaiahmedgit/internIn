@@ -16,6 +16,14 @@ export interface PublicCredentialDto {
   displayTitle: string;
   companyDisplayName: string;
   companyEndorsed: boolean;
+  /** Server-validated subset of demonstratedCriteria the company actually
+   * recognized (R1 §15) — empty unless companyEndorsed is true. */
+  companyEndorsedCapabilities: string[];
+  companyEndorsedAt: string | null;
+  /** Non-null only when an endorsement was granted and later withdrawn —
+   * distinguishes "never granted" from "granted then withdrawn" (R1 §17).
+   * The base evidence credential's own status is unaffected by this. */
+  endorsementWithdrawnAt: string | null;
   issuedAt: string | null;
   completedAt: string;
   /** Only strong/solid entries from the snapshot — a weak/unresolved
@@ -37,6 +45,9 @@ export function toPublicCredentialDto(row: ChallengeCredentialRow, studentDispla
     displayTitle: row.displayTitle,
     companyDisplayName: row.companyDisplayName,
     companyEndorsed: row.companyEndorsed,
+    companyEndorsedCapabilities: row.companyEndorsedCapabilities,
+    companyEndorsedAt: row.companyEndorsedAt ? row.companyEndorsedAt.toISOString() : null,
+    endorsementWithdrawnAt: row.endorsementWithdrawnAt ? row.endorsementWithdrawnAt.toISOString() : null,
     issuedAt: row.issuedAt ? row.issuedAt.toISOString() : null,
     completedAt: row.completedAt.toISOString(),
     demonstratedCriteria: row.rubricSnapshot.filter((entry) => DEMONSTRATED_LEVELS.has(entry.level)),

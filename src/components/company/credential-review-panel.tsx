@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Ban, BadgeCheck, Clock3, ShieldCheck, ShieldQuestion } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { confirmChallengeCredentialAction, requestBaseCredentialReviewAction, withdrawCredentialEndorsementAction } from "@/lib/credentials/actions";
+import {
+  confirmChallengeCredentialAction,
+  grantCredentialCompanyEndorsementAction,
+  requestBaseCredentialReviewAction,
+  withdrawCredentialEndorsementAction,
+} from "@/lib/credentials/actions";
 import type { CredentialEligibilityState } from "@/lib/credentials/types";
 
 const STATE_LABEL: Record<CredentialEligibilityState, string> = {
@@ -35,14 +40,26 @@ export function CredentialReviewPanel({
   policyOff,
   state,
   companyEndorsed,
+  companyEndorsedCapabilities,
   credentialId,
   demonstratedCriteria,
+  endorsementAvailable,
+  canGrantCertificate,
 }: {
   policyOff: boolean;
   state: CredentialEligibilityState;
   companyEndorsed: boolean;
+  /** Currently-granted subset (R1 §9) — empty unless companyEndorsed is true. */
+  companyEndorsedCapabilities: string[];
   credentialId?: string;
+  /** Same list drives both the Confirm dialog's preview and the Grant
+   * certificate dialog's selectable set (R1 §8) — this credential's own
+   * frozen rubricSnapshot, filtered to demonstrated (strong/solid). */
   demonstratedCriteria: string[];
+  /** True only when this challenge's policy is company_endorsed (R1 §2) — the panel never offers Grant certificate otherwise. */
+  endorsementAvailable: boolean;
+  /** True only when the viewer holds a real certificate_approver assignment for this opportunity (R1 §5) — server-checked, not just a UI hide. */
+  canGrantCertificate: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -50,8 +67,10 @@ export function CredentialReviewPanel({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [grantOpen, setGrantOpen] = useState(false);
   const [withdrawReason, setWithdrawReason] = useState("");
   const [reportReason, setReportReason] = useState("");
+  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
 
   // Optimistic local mirror of the server-derived props. router.refresh()
   // triggers a real RSC refetch, but gives no signal this component can
@@ -77,6 +96,12 @@ export function CredentialReviewPanel({
     setPrevCompanyEndorsed(companyEndorsed);
     setLocalCompanyEndorsed(companyEndorsed);
   }
+  const [prevEndorsedCapabilities, setPrevEndorsedCapabilities] = useState(companyEndorsedCapabilities);
+  const [localEndorsedCapabilities, setLocalEndorsedCapabilities] = useState(companyEndorsedCapabilities);
+  if (companyEndorsedCapabilities !== prevEndorsedCapabilities) {
+    setPrevEndorsedCapabilities(companyEndorsedCapabilities);
+    setLocalEndorsedCapabilities(companyEndorsedCapabilities);
+  }
 
   const label = policyOff ? "Credential unavailable" : localState === "issued" && localCompanyEndorsed ? "Issued · Company endorsed" : STATE_LABEL[localState];
   const Icon = policyOff ? ShieldQuestion : STATE_ICON[localState];
@@ -94,10 +119,14 @@ export function CredentialReviewPanel({
     });
   }
 
+  function toggleCapability(criterion: string) {
+    setSelectedCapabilities((prev) => (prev.includes(criterion) ? prev.filter((c) => c !== criterion) : [...prev, criterion]));
+  }
+
   return (
     <section aria-labelledby="credential-review-heading" className="rounded-xl border border-navy/10 bg-white p-5">
       <h2 id="credential-review-heading" className="text-xs font-semibold tracking-wide text-navy/45 uppercase">
-        Challenge credential
+        Evidence credential
       </h2>
       <div className="mt-2.5 flex items-center gap-1.5 text-sm font-medium text-navy">
         <Icon className="size-3.5 shrink-0 text-teal-ink" aria-hidden="true" />
@@ -112,11 +141,14 @@ export function CredentialReviewPanel({
 
       {!policyOff && localState === "pending_human_confirmation" && credentialId && (
         <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <DialogTrigger render={<Button size="sm" className="mt-3 bg-teal-ink text-white hover:bg-teal-ink/90" />}>Confirm credential</DialogTrigger>
+          <DialogTrigger render={<Button size="sm" className="mt-3 bg-teal-ink text-white hover:bg-teal-ink/90" />}>Confirm evidence credential</DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Confirm this Verified Challenge Credential?</DialogTitle>
-              <DialogDescription>This issues the credential. It does not affect this candidate&apos;s application status or hiring decision.</DialogDescription>
+              <DialogTitle>Confirm this internIn Challenge Evidence Credential?</DialogTitle>
+              <DialogDescription>
+                This confirms the evidence credential may be issued. It does not affect this candidate&apos;s application status or hiring decision
+                {endorsementAvailable ? ", and it is not your company&apos;s endorsement — that&apos;s a separate action available after issuance." : "."}
+              </DialogDescription>
             </DialogHeader>
             {demonstratedCriteria.length > 0 && (
               <div>
@@ -143,7 +175,71 @@ export function CredentialReviewPanel({
                 disabled={pending}
                 className="bg-teal-ink text-white hover:bg-teal-ink/90"
               >
-                {pending ? "Confirming…" : "Confirm credential"}
+                {pending ? "Confirming…" : "Confirm evidence credential"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {!policyOff && localState === "issued" && endorsementAvailable && !localCompanyEndorsed && canGrantCertificate && credentialId && (
+        <Dialog
+          open={grantOpen}
+          onOpenChange={(open) => {
+            setGrantOpen(open);
+            if (open) setSelectedCapabilities(demonstratedCriteria);
+          }}
+        >
+          <DialogTrigger render={<Button size="sm" className="mt-3 bg-teal-ink text-white hover:bg-teal-ink/90" />}>Grant certificate</DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Grant company endorsement?</DialogTitle>
+              <DialogDescription>
+                This recognizes the selected capabilities demonstrated in this Challenge. It is not an employment decision or a guarantee of future performance.
+              </DialogDescription>
+            </DialogHeader>
+            {demonstratedCriteria.length > 0 ? (
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-navy/45 uppercase">Select capabilities the company is willing to recognize</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {demonstratedCriteria.map((criterion) => {
+                    const selected = selectedCapabilities.includes(criterion);
+                    return (
+                      <button
+                        key={criterion}
+                        type="button"
+                        onClick={() => toggleCapability(criterion)}
+                        aria-pressed={selected}
+                        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                          selected ? "border-teal-ink bg-teal-ink text-white" : "border-navy/15 bg-[#fafcfc] text-navy/72 hover:border-teal/40"
+                        }`}
+                      >
+                        {criterion}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-navy/60">No demonstrated capabilities are available to recognize on this credential.</p>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setGrantOpen(false)} disabled={pending}>Cancel</Button>
+              <Button
+                onClick={() =>
+                  run(
+                    () => grantCredentialCompanyEndorsementAction({ credentialId, capabilities: selectedCapabilities }),
+                    () => {
+                      setGrantOpen(false);
+                      setLocalCompanyEndorsed(true);
+                      setLocalEndorsedCapabilities(selectedCapabilities);
+                    },
+                  )
+                }
+                disabled={pending || selectedCapabilities.length === 0}
+                className="bg-teal-ink text-white hover:bg-teal-ink/90"
+              >
+                {pending ? "Granting…" : "Grant company endorsement"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -156,8 +252,18 @@ export function CredentialReviewPanel({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Withdraw your company&apos;s endorsement?</DialogTitle>
-              <DialogDescription>The credential itself stays issued and Verified through internIn — only your company&apos;s endorsement is removed. This cannot be undone from here.</DialogDescription>
+              <DialogDescription>The evidence credential itself stays issued through internIn — only your company&apos;s endorsement is removed. This cannot be undone from here.</DialogDescription>
             </DialogHeader>
+            {localEndorsedCapabilities.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-navy/45 uppercase">Currently recognized capabilities</p>
+                <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                  {localEndorsedCapabilities.map((capability) => (
+                    <li key={capability} className="rounded-full border border-teal/20 bg-teal/6 px-2.5 py-1 text-xs text-teal-ink">{capability}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <label className="block text-sm font-medium text-navy">
               Reason (internal)
               <textarea value={withdrawReason} onChange={(e) => setWithdrawReason(e.target.value)} rows={3} className="mt-1.5 w-full rounded-md border border-navy/15 bg-white p-2.5 text-sm text-navy focus-visible:outline-2 focus-visible:outline-teal" />
@@ -171,6 +277,7 @@ export function CredentialReviewPanel({
                     () => {
                       setWithdrawOpen(false);
                       setLocalCompanyEndorsed(false);
+                      setLocalEndorsedCapabilities([]);
                     },
                   )
                 }
