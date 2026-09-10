@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CHALLENGE_RESOURCE_TYPES, SUBMISSION_ARTIFACT_KINDS, SUBMISSION_INPUT_MODES } from "@/lib/challenges/submission-model";
-import { ResourceContentSpecSchema } from "./schemas";
+import { AssessmentBasisSchema, ProductionWorkRiskSchema, ResourceContentSpecSchema } from "./schemas";
 
 /**
  * Structured output for Ask internIn's "clarify before drafting" step.
@@ -232,6 +232,14 @@ export const ChallengeDraftGeneratedSchema = z.object({
   // Challenge.estimatedMinutes). Flat, nullable/optional primitive, not a
   // nested object — follows the established null-tolerant-field rule.
   estimatedDurationLabel: optionalText(40),
+  /** R3 structured safety output. Optional/null only for backwards
+   * compatibility with pre-R3 conversation parts; live generation uses a
+   * stricter required schema in challenge-generation.ts. */
+  assessmentBasis: AssessmentBasisSchema.nullable().optional(),
+  productionWorkRisk: ProductionWorkRiskSchema.nullable().optional(),
+  productionWorkReason: optionalText(500),
+  transformationApplied: z.boolean().nullable().optional(),
+  originalIntentSummary: optionalText(500),
   // A short, employer-facing summary of what the candidate hands in —
   // distinct from each task's own instructions. Rendered as one summary
   // line, never a bulleted restatement of the tasks.

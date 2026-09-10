@@ -144,12 +144,45 @@ detect → respond-conceptually → offer-equivalent-assessment step. This is a
 real, bounded gap directly named in the new direction's "No Free Labor"
 section.
 
-### E. Challenge approval/publishing — ALIGNED
+### D1. R3 — IMPLEMENTED (status update)
+
+The bounded no-free-labor gap above is now closed without attempting the
+broader R4 Challenge Architect redesign. Both Challenge-generation paths
+produce structured `assessmentBasis`, potential `productionWorkRisk`, a
+short factual reason, `transformationApplied`, and an original-intent
+summary. The prompt requires live production/client/confidential-data work
+to become an equivalent synthetic, fictional, adapted-historical,
+anonymized-adapted, or sandbox assessment. A deterministic postcondition
+rejects model output that reports a concern but leaves it untransformed.
+This is a potential-concern classification, never model certainty.
+
+The final safety boundary is not AI-dependent. Every new/edited immutable
+Challenge version is safeguard policy version 2. Approval/publication
+requires a selected non-production basis and a version-bound confirmation
+from an authenticated authorized company user. The confirmation records the
+actor and time and is cleared by content edits. `ensureChallengeReadyForPublish`
+remains the single mode-aware publication guard, so R2 behavior does not
+change: Quick Apply has no Challenge requirement; optional/required
+Challenges both pass R3.
+
+Estimated active work above 90 minutes requires a substantive exception
+justification. More than 120 minutes is blocked. The current product has no
+separate completion-window/deadline field, so R3 labels `estimatedMinutes`
+as active work but deliberately does not invent or expand a deadline model.
+
+Migration `0028_no_free_labor_safeguards.sql` is additive. Historical rows
+remain policy version 1 with null safety/attestation metadata; existing
+published Challenges stay published, and no past company confirmation is
+fabricated. A future edited version must meet policy version 2.
+
+### E. Challenge approval/publishing — ALIGNED (R3 strengthened)
 `saveChallengeVersionAction`/`publishOpportunityAction`
 (`opportunities/actions.ts`) are source-agnostic (`assertChallengeSubstance`
 validates real content regardless of whether it came from AI or a human) and
 require an explicit human approval step before publish. No AI auto-publish
-path exists. No change needed.
+path exists. R3 additionally requires the immutable approved version's
+non-production basis, authenticated company confirmation, and active-work
+duration compliance through the canonical shared publish gate.
 
 ### F. Student application modes — MISSING (mostly already possible structurally)
 `applyToOpportunityAction` (`student-actions.ts:34`) is already a genuine
@@ -515,7 +548,10 @@ by this audit or any part of the proposed sequence below.
 - No AI-provenance observability — `aiUsageMode` is CLAIMED (self-declared)
   only, never OBSERVED.
 - No similarity/integrity infrastructure at all.
-- No production-work detection in the challenge-generation prompt.
+- Live provider execution of the new R3 generation safeguard remains
+  unverified because the configured OpenRouter account has no credits; the
+  structured schema, prompt, deterministic postcondition, mapping, manual
+  path, and publish gates are covered by deterministic tests.
 - No completion-window (vs. active-work-time) concept.
 - No ten-characteristic classification anywhere in schema or generation —
   no structured "what this Challenge can provide evidence for / cannot
@@ -587,12 +623,16 @@ No schema work needed until that assistant exists — correctly deferred.
 ## 11. Similarity/integrity architecture gap
 Same — genuinely new subsystem, no existing code to build on. Deferred.
 
-## 12. No-free-labor safeguards
-Principle documented since day one (`docs/05`). Real gap is narrow and
-bounded: add an explicit detection instruction + conceptual-decline response
-to `CHALLENGE_POLICY`, and a corresponding clarification-engine check when
-the employer's own request reads as active production work. Small, contained
-prompt change — no schema impact.
+## 12. No-free-labor safeguards — R3 IMPLEMENTED
+
+R3 uses the current Challenge/version architecture rather than a prompt-only
+patch. Structured AI concern/transformation metadata improves generation;
+deterministic version state protects manual and AI paths equally; authorized
+human confirmation anchors accountability; and 90/120-minute active-work
+rules address excessive scope. Existing published Challenges remain honest
+pre-R3 records rather than receiving fabricated attestations. This bounded
+phase does not include R4's role-reality/ten-characteristic/can-cannot-
+establish framework.
 
 ## 13. Review-speed requirement
 Building blocks already exist (grounded evidence, `confidence`,
@@ -618,9 +658,9 @@ separately — owner's call (§17).
 **R2 — Application modes (§7).** One enum column + one enforcement check +
 minor UI framing. Low schema risk, directly closes the fairness gap.
 
-**R3 — No-free-labor detection (§12).** Prompt-only change to
-`CHALLENGE_POLICY` + clarification engine. No schema impact — can ship
-independently and quickly.
+**R3 — No-free-labor safeguards (§12) — COMPLETE.** Additive immutable-version
+metadata, manual company confirmation, structured AI transformation output,
+canonical publish enforcement, and active-work duration limits.
 
 **R4 — Ten-characteristic framework + Company-AI conversation extension +
 can/cannot-establish summary (§6, §8).** Builds on the existing
@@ -649,7 +689,8 @@ candidate comparison at scale) that don't fully exist yet — correctly last.
   existing published opportunities (recommend `optional_challenge` as the
   default backfill — matches current de facto behavior exactly, changes
   nothing for existing listings).
-- R3 has zero schema/migration risk.
+- R3 uses additive migration `0028`; historical rows remain policy version 1
+  with null R3 attestations and are not unpublished or destructively backfilled.
 - R4 is additive-only if scoped as new nullable fields/tables.
 - R6-R8 are new subsystems — no migration risk to existing data, only new
   tables.

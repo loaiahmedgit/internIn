@@ -206,6 +206,13 @@ export class MockAIProvider implements AIProvider {
       title: `${t.role.replace(" Intern", "")} Challenge`,
       scenario: `You've joined ${scenario.companyName} as an intern. ${scenario.premise}`,
       estimatedMinutes: 75,
+      assessmentBasis: "synthetic",
+      productionWorkRisk: "none",
+      productionWorkReason: "The generated task uses only a fictional scenario and synthetic materials.",
+      transformationApplied: false,
+      originalIntentSummary: input.workDescription || `Create a work sample for ${input.internship.role}.`,
+      nonProductionConfirmed: false,
+      durationExceptionJustification: null,
       skills: t.skills,
       tasks: t.taskVerbs.map((v, i) => ({
         id: crypto.randomUUID(),
@@ -290,6 +297,7 @@ export class MockAIProvider implements AIProvider {
     }
 
     next.status = "pending_approval";
+    next.nonProductionConfirmed = false;
     return next;
   }
 

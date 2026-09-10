@@ -18,6 +18,7 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components
 import { Button } from "@/components/ui/button";
 import { formatDeadline } from "@/lib/format-date";
 import { formatChallengeDuration } from "@/lib/opportunities/challenge-duration";
+import { ASSESSMENT_BASIS_LABEL } from "@/lib/challenges/no-free-labor";
 import { ChevronRight, ExternalLink, PenSquare, FileText, Plus } from "lucide-react";
 
 type TabKey = "overview" | "candidates" | "listing" | "challenge" | "activity";
@@ -404,7 +405,7 @@ export default async function OpportunityDetailPage({
                 <ChallengeStatusBadge status={challenge!.status} />
               </div>
               <p className="mt-2 text-sm whitespace-pre-wrap text-navy/75">{challengeVersion!.scenario}</p>
-              <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+              <div className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">Expected duration</p>
                   <p className="mt-1 text-navy">{formatChallengeDuration(challengeVersion!.estimatedMinutes, challengeVersion!.estimatedDurationLabel)}</p>
@@ -412,6 +413,10 @@ export default async function OpportunityDetailPage({
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">AI usage policy</p>
                   <p className="mt-1 text-navy">{AI_USAGE_POLICY_LABEL[challengeVersion!.aiUsagePolicy] ?? challengeVersion!.aiUsagePolicy}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">Assessment basis</p>
+                  <p className="mt-1 text-navy">{challengeVersion!.assessmentBasis ? ASSESSMENT_BASIS_LABEL[challengeVersion!.assessmentBasis] : "Pre-R3 Challenge"}</p>
                 </div>
               </div>
               <div className="mt-4">

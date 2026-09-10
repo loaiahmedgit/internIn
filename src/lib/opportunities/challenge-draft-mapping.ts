@@ -45,6 +45,13 @@ export function mapChallengeDraftToChallenge(draft: ChallengeDraft): Challenge {
     // this used to silently fall back to a flat 60).
     estimatedMinutes: draft.durationMinutes ?? estimateMinutesFromLabel(draft.estimatedDurationLabel) ?? 60,
     estimatedDurationLabel: draft.estimatedDurationLabel ?? null,
+    assessmentBasis: draft.assessmentBasis ?? null,
+    productionWorkRisk: draft.productionWorkRisk ?? null,
+    productionWorkReason: draft.productionWorkReason ?? null,
+    transformationApplied: draft.transformationApplied ?? null,
+    originalIntentSummary: draft.originalIntentSummary ?? null,
+    nonProductionConfirmed: false,
+    durationExceptionJustification: null,
     skills: draft.skills,
     tasks,
     // Prefer the model's own explicit deliverables summary; only fall

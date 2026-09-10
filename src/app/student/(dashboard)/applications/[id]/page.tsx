@@ -15,6 +15,7 @@ import { RubricInline, RubricList } from "@/components/opportunities/rubric-list
 import { deriveGuidanceBullets, firstSentence, summarizeSubmissionRequirements, summarizeTaskTitles } from "@/lib/challenges/summaries";
 import { loadCredentialContext, toEligibilityInput } from "@/lib/credentials/credential-data";
 import { computeCredentialEligibility } from "@/lib/credentials/eligibility";
+import { ASSESSMENT_BASIS_LABEL } from "@/lib/challenges/no-free-labor";
 
 const WORK_MODE_LABEL: Record<"remote" | "onsite" | "hybrid", string> = {
   remote: "Remote",
@@ -366,6 +367,7 @@ export default async function ApplicationWorkspacePage({
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-navy/56">
             <span className="flex items-center gap-1.5"><Clock3 className="size-4" aria-hidden="true" />{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</span>
             <span className="flex items-center gap-1.5"><ListChecks className="size-4" aria-hidden="true" />{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</span>
+            <span className="flex items-center gap-1.5"><ShieldCheck className="size-4" aria-hidden="true" />Assessment exercise{currentVersion.assessmentBasis ? ` · ${ASSESSMENT_BASIS_LABEL[currentVersion.assessmentBasis]}` : ""}</span>
             <span className="rounded-full bg-gray-light px-2.5 py-0.5 text-xs font-medium text-navy/55">Not started</span>
             {application.applicationMode === "challenge_required" ? (
               <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">Required</span>
@@ -436,6 +438,7 @@ export default async function ApplicationWorkspacePage({
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-navy/56">
                 <span className="flex items-center gap-1.5"><Clock3 className="size-4" aria-hidden="true" />{currentVersion.estimatedDurationLabel ?? `~${currentVersion.estimatedMinutes} minutes`}</span>
                 <span className="flex items-center gap-1.5"><ListChecks className="size-4" aria-hidden="true" />{currentVersion.tasks.length} {currentVersion.tasks.length === 1 ? "task" : "tasks"}</span>
+                <span className="flex items-center gap-1.5"><ShieldCheck className="size-4" aria-hidden="true" />Assessment exercise{currentVersion.assessmentBasis ? ` · ${ASSESSMENT_BASIS_LABEL[currentVersion.assessmentBasis]}` : ""}</span>
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${CHALLENGE_STATUS_LABEL[challengeStatus].style}`}>
                   {CHALLENGE_STATUS_LABEL[challengeStatus].label}
                 </span>

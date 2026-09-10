@@ -15,6 +15,7 @@ import {
   FileImage,
   FileSpreadsheet,
   FileText,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { type ChallengeDraft, type ChallengeDraftMaterial } from "@/lib/ai/challenge-clarification-schemas";
@@ -24,6 +25,7 @@ import {
   listAttachableOpportunitiesAction,
 } from "@/lib/opportunities/opportunity-from-challenge-actions";
 import { ChallengeDraftEditForm } from "@/components/opportunities/challenge-draft-edit-form";
+import { ASSESSMENT_BASIS_LABEL } from "@/lib/challenges/no-free-labor";
 
 /** Icon by material type/filename — CSV/XLSX, PDF/DOCX, images,
  * code/archives, generic fallback. Never a hand-drawn SVG (Lucide only,
@@ -208,6 +210,21 @@ export function ChallengeDraftCard({
               ))}
             </div>
           </div>
+
+          {draft.transformationApplied && draft.productionWorkRisk !== "none" && (
+            <>
+              <div className="border-t border-border" />
+              <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5">
+                <p className="flex items-center gap-1.5 text-sm font-medium text-amber-950">
+                  <ShieldCheck className="size-4" aria-hidden="true" />
+                  Converted to a non-production assessment
+                </p>
+                {draft.originalIntentSummary && <p className="mt-1 text-xs leading-relaxed text-amber-950/70">Original intent: {draft.originalIntentSummary}</p>}
+                {draft.productionWorkReason && <p className="mt-1 text-xs leading-relaxed text-amber-950/70">Why: {draft.productionWorkReason}</p>}
+                {draft.assessmentBasis && <p className="mt-1 text-xs font-medium text-amber-950/80">Assessment basis: {ASSESSMENT_BASIS_LABEL[draft.assessmentBasis]}</p>}
+              </div>
+            </>
+          )}
 
           <div className="border-t border-border" />
 

@@ -62,6 +62,13 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
         scenario: version.scenario,
         estimatedMinutes: version.estimatedMinutes,
         estimatedDurationLabel: version.estimatedDurationLabel,
+        assessmentBasis: version.assessmentBasis,
+        productionWorkRisk: version.productionWorkRisk,
+        productionWorkReason: version.productionWorkReason,
+        transformationApplied: version.transformationApplied,
+        originalIntentSummary: version.originalIntentSummary,
+        nonProductionConfirmed: Boolean(version.nonProductionConfirmedByUserId && version.nonProductionConfirmedAt),
+        durationExceptionJustification: version.durationExceptionJustification,
         skills: version.skills,
         tasks: version.tasks,
         deliverables: version.deliverables,
@@ -102,6 +109,13 @@ export default async function ResumeOpportunitySetupPage({ params }: { params: P
           taskCount: challenge.tasks.length,
           estimatedMinutes: challenge.estimatedMinutes,
           estimatedDurationLabel: challenge.estimatedDurationLabel ?? null,
+          assessmentBasis: challenge.assessmentBasis ?? null,
+          productionWorkRisk: challenge.productionWorkRisk ?? null,
+          productionWorkReason: challenge.productionWorkReason ?? null,
+          transformationApplied: challenge.transformationApplied ?? null,
+          originalIntentSummary: challenge.originalIntentSummary ?? null,
+          nonProductionConfirmed: challenge.nonProductionConfirmed === true,
+          durationExceptionJustification: challenge.durationExceptionJustification ?? null,
         }}
         initialLocation={isUnsetLocation(opportunity.location) ? "" : opportunity.location}
         initialDuration={isUnsetDuration(opportunity.duration) ? "" : opportunity.duration}

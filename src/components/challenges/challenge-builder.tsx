@@ -12,6 +12,13 @@ import { editChallengeAction } from "@/lib/ai/actions";
 import { saveChallengeVersionAction, publishOpportunityAction } from "@/lib/opportunities/actions";
 import { CheckCircle2, Sparkles, X, Plus, FileText, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  ASSESSMENT_BASIS_DESCRIPTION,
+  ASSESSMENT_BASIS_LABEL,
+  ASSESSMENT_BASIS_VALUES,
+  MAX_UNPAID_CHALLENGE_MINUTES,
+  type AssessmentBasis,
+} from "@/lib/challenges/no-free-labor";
 
 const STEPS: { key: Challenge["status"]; label: string }[] = [
   { key: "ai_generated", label: "AI Generated" },
@@ -48,6 +55,9 @@ export function ChallengeBuilder({
   function markEdited(next: Challenge) {
     onChange({
       ...next,
+      // Confirmation belongs to the exact immutable content a human
+      // reviewed. Any edit requires a fresh acknowledgement.
+      nonProductionConfirmed: false,
       status: next.status === "published" || next.status === "approved" ? "pending_approval" : next.status,
     });
   }
@@ -300,6 +310,101 @@ export function ChallengeBuilder({
             ))}
           </ul>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-cool/60 bg-white p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-navy/40">Assessment setup</p>
+            <p className="mt-1 text-sm text-navy/60">Confirm why this is an assessment—not unpaid live company work.</p>
+          </div>
+          <span className="shrink-0 text-xs font-medium text-navy/50">{challenge.estimatedMinutes} min active work</span>
+        </div>
+
+        {challenge.transformationApplied && challenge.productionWorkRisk !== "none" && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-sm">
+            <p className="font-medium text-amber-900">Potential production-work concern converted</p>
+            {challenge.originalIntentSummary && <p className="mt-1 text-amber-900/75">Original intent: {challenge.originalIntentSummary}</p>}
+            {challenge.productionWorkReason && <p className="mt-1 text-amber-900/75">Why: {challenge.productionWorkReason}</p>}
+          </div>
+        )}
+
+        <label className="mt-4 block">
+          <span className="text-xs font-medium text-navy/60">Assessment basis</span>
+          <select
+            value={challenge.assessmentBasis ?? ""}
+            onChange={(event) =>
+              onChange({
+                ...challenge,
+                assessmentBasis: (event.target.value || null) as AssessmentBasis | null,
+                nonProductionConfirmed: false,
+                status:
+                  challenge.status === "published" || challenge.status === "approved"
+                    ? "pending_approval"
+                    : challenge.status,
+              })
+            }
+            className="mt-1.5 h-9 w-full rounded-lg border border-navy/15 bg-white px-2.5 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+          >
+            <option value="">Select a non-production basis</option>
+            {ASSESSMENT_BASIS_VALUES.map((basis) => (
+              <option key={basis} value={basis}>{ASSESSMENT_BASIS_LABEL[basis]}</option>
+            ))}
+          </select>
+          {challenge.assessmentBasis && (
+            <span className="mt-1 block text-xs text-navy/45">{ASSESSMENT_BASIS_DESCRIPTION[challenge.assessmentBasis]}</span>
+          )}
+        </label>
+
+        {challenge.estimatedMinutes > 90 && challenge.estimatedMinutes <= MAX_UNPAID_CHALLENGE_MINUTES && (
+          <label className="mt-4 block">
+            <span className="text-xs font-medium text-navy/60">Why does this need more than 90 minutes?</span>
+            <Textarea
+              value={challenge.durationExceptionJustification ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...challenge,
+                  durationExceptionJustification: event.target.value,
+                  nonProductionConfirmed: false,
+                  status:
+                    challenge.status === "published" || challenge.status === "approved"
+                      ? "pending_approval"
+                      : challenge.status,
+                })
+              }
+              rows={2}
+              className="mt-1.5 min-h-16 resize-none"
+              placeholder="Briefly explain why the role-relevant evidence cannot be assessed in a shorter exercise."
+            />
+          </label>
+        )}
+
+        {challenge.estimatedMinutes > MAX_UNPAID_CHALLENGE_MINUTES && (
+          <p className="mt-3 text-sm font-medium text-destructive">
+            Reduce active work to {MAX_UNPAID_CHALLENGE_MINUTES} minutes or less before approval.
+          </p>
+        )}
+
+        <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-sm text-navy/75">
+          <input
+            type="checkbox"
+            checked={challenge.nonProductionConfirmed === true}
+            onChange={(event) =>
+              onChange({
+                ...challenge,
+                nonProductionConfirmed: event.target.checked,
+                status:
+                  challenge.status === "published" || challenge.status === "approved"
+                    ? "pending_approval"
+                    : challenge.status,
+              })
+            }
+            className="mt-0.5 size-4 shrink-0 accent-teal-ink"
+          />
+          <span>
+            This Challenge is an assessment, uses no confidential live data, and is not intended to obtain unpaid work for company production.
+          </span>
+        </label>
       </div>
 
       {/* AI edit-by-instruction */}

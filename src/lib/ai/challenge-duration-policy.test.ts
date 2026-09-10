@@ -70,11 +70,12 @@ describe("enforceChallengeDurationPolicy", () => {
     expect(result.tasks).toHaveLength(3);
   });
 
-  it("allows a longer take-home only when the employer explicitly requested the duration", () => {
+  it("caps even an explicitly requested multi-hour take-home at the unpaid-assessment ceiling", () => {
     const result = enforceChallengeDurationPolicy(draft(), context("Create a 3 hour take-home project."));
-    expect(result.durationMinutes).toBe(180);
-    expect(result.estimatedDurationLabel).toBe("180 minutes");
-    expect(result.tasks).toHaveLength(6);
+    expect(result.durationMinutes).toBe(120);
+    expect(result.estimatedDurationLabel).toBe("120 minutes");
+    expect(result.tasks).toHaveLength(4);
+    expect(result.safetyNotes.join(" ")).toMatch(/ceiling/i);
   });
 
   it("repairs a numeric duration that contradicts its human label", () => {

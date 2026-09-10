@@ -16,11 +16,14 @@ import {
   ResumeExtractionSchema,
   InternshipCopyAssistSchema,
   InternshipAssistantAnswerSchema,
+  AssessmentBasisSchema,
+  ProductionWorkRiskSchema,
   type Challenge,
   type CandidateComparisonRow,
   type RubricCriterion,
   type RubricEvaluation,
 } from "./schemas";
+import { assertGeneratedNonProductionMetadata } from "@/lib/challenges/no-free-labor";
 
 /**
  * Real provider — OpenRouter via the Vercel AI SDK's generateObject (the
@@ -49,8 +52,17 @@ export function getModel() {
 }
 
 // AI output shapes omit app-managed control fields (ids, status).
-const ChallengeContentSchema = ChallengeSchema.omit({ status: true }).extend({
+const ChallengeContentSchema = ChallengeSchema.omit({
+  status: true,
+  nonProductionConfirmed: true,
+  durationExceptionJustification: true,
+}).extend({
   tasks: z.array(z.object({ title: z.string(), description: z.string() })),
+  assessmentBasis: AssessmentBasisSchema,
+  productionWorkRisk: ProductionWorkRiskSchema,
+  productionWorkReason: z.string().trim().min(1).max(500),
+  transformationApplied: z.boolean(),
+  originalIntentSummary: z.string().trim().min(1).max(500),
 });
 
 export class GemmaProvider implements AIProvider {
@@ -112,20 +124,25 @@ Use this fictional scenario (do not invent a different company): ${scenario.comp
 
 Requirements:
 - 3-5 concrete tasks the candidate must complete, in order
-- estimatedMinutes should be realistic for the scope (typically 45-120)
+- estimatedMinutes should be realistic for the scope (normally 30-90, never above 120 active-work minutes)
 - skills tested should overlap with: ${input.internship.skills.join(", ")}
 - deliverables: what the candidate must submit
 - files: synthetic/fictional files provided (e.g. brief.pdf, dataset.csv) with a one-line description each. For each file, also set contentSpec describing its real content (for a spreadsheet/CSV: columns with name+dataType, rowCount, rowGenerationHint; for a PDF/document: a title and sections with heading+paragraphs) so the platform can generate an actual file — never leave contentSpec empty for a file you expect the candidate to actually use. If a file should be an image/video/audio/diagram you cannot design real content for, still name and describe it honestly; the platform will flag it for the employer to upload.
 - rubric: 3-5 evaluation criteria, each with a numeric weight (0-100) summing to 100
 - submissionRequirements: 1-4 items describing exactly what the candidate must hand in (inputMode: file/multiple_files/text/url; artifactKind: what it actually is; required true/false). For a url requirement tied to a platform (a code repository, a Figma link), set providers to that platform's real domain(s).
-- Never reference real companies, real people, or real proprietary data — everything must be clearly synthetic/fictional.`,
+- Never reference real companies, real people, or real proprietary data — everything must be clearly synthetic/fictional.
+- Classify the ORIGINAL request as productionWorkRisk none/possible/high. This is a potential concern, not certainty. If it asks for live company output, a real client deliverable, changes to a production system, or real confidential/private records, preserve the assessed skill but convert the task to this fictional/synthetic scenario; set transformationApplied true, select the truthful assessmentBasis, and briefly state the reason and original intent. Otherwise set risk none and transformationApplied false.`,
     });
+
+    assertGeneratedNonProductionMetadata(content);
 
     const challenge: Challenge = {
       ...content,
       tasks: content.tasks.map((t) => ({ id: crypto.randomUUID(), ...t })),
       rubric: normalizeRubricWeights(content.rubric),
       status: "ai_generated",
+      nonProductionConfirmed: false,
+      durationExceptionJustification: null,
     };
     return challenge;
   }
@@ -134,7 +151,7 @@ Requirements:
     const { object: content } = await generateObject({
       model: getModel(),
       schema: ChallengeContentSchema,
-      prompt: `Apply this edit instruction to the work challenge below and return the FULL updated challenge (not a diff). Keep everything unchanged except what the instruction asks for.
+      prompt: `Apply this edit instruction to the work challenge below and return the FULL updated challenge (not a diff). Keep everything unchanged except what the instruction asks for. A Challenge must remain a non-production assessment: never turn it into a live company/client deliverable or require real confidential data. If the instruction introduces potential production work, preserve the skill being assessed but convert it into an equivalent synthetic, adapted, or sandbox task; record the short risk reason, original intent, truthful assessment basis, and transformationApplied=true.
 
 Instruction: "${instruction}"
 
@@ -142,12 +159,16 @@ Current challenge (JSON):
 ${JSON.stringify({ ...challenge, status: undefined })}`,
     });
 
+    assertGeneratedNonProductionMetadata(content);
+
     const challengeIds = new Map(challenge.tasks.map((t) => [t.description, t.id]));
     const next: Challenge = {
       ...content,
       tasks: content.tasks.map((t) => ({ id: challengeIds.get(t.description) ?? crypto.randomUUID(), ...t })),
       rubric: normalizeRubricWeights(content.rubric),
       status: "pending_approval",
+      nonProductionConfirmed: false,
+      durationExceptionJustification: null,
     };
     return next;
   }

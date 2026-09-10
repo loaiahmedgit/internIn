@@ -21,6 +21,7 @@ import type {
   SubmissionRequirement,
 } from "@/lib/challenges/submission-model";
 import type { EvidenceLevel } from "@/lib/ai/schemas";
+import { ASSESSMENT_BASIS_VALUES, PRODUCTION_WORK_RISK_VALUES } from "@/lib/challenges/no-free-labor";
 
 /**
  * Cross-cutting conventions (see docs/ and the approved Phase 1 plan):
@@ -66,6 +67,10 @@ export const challengeStatusEnum = pgEnum("challenge_status", [
   "approved",
   "published",
 ]);
+/** R3 — why a pre-hire Challenge is not a request for live company work. */
+export const assessmentBasisEnum = pgEnum("assessment_basis", ASSESSMENT_BASIS_VALUES);
+/** AI-authored concern level only; never treated as certain or exposed as a hiring signal. */
+export const productionWorkRiskEnum = pgEnum("production_work_risk", PRODUCTION_WORK_RISK_VALUES);
 export const versionSourceEnum = pgEnum("version_source", ["ai_generated", "human_edited", "approved"]);
 export const applicationStatusEnum = pgEnum("application_status", [
   "applied",
@@ -523,6 +528,20 @@ export const challengeVersions = pgTable(
      * numeric fallback for code that predates this column. Null for
      * versions saved before this field existed. */
     estimatedDurationLabel: text("estimated_duration_label"),
+    /** R3 policy version. Migration 0028 leaves historical versions at 1;
+     * every newly saved version is explicitly written as 2 by the action. */
+    safeguardPolicyVersion: integer("safeguard_policy_version").notNull().default(1),
+    assessmentBasis: assessmentBasisEnum("assessment_basis"),
+    productionWorkRisk: productionWorkRiskEnum("production_work_risk"),
+    /** Short factual model output, never chain-of-thought. */
+    productionWorkReason: text("production_work_reason"),
+    transformationApplied: boolean("transformation_applied"),
+    originalIntentSummary: text("original_intent_summary"),
+    /** A human confirmation is anchored to this immutable version so an edit
+     * cannot silently inherit an attestation made for different content. */
+    nonProductionConfirmedByUserId: uuid("non_production_confirmed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    nonProductionConfirmedAt: timestamp("non_production_confirmed_at", { withTimezone: true }),
+    durationExceptionJustification: text("duration_exception_justification"),
     skills: jsonb("skills").$type<string[]>().notNull().default([]),
     tasks: jsonb("tasks").$type<{ id: string; title: string; description: string }[]>().notNull().default([]),
     /** Human-readable summary, kept for backward-compat display on historical rows and the company builder. New versions also populate submissionRequirements below, which is what validation actually reads. */

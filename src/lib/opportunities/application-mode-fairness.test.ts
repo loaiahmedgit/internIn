@@ -76,9 +76,10 @@ import {
   shortlistApplicationAction,
   inviteToInternshipAction,
   updateApplicationModeAction,
+  saveChallengeVersionAction,
   type InternshipFormInput,
 } from "./actions";
-import type { InternshipDraft } from "@/lib/ai";
+import type { Challenge, InternshipDraft } from "@/lib/ai";
 
 const COMPANY_A = "11111111-1111-4111-8111-111111111111";
 const COMPANY_B = "22222222-2222-4222-8222-222222222222";
@@ -97,6 +98,15 @@ function currentVersionRow(overrides: Record<string, unknown> = {}) {
     title: "Real challenge",
     scenario: "A real scenario.",
     estimatedMinutes: 60,
+    safeguardPolicyVersion: 2,
+    assessmentBasis: "synthetic",
+    productionWorkRisk: "none",
+    productionWorkReason: null,
+    transformationApplied: false,
+    originalIntentSummary: null,
+    nonProductionConfirmedByUserId: USER_ID,
+    nonProductionConfirmedAt: new Date("2026-09-10T10:00:00Z"),
+    durationExceptionJustification: null,
     skills: [],
     tasks: [{ id: "t1", title: "Task", description: "Do the thing." }],
     deliverables: ["A file"],
@@ -138,6 +148,26 @@ const baseInternship: InternshipDraft = {
   slots: 1,
   skills: [],
   description: "A real description of the role.",
+};
+
+const approvedChallenge: Challenge = {
+  title: "Safe assessment",
+  scenario: "Use the supplied synthetic records to complete a short analysis exercise.",
+  estimatedMinutes: 60,
+  assessmentBasis: "synthetic",
+  productionWorkRisk: "none",
+  productionWorkReason: null,
+  transformationApplied: false,
+  originalIntentSummary: null,
+  nonProductionConfirmed: true,
+  durationExceptionJustification: null,
+  skills: ["Analysis"],
+  tasks: [{ id: "t1", title: "Analyze records", description: "Analyze the synthetic records." }],
+  deliverables: ["Written response"],
+  files: [],
+  rubric: [{ criterion: "Accuracy", description: "Work is accurate.", weight: 100 }],
+  submissionRequirements: [{ id: "s1", label: "Written response", inputMode: "text", artifactKind: "text_response", required: true }],
+  status: "approved",
 };
 
 beforeEach(() => {
@@ -215,6 +245,85 @@ describe("publish gate — R2 §4 (ensureChallengeReadyForPublish, shared by bot
     expect(mocks.updatedRows.some((r) => r.table === "opportunities" && r.payload.status === "published")).toBe(true);
   });
 
+  it("blocks a new optional Challenge publish when assessment basis is missing", async () => {
+    mocks.requireCurrentCompanyMember.mockResolvedValue({ user: { id: USER_ID }, membership: { companyId: COMPANY_A, role: "owner" } });
+    mocks.selectResults = [
+      [{ verified: true }],
+      [{ id: OPPORTUNITY_ID, companyId: COMPANY_A, applicationMode: "optional_challenge" }],
+      [approvedChallengeRow()],
+      [currentVersionRow({ assessmentBasis: null })],
+    ];
+    await expect(publishOpportunityAction(OPPORTUNITY_ID)).rejects.toThrow(/choose what makes this a non-production assessment/i);
+  });
+
+  it("blocks a new required Challenge publish when human confirmation is missing", async () => {
+    mocks.requireCurrentCompanyMember.mockResolvedValue({ user: { id: USER_ID }, membership: { companyId: COMPANY_A, role: "owner" } });
+    mocks.selectResults = [
+      [{ verified: true }],
+      [{ id: OPPORTUNITY_ID, companyId: COMPANY_A, applicationMode: "challenge_required" }],
+      [approvedChallengeRow()],
+      [currentVersionRow({ nonProductionConfirmedByUserId: null, nonProductionConfirmedAt: null })],
+    ];
+    await expect(publishOpportunityAction(OPPORTUNITY_ID)).rejects.toThrow(/confirm that this challenge is an assessment/i);
+  });
+
+  it("requires justification above 90 minutes and accepts it when present", async () => {
+    mocks.requireCurrentCompanyMember.mockResolvedValue({ user: { id: USER_ID }, membership: { companyId: COMPANY_A, role: "owner" } });
+    mocks.selectResults = [
+      [{ verified: true }],
+      [{ id: OPPORTUNITY_ID, companyId: COMPANY_A, applicationMode: "optional_challenge" }],
+      [approvedChallengeRow()],
+      [currentVersionRow({ estimatedMinutes: 100 })],
+    ];
+    await expect(publishOpportunityAction(OPPORTUNITY_ID)).rejects.toThrow(/more than 90 minutes/i);
+
+    mocks.selectResults = [
+      [{ verified: true }],
+      [{ id: OPPORTUNITY_ID, companyId: COMPANY_A, applicationMode: "optional_challenge" }],
+      [approvedChallengeRow()],
+      [currentVersionRow({
+        estimatedMinutes: 100,
+        durationExceptionJustification: "The role-specific exercise needs two short validation passes.",
+      })],
+      [],
+    ];
+    await expect(publishOpportunityAction(OPPORTUNITY_ID)).resolves.toBeUndefined();
+  });
+
+  it("hard-blocks active work above 120 minutes", async () => {
+    mocks.requireCurrentCompanyMember.mockResolvedValue({ user: { id: USER_ID }, membership: { companyId: COMPANY_A, role: "owner" } });
+    mocks.selectResults = [
+      [{ verified: true }],
+      [{ id: OPPORTUNITY_ID, companyId: COMPANY_A, applicationMode: "optional_challenge" }],
+      [approvedChallengeRow()],
+      [currentVersionRow({
+        estimatedMinutes: 121,
+        durationExceptionJustification: "The company requested a larger exercise for this role.",
+      })],
+    ];
+    await expect(publishOpportunityAction(OPPORTUNITY_ID)).rejects.toThrow(/120 minutes or less/i);
+  });
+
+  it("allows an untouched legacy Challenge to remain live but does not let a merely approved legacy version use that bypass", async () => {
+    mocks.requireCurrentCompanyMember.mockResolvedValue({ user: { id: USER_ID }, membership: { companyId: COMPANY_A, role: "owner" } });
+    mocks.selectResults = [
+      [{ verified: true }],
+      [{ id: OPPORTUNITY_ID, companyId: COMPANY_A, status: "published", applicationMode: "optional_challenge" }],
+      [approvedChallengeRow({ status: "published" })],
+      [currentVersionRow({ safeguardPolicyVersion: 1, assessmentBasis: null, nonProductionConfirmedByUserId: null, nonProductionConfirmedAt: null })],
+      [],
+    ];
+    await expect(publishOpportunityAction(OPPORTUNITY_ID)).resolves.toBeUndefined();
+
+    mocks.selectResults = [
+      [{ verified: true }],
+      [{ id: OPPORTUNITY_ID, companyId: COMPANY_A, status: "published", applicationMode: "optional_challenge" }],
+      [approvedChallengeRow({ status: "approved" })],
+      [currentVersionRow({ safeguardPolicyVersion: 1, assessmentBasis: null, nonProductionConfirmedByUserId: null, nonProductionConfirmedAt: null })],
+    ];
+    await expect(publishOpportunityAction(OPPORTUNITY_ID)).rejects.toThrow(/review this legacy challenge/i);
+  });
+
   it("saveInternshipAction (the manual-form publish path) runs the identical gate — rejects challenge_required on a new listing with no challenge yet", async () => {
     mocks.requireCurrentCompanyMember.mockResolvedValue({ user: { id: USER_ID }, membership: { companyId: COMPANY_A, role: "owner" } });
     mocks.selectResults = [
@@ -231,6 +340,26 @@ describe("publish gate — R2 §4 (ensureChallengeReadyForPublish, shared by bot
     const id = await saveInternshipAction({ publish: true, form: { ...baseForm, applicationMode: "quick_apply" } });
     expect(id).toBe(OPPORTUNITY_ID);
     expect(mocks.updatedRows.some((r) => r.table === "opportunities" && r.payload.status === "published")).toBe(true);
+  });
+});
+
+describe("R3 Challenge safeguard authorization", () => {
+  it("does not let a student session record company confirmation", async () => {
+    mocks.requireCurrentCompanyMember.mockRejectedValue(new Error("Not signed in as a company user."));
+    await expect(
+      saveChallengeVersionAction(OPPORTUNITY_ID, approvedChallenge, "approved"),
+    ).rejects.toThrow(/not signed in as a company user/i);
+  });
+
+  it("does not let a member confirm a Challenge owned by another company", async () => {
+    mocks.requireCurrentCompanyMember.mockResolvedValue({
+      user: { id: USER_ID },
+      membership: { companyId: COMPANY_B, role: "owner" },
+    });
+    mocks.selectResults = [[{ id: OPPORTUNITY_ID, companyId: COMPANY_A }]];
+    await expect(
+      saveChallengeVersionAction(OPPORTUNITY_ID, approvedChallenge, "approved"),
+    ).rejects.toThrow(/not authorized for this opportunity/i);
   });
 });
 

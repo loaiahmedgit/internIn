@@ -15,6 +15,7 @@ import { saveChallengeVersionAction, saveInternshipAction, publishOpportunityAct
 import { saveChallengeDraftAction } from "@/lib/opportunities/challenge-draft-actions";
 import { generateOpportunityFromChallenge } from "@/lib/ai/opportunity-from-challenge";
 import { DRAFT_DURATION_SENTINEL, DRAFT_LOCATION_SENTINEL, DRAFT_HOURS_SENTINEL } from "@/lib/opportunities/opportunity-draft-sentinels";
+import { ASSESSMENT_BASIS_VALUES } from "@/lib/challenges/no-free-labor";
 
 const IdSchema = z.string().uuid();
 
@@ -94,6 +95,13 @@ const MissingDetailsSchema = z.object({
 });
 export type MissingOpportunityDetails = z.infer<typeof MissingDetailsSchema>;
 
+const ChallengeSafetyConfirmationSchema = z.object({
+  assessmentBasis: z.enum(ASSESSMENT_BASIS_VALUES),
+  nonProductionConfirmed: z.boolean().refine((confirmed) => confirmed, "Non-production confirmation is required."),
+  durationExceptionJustification: z.string().trim().max(1000).nullable(),
+});
+export type ChallengeSafetyConfirmation = z.infer<typeof ChallengeSafetyConfirmationSchema>;
+
 /**
  * "Publish internship" — the one explicit, consequential action. Fills in
  * the employer-confirmed logistics, approves the current challenge version
@@ -102,9 +110,14 @@ export type MissingOpportunityDetails = z.infer<typeof MissingDetailsSchema>;
  * publishOpportunityAction every other publish path in the app uses
  * (which itself re-checks the challenge is approved and flips both rows).
  */
-export async function publishOpportunityFromReviewAction(opportunityId: string, missing: MissingOpportunityDetails): Promise<void> {
+export async function publishOpportunityFromReviewAction(
+  opportunityId: string,
+  missing: MissingOpportunityDetails,
+  safety: ChallengeSafetyConfirmation,
+): Promise<void> {
   const validatedId = IdSchema.parse(opportunityId);
   const validatedMissing = MissingDetailsSchema.parse(missing);
+  const validatedSafety = ChallengeSafetyConfirmationSchema.parse(safety);
   const { membership } = await requireCurrentCompanyMember("hiring_access");
   const db = getDb();
 
@@ -164,11 +177,19 @@ export async function publishOpportunityFromReviewAction(opportunityId: string, 
         scenario: version.scenario,
         estimatedMinutes: version.estimatedMinutes,
         estimatedDurationLabel: version.estimatedDurationLabel,
+        assessmentBasis: validatedSafety.assessmentBasis,
+        productionWorkRisk: version.productionWorkRisk,
+        productionWorkReason: version.productionWorkReason,
+        transformationApplied: version.transformationApplied,
+        originalIntentSummary: version.originalIntentSummary,
+        nonProductionConfirmed: validatedSafety.nonProductionConfirmed,
+        durationExceptionJustification: validatedSafety.durationExceptionJustification,
         skills: version.skills,
         tasks: version.tasks,
         deliverables: version.deliverables,
         files: version.files,
         rubric: version.rubric,
+        submissionRequirements: version.submissionRequirements,
         status: "approved",
       });
       await saveChallengeVersionAction(validatedId, approved, "approved");

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CHALLENGE_RESOURCE_TYPES, SUBMISSION_ARTIFACT_KINDS, SUBMISSION_INPUT_MODES } from "@/lib/challenges/submission-model";
+import { ASSESSMENT_BASIS_VALUES, PRODUCTION_WORK_RISK_VALUES } from "@/lib/challenges/no-free-labor";
 
 /**
  * Structured-output contracts for every AIProvider method.
@@ -118,6 +119,9 @@ export const SubmissionRequirementSchema = z.object({
 });
 export type SubmissionRequirementInput = z.infer<typeof SubmissionRequirementSchema>;
 
+export const AssessmentBasisSchema = z.enum(ASSESSMENT_BASIS_VALUES);
+export const ProductionWorkRiskSchema = z.enum(PRODUCTION_WORK_RISK_VALUES);
+
 export const ChallengeSchema = z.object({
   title: z.string().trim().min(2).max(180),
   scenario: z.string().trim().min(20).max(6000),
@@ -126,6 +130,17 @@ export const ChallengeSchema = z.object({
    * see challenge-duration.ts's formatChallengeDuration. Null for a
    * challenge from a path that never produced one. */
   estimatedDurationLabel: z.string().trim().max(40).nullable().optional(),
+  /** R3 authoring metadata. Optional/null keeps pre-R3 Challenges readable;
+   * every newly approved version is gated server-side before publication. */
+  assessmentBasis: AssessmentBasisSchema.nullable().optional(),
+  productionWorkRisk: ProductionWorkRiskSchema.nullable().optional(),
+  productionWorkReason: z.string().trim().max(500).nullable().optional(),
+  transformationApplied: z.boolean().nullable().optional(),
+  originalIntentSummary: z.string().trim().max(500).nullable().optional(),
+  /** Client intent only. The server records the authenticated actor/time on
+   * the immutable version; an AI output contract always omits this field. */
+  nonProductionConfirmed: z.boolean().optional(),
+  durationExceptionJustification: z.string().trim().max(1000).nullable().optional(),
   skills: z.array(z.string().trim().min(1).max(60)).max(20),
   tasks: z.array(ChallengeTaskSchema).min(1).max(20),
   deliverables: z.array(z.string().trim().min(1).max(500)).min(1).max(15),

@@ -22,6 +22,10 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateResourceFile } from "@/lib/challenges/resource-generation";
 import { ApplicationModeSchema, type ApplicationMode } from "@/lib/opportunities/application-mode";
+import {
+  NO_FREE_LABOR_POLICY_VERSION,
+  assertChallengeSafeguards,
+} from "@/lib/challenges/no-free-labor";
 
 const IdSchema = z.string().uuid();
 const VersionSourceSchema = z.enum(["ai_generated", "human_edited", "approved"]);
@@ -246,6 +250,15 @@ export async function saveChallengeVersionAction(
   }
   if (validatedChallenge.status === "approved") {
     assertChallengeSubstance(validatedChallenge);
+    assertChallengeSafeguards({
+      policyVersion: NO_FREE_LABOR_POLICY_VERSION,
+      assessmentBasis: validatedChallenge.assessmentBasis,
+      nonProductionConfirmed: validatedChallenge.nonProductionConfirmed === true,
+      estimatedMinutes: validatedChallenge.estimatedMinutes,
+      durationExceptionJustification: validatedChallenge.durationExceptionJustification,
+      productionWorkRisk: validatedChallenge.productionWorkRisk,
+      transformationApplied: validatedChallenge.transformationApplied,
+    });
   }
 
   const { companyId, userId, canPublish } = await getCompanyIdForCurrentUser();
@@ -297,6 +310,17 @@ export async function saveChallengeVersionAction(
       scenario: validatedChallenge.scenario,
       estimatedMinutes: validatedChallenge.estimatedMinutes,
       estimatedDurationLabel: validatedChallenge.estimatedDurationLabel ?? null,
+      safeguardPolicyVersion: NO_FREE_LABOR_POLICY_VERSION,
+      assessmentBasis: validatedChallenge.assessmentBasis ?? null,
+      productionWorkRisk: validatedChallenge.productionWorkRisk ?? null,
+      productionWorkReason: validatedChallenge.productionWorkReason ?? null,
+      transformationApplied: validatedChallenge.transformationApplied ?? null,
+      originalIntentSummary: validatedChallenge.originalIntentSummary ?? null,
+      nonProductionConfirmedByUserId:
+        validatedSource === "approved" && validatedChallenge.nonProductionConfirmed === true ? userId : null,
+      nonProductionConfirmedAt:
+        validatedSource === "approved" && validatedChallenge.nonProductionConfirmed === true ? new Date() : null,
+      durationExceptionJustification: validatedChallenge.durationExceptionJustification ?? null,
       skills: validatedChallenge.skills,
       tasks: validatedChallenge.tasks,
       deliverables: validatedChallenge.deliverables,
@@ -324,6 +348,36 @@ export async function saveChallengeVersionAction(
     actorUserId: userId,
     metadata: { versionNumber, source: validatedSource },
   });
+  if (validatedSource === "approved" && validatedChallenge.nonProductionConfirmed === true) {
+    await db.insert(schema.eventLog).values({
+      entityType: "challenge",
+      entityId: challengeRow.id,
+      eventType: "challenge_non_production_confirmed",
+      actorUserId: userId,
+      metadata: {
+        versionId: version.id,
+        versionNumber,
+        assessmentBasis: validatedChallenge.assessmentBasis,
+      },
+    });
+  }
+  if (
+    validatedSource === "approved" &&
+    validatedChallenge.estimatedMinutes > 90 &&
+    validatedChallenge.durationExceptionJustification
+  ) {
+    await db.insert(schema.eventLog).values({
+      entityType: "challenge",
+      entityId: challengeRow.id,
+      eventType: "challenge_duration_exception_confirmed",
+      actorUserId: userId,
+      metadata: {
+        versionId: version.id,
+        versionNumber,
+        estimatedMinutes: validatedChallenge.estimatedMinutes,
+      },
+    });
+  }
 
   return { challengeId: challengeRow.id as string, versionId: version.id as string };
 }
@@ -341,7 +395,12 @@ export async function saveChallengeVersionAction(
  * when one exists and isn't already — mirrors the exact checks
  * publishOpportunityAction always ran, just gated on mode first.
  */
-async function ensureChallengeReadyForPublish(opportunityId: string, applicationMode: ApplicationMode, actorUserId: string) {
+async function ensureChallengeReadyForPublish(
+  opportunityId: string,
+  applicationMode: ApplicationMode,
+  actorUserId: string,
+  options: { allowLegacyAlreadyPublished?: boolean } = {},
+) {
   if (applicationMode === "quick_apply") return;
   const db = getDb();
   const [challengeRow] = await db
@@ -370,6 +429,16 @@ async function ensureChallengeReadyForPublish(opportunityId: string, application
     title: currentVersion.title,
     scenario: currentVersion.scenario,
     estimatedMinutes: currentVersion.estimatedMinutes,
+    estimatedDurationLabel: currentVersion.estimatedDurationLabel,
+    assessmentBasis: currentVersion.assessmentBasis,
+    productionWorkRisk: currentVersion.productionWorkRisk,
+    productionWorkReason: currentVersion.productionWorkReason,
+    transformationApplied: currentVersion.transformationApplied,
+    originalIntentSummary: currentVersion.originalIntentSummary,
+    nonProductionConfirmed: Boolean(
+      currentVersion.nonProductionConfirmedByUserId && currentVersion.nonProductionConfirmedAt,
+    ),
+    durationExceptionJustification: currentVersion.durationExceptionJustification,
     skills: currentVersion.skills,
     tasks: currentVersion.tasks,
     deliverables: currentVersion.deliverables,
@@ -378,6 +447,27 @@ async function ensureChallengeReadyForPublish(opportunityId: string, application
     submissionRequirements: currentVersion.submissionRequirements,
     status: "approved",
   });
+  assertChallengeSafeguards(
+    {
+      policyVersion: currentVersion.safeguardPolicyVersion,
+      assessmentBasis: currentVersion.assessmentBasis,
+      nonProductionConfirmed: Boolean(
+        currentVersion.nonProductionConfirmedByUserId && currentVersion.nonProductionConfirmedAt,
+      ),
+      estimatedMinutes: currentVersion.estimatedMinutes,
+      durationExceptionJustification: currentVersion.durationExceptionJustification,
+      productionWorkRisk: currentVersion.productionWorkRisk,
+      transformationApplied: currentVersion.transformationApplied,
+    },
+    {
+      // Legacy bypass is deliberately narrower than "the opportunity row
+      // says published": the exact legacy Challenge must already be live.
+      // A merely approved legacy version still needs an R3 review before it
+      // can cross the publication boundary.
+      allowLegacyAlreadyPublished:
+        options.allowLegacyAlreadyPublished === true && challengeRow.status === "published",
+    },
+  );
   await assertChallengeResourcesReady(challengeRow.currentVersionId);
 
   if (challengeRow.status !== "published") {
@@ -402,7 +492,9 @@ export async function publishOpportunityAction(opportunityId: string) {
   const opportunity = await assertOwnsOpportunity(validatedOpportunityId, companyId);
   const db = getDb();
 
-  await ensureChallengeReadyForPublish(validatedOpportunityId, opportunity.applicationMode, userId);
+  await ensureChallengeReadyForPublish(validatedOpportunityId, opportunity.applicationMode, userId, {
+    allowLegacyAlreadyPublished: opportunity.status === "published",
+  });
 
   await db
     .update(schema.opportunities)
@@ -434,7 +526,9 @@ export async function updateApplicationModeAction(opportunityId: string, applica
   const opportunity = await assertOwnsOpportunity(validatedId, companyId);
 
   if (opportunity.status === "published") {
-    await ensureChallengeReadyForPublish(validatedId, validatedMode, userId);
+    await ensureChallengeReadyForPublish(validatedId, validatedMode, userId, {
+      allowLegacyAlreadyPublished: true,
+    });
   }
 
   const db = getDb();
@@ -602,7 +696,11 @@ export async function saveInternshipAction(input: {
     const validatedId = IdSchema.parse(input.opportunityId);
     const existing = await assertOwnsOpportunity(validatedId, companyId);
     const nowPublishing = input.publish && existing.status !== "published";
-    if (input.publish) await ensureChallengeReadyForPublish(validatedId, validated.applicationMode, userId);
+    if (input.publish) {
+      await ensureChallengeReadyForPublish(validatedId, validated.applicationMode, userId, {
+        allowLegacyAlreadyPublished: existing.status === "published",
+      });
+    }
     await db
       .update(schema.opportunities)
       .set({ ...values, status: input.publish ? "published" : existing.status, updatedAt: new Date() })

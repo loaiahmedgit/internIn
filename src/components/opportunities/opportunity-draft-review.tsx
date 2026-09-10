@@ -14,6 +14,13 @@ import { publishOpportunityFromReviewAction, type MissingOpportunityDetails } fr
 import { formatChallengeDuration } from "@/lib/opportunities/challenge-duration";
 import { LocationCombobox } from "@/components/opportunities/location-combobox";
 import { DatePickerField } from "@/components/opportunities/date-picker-field";
+import {
+  ASSESSMENT_BASIS_DESCRIPTION,
+  ASSESSMENT_BASIS_LABEL,
+  ASSESSMENT_BASIS_VALUES,
+  MAX_UNPAID_CHALLENGE_MINUTES,
+  type AssessmentBasis,
+} from "@/lib/challenges/no-free-labor";
 
 type WorkMode = "remote" | "onsite" | "hybrid" | null;
 
@@ -42,6 +49,13 @@ type ChallengeSummary = {
   taskCount: number;
   estimatedMinutes: number;
   estimatedDurationLabel: string | null;
+  assessmentBasis: AssessmentBasis | null;
+  productionWorkRisk: "none" | "possible" | "high" | null;
+  productionWorkReason: string | null;
+  transformationApplied: boolean | null;
+  originalIntentSummary: string | null;
+  nonProductionConfirmed: boolean;
+  durationExceptionJustification: string | null;
 };
 
 /**
@@ -106,6 +120,9 @@ export function OpportunityDraftReview({
   const [deadline, setDeadline] = useState<Date | null>(initialApplicationDeadline);
   const [startDate, setStartDate] = useState<Date | null>(initialStartDate);
   const [slots, setSlots] = useState(initialSlots);
+  const [assessmentBasis, setAssessmentBasis] = useState<AssessmentBasis | null>(challengeSummary?.assessmentBasis ?? null);
+  const [nonProductionConfirmed, setNonProductionConfirmed] = useState(challengeSummary?.nonProductionConfirmed ?? false);
+  const [durationExceptionJustification, setDurationExceptionJustification] = useState(challengeSummary?.durationExceptionJustification ?? "");
 
   const today = startOfToday();
   const fieldErrors = {
@@ -116,6 +133,14 @@ export function OpportunityDraftReview({
     deadline: !deadline ? "Required" : deadline < today ? "Cannot be in the past" : null,
     startDate: !startDate ? "Required" : startDate < today ? "Cannot be in the past" : deadline && startDate <= deadline ? "Must be after the deadline" : null,
     slots: slots < 1 ? "At least 1" : null,
+    assessmentBasis: challengeSummary && !assessmentBasis ? "Required" : null,
+    nonProductionConfirmed: challengeSummary && !nonProductionConfirmed ? "Required" : null,
+    challengeDuration:
+      challengeSummary && challengeSummary.estimatedMinutes > MAX_UNPAID_CHALLENGE_MINUTES
+        ? `Maximum ${MAX_UNPAID_CHALLENGE_MINUTES} minutes`
+        : challengeSummary && challengeSummary.estimatedMinutes > 90 && durationExceptionJustification.trim().length < 20
+          ? "Add a brief justification"
+          : null,
   };
   const canPublish = Object.values(fieldErrors).every((e) => e === null);
 
@@ -139,7 +164,11 @@ export function OpportunityDraftReview({
     };
     startTransition(async () => {
       try {
-        await publishOpportunityFromReviewAction(opportunityId, missing);
+        await publishOpportunityFromReviewAction(opportunityId, missing, {
+          assessmentBasis: assessmentBasis!,
+          nonProductionConfirmed,
+          durationExceptionJustification: durationExceptionJustification.trim() || null,
+        });
         toast.success("Internship published", { description: `${role} is now live.` });
         router.push(`/company/opportunities/${opportunityId}`);
       } catch (e) {
@@ -203,20 +232,79 @@ export function OpportunityDraftReview({
         <section className="border-t border-navy/10 px-5 py-5 sm:px-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">Challenge</p>
           {challengeSummary ? (
-            <div className="mt-2.5 flex flex-col gap-3 rounded-lg border border-navy/10 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3">
-                <FileCheck2 className="size-4 shrink-0 text-teal-ink" aria-hidden="true" />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary" className="bg-primary/10 font-normal text-primary hover:bg-primary/10">Attached</Badge>
-                    <p className="truncate text-sm font-medium text-navy">{challengeSummary.title}</p>
+            <div className="mt-2.5 rounded-lg border border-navy/10">
+              <div className="flex flex-col gap-3 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <FileCheck2 className="size-4 shrink-0 text-teal-ink" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="bg-primary/10 font-normal text-primary hover:bg-primary/10">Attached</Badge>
+                      <p className="truncate text-sm font-medium text-navy">{challengeSummary.title}</p>
+                    </div>
+                    <p className="mt-0.5 text-xs text-navy/50">
+                      {challengeSummary.taskCount} task{challengeSummary.taskCount === 1 ? "" : "s"} · {formatChallengeDuration(challengeSummary.estimatedMinutes, challengeSummary.estimatedDurationLabel)} active work
+                    </p>
                   </div>
-                  <p className="mt-0.5 text-xs text-navy/50">
-                    {challengeSummary.taskCount} task{challengeSummary.taskCount === 1 ? "" : "s"} · {formatChallengeDuration(challengeSummary.estimatedMinutes, challengeSummary.estimatedDurationLabel)}
-                  </p>
                 </div>
+                <ChallengeInspector challenge={challengeSummary} opportunityId={opportunityId} />
               </div>
-              <ChallengeInspector challenge={challengeSummary} opportunityId={opportunityId} />
+              <div className="border-t border-navy/10 px-3.5 py-3">
+                {challengeSummary.transformationApplied && challengeSummary.productionWorkRisk !== "none" && (
+                  <div className="mb-3 rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900/80">
+                    <p className="font-medium text-amber-900">Potential live-work request converted to an assessment</p>
+                    {challengeSummary.originalIntentSummary && <p className="mt-1">Original intent: {challengeSummary.originalIntentSummary}</p>}
+                    {challengeSummary.productionWorkReason && <p className="mt-1">Why: {challengeSummary.productionWorkReason}</p>}
+                  </div>
+                )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Assessment basis" error={attempted ? fieldErrors.assessmentBasis : null}>
+                    <Select
+                      value={assessmentBasis ?? undefined}
+                      onValueChange={(value) => {
+                        setAssessmentBasis(value as AssessmentBasis);
+                        setNonProductionConfirmed(false);
+                      }}
+                    >
+                      <SelectTrigger aria-label="Assessment basis" className="w-full"><SelectValue placeholder="Select basis" /></SelectTrigger>
+                      <SelectContent>
+                        {ASSESSMENT_BASIS_VALUES.map((basis) => (
+                          <SelectItem key={basis} value={basis}>{ASSESSMENT_BASIS_LABEL[basis]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {assessmentBasis && <p className="text-xs text-navy/45">{ASSESSMENT_BASIS_DESCRIPTION[assessmentBasis]}</p>}
+                  </Field>
+                  <div>
+                    <p className="text-xs font-medium text-navy/60">Estimated active work</p>
+                    <p className="mt-1.5 text-sm text-navy">{formatChallengeDuration(challengeSummary.estimatedMinutes, challengeSummary.estimatedDurationLabel)}</p>
+                    {attempted && fieldErrors.challengeDuration && <p className="mt-1 text-xs text-destructive">{fieldErrors.challengeDuration}</p>}
+                  </div>
+                </div>
+                {challengeSummary.estimatedMinutes > 90 && challengeSummary.estimatedMinutes <= MAX_UNPAID_CHALLENGE_MINUTES && (
+                  <Field label="Why does this need more than 90 minutes?" error={attempted ? fieldErrors.challengeDuration : null}>
+                    <textarea
+                      value={durationExceptionJustification}
+                      onChange={(event) => {
+                        setDurationExceptionJustification(event.target.value);
+                        setNonProductionConfirmed(false);
+                      }}
+                      rows={2}
+                      className="mt-1.5 min-h-16 w-full resize-none rounded-lg border border-navy/15 bg-white px-3 py-2 text-sm text-navy outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+                      placeholder="Briefly explain why the evidence cannot be assessed in a shorter exercise."
+                    />
+                  </Field>
+                )}
+                <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-sm text-navy/75">
+                  <input
+                    type="checkbox"
+                    checked={nonProductionConfirmed}
+                    onChange={(event) => setNonProductionConfirmed(event.target.checked)}
+                    className="mt-0.5 size-4 shrink-0 accent-teal-ink"
+                  />
+                  <span>This is an assessment, uses no confidential live data, and is not intended to obtain unpaid work for company production.</span>
+                </label>
+                {attempted && fieldErrors.nonProductionConfirmed && <p className="mt-1 text-xs text-destructive">Confirmation required</p>}
+              </div>
             </div>
           ) : (
             <p className="mt-2 text-sm text-navy/50">No challenge attached.</p>

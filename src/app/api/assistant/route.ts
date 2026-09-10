@@ -680,6 +680,11 @@ function challengeDraftFromStoredVersion(role: string, challengeId: string, vers
     })),
     durationMinutes: version.estimatedMinutes,
     estimatedDurationLabel: version.estimatedDurationLabel,
+    assessmentBasis: version.assessmentBasis,
+    productionWorkRisk: version.productionWorkRisk,
+    productionWorkReason: version.productionWorkReason,
+    transformationApplied: version.transformationApplied,
+    originalIntentSummary: version.originalIntentSummary,
     deliverables: version.deliverables,
     rubric: version.rubric.map((criterion) => ({
       id: crypto.randomUUID(),

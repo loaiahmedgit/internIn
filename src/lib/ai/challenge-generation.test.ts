@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { attachDraftIdentity, buildDesignSummary, formatQuestionnaireAnswers, normalizeRubricWeights, preserveStructuredEmployerAnswers } from "./challenge-generation";
+import { assertGeneratedChallengeSafeguards, attachDraftIdentity, buildDesignSummary, formatQuestionnaireAnswers, normalizeRubricWeights, preserveStructuredEmployerAnswers } from "./challenge-generation";
 import { ChallengeDraftGeneratedSchema, ChallengeDraftSchema, type ChallengeDraft, type ChallengeDraftGenerated, type EmployerContext } from "./challenge-clarification-schemas";
 import { mapChallengeDraftToChallenge } from "@/lib/opportunities/challenge-draft-mapping";
 import { ChallengeSchema } from "@/lib/ai/schemas";
@@ -15,6 +15,11 @@ function draft(overrides: Partial<ChallengeDraftGenerated> = {}): ChallengeDraft
     materials: [{ name: "customers.csv", type: "csv", description: "Synthetic customer records" }],
     tasks: [{ title: "Write queries", instructions: "Write SQL to find duplicates.", deliverableType: "code" }],
     durationMinutes: 60,
+    assessmentBasis: "synthetic",
+    productionWorkRisk: "none",
+    productionWorkReason: "The exercise uses synthetic customer records.",
+    transformationApplied: false,
+    originalIntentSummary: "Assess SQL data-cleaning skills.",
     rubric: [{ criterion: "SQL correctness", weight: 100, description: "Queries are correct." }],
     submissionRequirements: [{ label: "SQL scripts", inputMode: "file", artifactKind: "code", required: true }],
     assumptions: [],
@@ -127,6 +132,11 @@ describe("buildDesignSummary", () => {
     const lines = buildDesignSummary(draft({ safetyNotes: ["Never handle real patient data."] }));
     expect(lines.some((l) => l.includes("Never handle real patient data."))).toBe(true);
   });
+
+  it("shows when a possible live-work request was converted into an assessment", () => {
+    const lines = buildDesignSummary(draft({ productionWorkRisk: "high", transformationApplied: true }));
+    expect(lines).toContain("Converting potential live work into an equivalent non-production assessment");
+  });
 });
 
 describe("attachDraftIdentity", () => {
@@ -189,6 +199,11 @@ describe("end-to-end: generated output -> schema validation -> ChallengeDraft ->
       materials: [],
       deliverables: ["Workstation setup notes"],
       durationMinutes: 60,
+      assessmentBasis: "sandbox",
+      productionWorkRisk: "none",
+      productionWorkReason: "The task runs in an isolated fictional support environment.",
+      transformationApplied: false,
+      originalIntentSummary: "Assess workstation setup and troubleshooting.",
       rubric: [
         { criterion: "Accuracy", weight: 50, description: "Steps followed correctly." },
         { criterion: "Communication", weight: 50, description: "Clear documentation." },
@@ -202,10 +217,12 @@ describe("end-to-end: generated output -> schema validation -> ChallengeDraft ->
 
   it("a normal generation with a 100% rubric passes through schema validation, mapping, and the real live ChallengeSchema untouched", () => {
     const parsed = ChallengeDraftGeneratedSchema.parse(generated());
+    expect(() => assertGeneratedChallengeSafeguards(parsed)).not.toThrow();
     const withIdentity = attachDraftIdentity(parsed, null);
     expect(() => ChallengeDraftSchema.parse(withIdentity)).not.toThrow();
     const mapped = mapChallengeDraftToChallenge(withIdentity);
     expect(() => ChallengeSchema.parse(mapped)).not.toThrow();
+    expect(mapped.assessmentBasis).toBe("sandbox");
   });
 
   it("a non-100% rubric is normalized before it ever reaches the schema/renderer boundary", () => {

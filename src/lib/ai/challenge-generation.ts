@@ -1,9 +1,12 @@
 import { generateObject } from "ai";
+import { z } from "zod";
 import { getModel } from "./gemma-provider";
 import { ChallengeDraftGeneratedSchema, EmployerContextSchema, type ChallengeDraft, type ChallengeDraftGenerated, type EmployerContext } from "./challenge-clarification-schemas";
+import { AssessmentBasisSchema, ProductionWorkRiskSchema } from "./schemas";
 import type { QuestionnaireAnswer } from "./assistant-messages";
 import { workActivitySignals, type WorkNeedProfile } from "./role-intelligence-schemas";
 import { normalizeRubricWeights } from "./rubric-weights";
+import { assertGeneratedNonProductionMetadata } from "@/lib/challenges/no-free-labor";
 
 export { normalizeRubricWeights };
 
@@ -32,6 +35,14 @@ const ChallengeDraftCoreSchema = ChallengeDraftGeneratedSchema.pick({
   aiUsagePolicyCustomText: true,
   assumptions: true,
   safetyNotes: true,
+}).extend({
+  // Required for every new model output. The base app-facing schema keeps
+  // these optional only so pre-R3 conversation parts remain readable.
+  assessmentBasis: AssessmentBasisSchema,
+  productionWorkRisk: ProductionWorkRiskSchema,
+  productionWorkReason: z.string().trim().min(1).max(500),
+  transformationApplied: z.boolean(),
+  originalIntentSummary: z.string().trim().min(1).max(500),
 });
 const ChallengeDraftDetailsSchema = ChallengeDraftGeneratedSchema.pick({
   tasks: true,
@@ -68,6 +79,10 @@ export async function withGenerateRetries<T, A>(label: string, attempts: readonl
 export const CHALLENGE_POLICY = `When an employer describes an internship role (even vaguely) and wants a work challenge / assessment / task for it, you can help design one — this is core to what you do.
 
 A challenge is a realistic SIMULATION of the actual internship work, never a generic quiz. Depending on the profession, mix practical tasks, code, spreadsheet work, design work, file/document review, a written deliverable, or a presentation — whatever fits the real work, never one uniform task type for every role.
+
+Classify the employer's ORIGINAL intent as productionWorkRisk "none", "possible", or "high". This is a potential-concern label, not certainty. If it may create a live company deliverable, affect a production system, use current confidential/private records, serve a real client/campaign, or complete work the company already needs, do NOT pass that request through. Preserve the skills and work activities being assessed, but transform the task into an equivalent synthetic, fictional, adapted-historical, anonymized-adapted, or sandbox exercise. Set transformationApplied true, select the truthful assessmentBasis, give a short factual productionWorkReason, and summarize the original intent without chain-of-thought. For ordinary safe assessment requests, set productionWorkRisk "none" and transformationApplied false.
+
+All candidate materials must be safe for assessment. Never require real credentials, live customer/patient/financial/government records, production secrets, or access to a live company system. Synthetic data may mirror realistic constraints without reproducing confidential records.
 
 For safety-sensitive professions (healthcare, pharmacy, legal, cybersecurity, engineering, etc.), only ever design SAFE SIMULATED tasks using synthetic/fictional data — documentation, prioritization, escalation judgment, safe procedural scenarios. Never have a candidate perform real diagnosis, real prescribing/dispensing, real unsupervised clinical decisions, a real attack on a real system, or present output as real legal/medical advice.
 
@@ -175,6 +190,7 @@ export function buildDesignSummary(draft: ChallengeDraftGenerated): string[] {
   if (draft.materials.length) lines.push(`Preparing synthetic materials: ${draft.materials.map((m) => m.name).join(", ")}`);
   if (draft.durationMinutes) lines.push(`Sizing it for about ${draft.durationMinutes} minutes`);
   if (draft.safetyNotes.length) lines.push(`Keeping it a safe simulation: ${draft.safetyNotes.join(" ")}`);
+  if (draft.transformationApplied) lines.push("Converting potential live work into an equivalent non-production assessment");
   if (draft.assumptions.length) lines.push(`Assumptions: ${draft.assumptions.join(" ")}`);
   return lines;
 }
@@ -232,7 +248,7 @@ export async function generateChallengeDraftObject(params: {
       const { object } = await generateObject({
         model: getModel(),
         schema: ChallengeDraftCoreSchema,
-        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the role, title, scenario, skills, duration, deliverables, AI usage policy, assumptions, and safety notes — not tasks/materials/rubric, those come from a separate step. Keep every field concise.\n\nDefault to a focused 30-60 minute challenge. Use 60-90 minutes only when the work is genuinely complex. Go beyond 90 minutes only when the employer explicitly requested a substantial take-home project. Reduce scope instead of assigning an ordinary intern candidate several hours of work. "estimatedDurationLabel" is a short human range like "30-60 minutes" or "60-90 minutes" and must agree with durationMinutes. "deliverables" is a short list (2-4 items) of what the candidate actually hands in (e.g. "SQL scripts", "a one-page summary report"), not a restatement of the tasks.`,
+        system: `${CHALLENGE_POLICY}\n\nGenerate ONLY the role, title, scenario, skills, duration, deliverables, AI usage policy, assumptions, safety notes, and the five non-production safeguard fields — not tasks/materials/rubric, those come from a separate step. Keep every field concise.\n\nDefault to a focused 30-60 minute challenge. Use 60-90 minutes only when the work is genuinely complex. Go beyond 90 minutes only when the employer explicitly requested a substantial take-home project, and never exceed 120 minutes. Reduce scope instead of assigning an ordinary intern candidate several hours of work. "estimatedDurationLabel" is a short human range like "30-60 minutes" or "60-90 minutes" and must agree with durationMinutes. "deliverables" is a short list (2-4 items) of what the candidate actually hands in (e.g. "SQL scripts", "a one-page summary report"), not a restatement of the tasks.`,
         prompt: basePrompt + attempt.extraInstruction,
         temperature: attempt.temperature,
         maxOutputTokens: 1500,
@@ -254,7 +270,7 @@ export async function generateChallengeDraftObject(params: {
     }),
   ]);
 
-  return enforceChallengeDurationPolicy(
+  return assertGeneratedChallengeSafeguards(enforceChallengeDurationPolicy(
     {
       ...core,
       // Structured selections win over generated restatements. This keeps
@@ -269,7 +285,15 @@ export async function generateChallengeDraftObject(params: {
       submissionRequirements: details.submissionRequirements,
     },
     context,
-  );
+  ));
+}
+
+/** The classifier eyeballs intent, but this postcondition is deterministic:
+ * a model output that reports a production-work concern cannot be stored as
+ * an unchanged live-work task. */
+export function assertGeneratedChallengeSafeguards(draft: ChallengeDraftGenerated): ChallengeDraftGenerated {
+  assertGeneratedNonProductionMetadata(draft);
+  return draft;
 }
 
 function explicitRequestedMinutes(context: EmployerContext): number | null {
@@ -316,13 +340,18 @@ export function enforceChallengeDurationPolicy(
 ): ChallengeDraftGenerated {
   const explicitlyRequested = explicitRequestedMinutes(context);
   if (explicitlyRequested !== null) {
-    const maxTasks = explicitlyRequested <= 60 ? 3 : explicitlyRequested <= 90 ? 4 : draft.tasks.length;
+    const boundedMinutes = Math.min(explicitlyRequested, 120);
+    const maxTasks = boundedMinutes <= 60 ? 3 : 4;
     return {
       ...draft,
       tasks: draft.tasks.slice(0, maxTasks),
       deliverables: draft.deliverables.slice(0, maxTasks),
-      durationMinutes: explicitlyRequested,
-      estimatedDurationLabel: `${explicitlyRequested} minutes`,
+      durationMinutes: boundedMinutes,
+      estimatedDurationLabel: `${boundedMinutes} minutes`,
+      safetyNotes:
+        explicitlyRequested > 120
+          ? [...draft.safetyNotes, "The requested scope exceeded the unpaid-assessment ceiling and was reduced to 120 minutes of active work."]
+          : draft.safetyNotes,
     };
   }
 

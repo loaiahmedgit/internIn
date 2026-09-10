@@ -8,7 +8,7 @@
 2. Read the referenced architecture docs (§"Canonical architecture docs" below).
 3. Run `git status` and `git log --oneline -10`. Inspect the real schema/code — do not trust stale prose over what you can read now.
 4. The **current** master direction is HONESTY + EVIDENCE (see below). Older roadmap docs (`docs/00`–`docs/11`) are still the source of truth for *product scope/mechanics*, but where an older doc conflicts with the honesty direction or with `docs/13`, the honesty direction wins.
-5. Preserve working functionality. Phases 4A–6B, R1, R2 are done and verified — do not undo them because an older doc reads differently.
+5. Preserve working functionality. Phases 4A–6B, R1, R2, and R3 are done and verified — do not undo them because an older doc reads differently.
 6. Continue from the **NEXT TASK** section at the bottom unless the owner gives newer instructions. Current owner instructions always override this file.
 7. Report uncertainty instead of fabricating implementation state.
 
@@ -71,13 +71,24 @@ A Challenge means: realistic company-style problem → actual work → artifact 
 
 Every Challenge should be able to answer: (1) what ability are we assessing, (2) what artifact would expose it, (3) how can that evidence be checked, (4) what can this Challenge provide evidence for, (5) what can it NOT establish.
 
+### R3 — bounded No-Free-Labor safeguards — IMPLEMENTED
+
+R3 is the safety boundary around the **current** Challenge system; it is not the full Challenge Architect redesign. Every new/edited Challenge version is policy version 2 and publication requires a version-bound non-production basis (`synthetic`, `fictional`, `historical_adapted`, `sandbox`, or `anonymized_adapted`), an authenticated company user's explicit confirmation, and compliant estimated **active-work** time. More than 90 minutes requires a meaningful justification; more than 120 minutes cannot be approved or published as a normal unpaid assessment.
+
+`ensureChallengeReadyForPublish` remains the canonical mode-aware publish gate and now applies the R3 checks for optional/required Challenges. `quick_apply` remains unaffected. Approval also checks the same pure guard before recording actor/time on the immutable approved version. Human confirmation is never accepted from AI output and is reset by content edits. Meaningful confirmation and duration-exception events are written to `event_log`.
+
+AI Challenge generation now returns structured potential-production-work metadata. When the model reports a possible/high concern, a deterministic postcondition requires `transformationApplied=true` and a truthful non-production basis before the draft can be stored. Prompts require equivalent synthetic/adapted/sandbox work and forbid live confidential records/credentials/secrets. This classification is a potential concern, not certainty, and the final safety boundary does not depend on OpenRouter being available.
+
+Historical versions remain policy version 1 with null R3 metadata. Migration `0028` does **not** fabricate an attestation or unpublish the 11 existing published opportunities. An untouched already-published legacy record may remain live; a new/edited version must pass R3 before approval/publication.
+
+The schema still has no separate Challenge completion-window/deadline model. `estimatedMinutes` is explicitly treated and shown as active-work time; R3 did not expand the deadline model.
+
 ---
 
 ## Approved future directions — NOT yet implemented
 
 - **Ten-characteristic framework** (physical work / real humans / safety-critical decisions / specialized equipment / legal authority / real-world unpredictability / confidential information / long time horizons / team dependency / real consequences). Future Challenge-Architect AI should classify a role as digitally-assessable / human-review-required / practical-verification-required / not-meaningfully-assessable-digitally. **Not built.**
 - **AI provenance** for OBSERVED internIn AI usage. internIn cannot fully know whether someone used *external* AI — never claim universal AI detection. Similarity ≠ AI detection. No automatic cheating verdict. **Not built.**
-- **No-free-labor safeguards.** internIn Challenges must not become unpaid production work — use synthetic / historical / adapted / sandbox / fictional work. Disallowed: "fix our live production bug", "create next week's real client campaign", "generate real sales leads", "design the actual feature we intend to ship". A future Challenge Architect must detect/transform these. **Not built.** (This is R3 — the next planned phase.)
 - **Objective-validation architecture** (deterministic checks beyond AI rubric). **Not built.**
 
 ---
@@ -137,8 +148,9 @@ Latest meaningful migrations:
 - `0025_internship_task_evidence.sql` — internship task evidence / blocking.
 - `0026_company_endorsement_honesty_fix.sql` — R1: `opportunity_responsibility_assignments` (pre-hire), `challenge_credentials` grant/withdrawal audit columns.
 - `0027_application_modes.sql` — R2: `application_mode` enum + `opportunities.application_mode` (default `optional_challenge`) + conservative backfill (challenge-less → `quick_apply`, all others keep the default; never `challenge_required`).
+- `0028_no_free_labor_safeguards.sql` — R3: assessment-basis / model-risk enums and immutable-version safety metadata, version-bound company confirmation, and duration-exception justification. Additive only; historical rows remain honest policy-version-1 records.
 
-All applied to production.
+Through `0027` is applied to production. `0028` is included in the R3 release and is pending the release-time migration step at this pre-commit handoff checkpoint.
 
 ---
 
@@ -147,21 +159,22 @@ All applied to production.
 - Phase 6A: `229c007`
 - Phase 6B: `96951c2`
 - R1 (company endorsement honesty fix): `301a405`
-- **R2 (application modes + fairness): this commit** (see `git log --oneline -1`; the SHA is reported in the R2 final report).
+- R2 (application modes + fairness): `69a198122238d776aa506e221d047b5cbd25536c`
+- R3: pending final commit at this pre-release handoff checkpoint.
 
 ---
 
-## Test baseline (after R2)
+## Test baseline (R3 pre-release verification)
 
-Full suite: **457 passed, 1 skipped, 19 failed** (of 477).
+Final full suite: **475 passed, 1 skipped, 19 failed** (of 495).
 
-The **19 failures are all pre-existing** live-AI integration tests failing on `AI_APICallError: Insufficient credits` (OpenRouter credit exhaustion) — `assistant-router.integration.test.ts`, `clarification-wording.integration.test.ts`, `role-intelligence.integration.test.ts`. This is unchanged from the R1 baseline. Do **not** call any test "pre-existing" without checking it against the current run.
+The **19 failures exactly match the R2 baseline** and are live-AI integration tests failing on `AI_APICallError: Insufficient credits` (OpenRouter credit exhaustion) — `assistant-router.integration.test.ts`, `clarification-wording.integration.test.ts`, `role-intelligence.integration.test.ts`. Do **not** call any test "pre-existing" without checking it against the current run.
 
-`npm run build`, `npx tsc --noEmit`, `git diff --check`: all green after R2.
+R3 verification: `npx tsc --noEmit`, touched-file ESLint, focused R3/Challenge/application/credential tests, `next build --webpack`, and `git diff --check` are green. The final full run includes all deterministic and database-backed coverage. The default Turbopack `npm run build` cannot create its internal worker process on this Codex host because the worker attempts to bind a local port (`EPERM`); the supported webpack build compiles, type-checks, generates all 32 static pages, and completes successfully.
 
 ## OpenRouter / AI provider limitation
 
-Some live AI integration tests/actions may fail because OpenRouter credits are exhausted. This is **not** a deterministic product regression. But: do not use provider failure to skip manual/non-AI paths — **manual-first Challenge creation must stay functional**, and the R2 fairness gate deliberately does not depend on AI evaluation succeeding.
+Some live AI integration tests/actions fail because OpenRouter credits are exhausted. Live R3 AI transformation could therefore not be exercised against the provider in this phase. Prompt/schema/postcondition tests are green, and the complete manual/deterministic safety path stays functional without an AI call. Do not use provider failure to skip manual/non-AI paths.
 
 ---
 
@@ -195,22 +208,24 @@ Full design spec: `design-system/internin/MASTER.md` (forbids gradients/glow/gla
 - Do **NOT** claim external AI usage can be fully detected.
 - Do **NOT** use `programSupervisorAssignments` for pre-hire reviewer/certificate roles (use `opportunity_responsibility_assignments`).
 - Do **NOT** build a cohort migration for InternshipProgram.
-- Do **NOT** rewrite working Phase 6A/6B / R1 / R2 architecture.
+- Do **NOT** rewrite working Phase 6A/6B / R1 / R2 / R3 architecture.
 - Post-hire expansion is **frozen**.
 
 ---
 
-## Dirty worktree / session state (at R2 handoff)
+## Dirty worktree / session state (at R3 pre-release handoff)
 
-- Branch: `main`. HEAD after R2 commit is the R2 implementation commit; pushed to `origin/main`.
+- Branch: `main`. Starting R3 HEAD and `origin/main` were both `69a198122238d776aa506e221d047b5cbd25536c` (R2).
 - Intentional unrelated dirty files that must be preserved (present since before R1, not part of any phase): `vault/.obsidian/graph.json` (modified), and untracked `.agents/`, `.codex/`, `.mcp.json`, `.playwright-cli/`, `.playwright-mcp/`, `seed.spec.ts`, `skills-lock.json`, `specs/`. Do not stage or commit these.
-- No migration pending — `0027` is applied to production.
-- No temporary QA scripts remain (R2 QA seed/cleanup/audit scripts were created under `scripts/` and deleted after use).
+- `0027` is applied to production. `0028` is prepared and pending the authorized release-time application step.
+- No synthetic R3 QA data or auth users have been created at this checkpoint.
 - `AGENTS.md` may show as dirty — it is re-written by `next dev` on every run; commit it with your work if it appears, or leave it.
 
-## Database / production state (at R2 handoff)
+## Database / production state (R3 pre-release)
 
 - Latest migration successfully applied to production: `0027_application_modes.sql` (verified idempotent; all 11 existing opportunities backfilled to `optional_challenge`).
+- R3 read-only audit before migration: 11 Challenges / 11 opportunities, all published; all opportunities `optional_challenge`; published active-work estimates range from 60 to 150 minutes (one 150-minute legacy version, three 120-minute versions); no pre-existing field represented assessment basis or human no-free-labor confirmation. `0028` deliberately leaves all historical version rows at policy version 1 with null confirmation metadata.
+- R3 deployment/migration status at this mandatory pre-commit checkpoint: not yet released; `0028` must be applied after the R3 commit is pushed and before production verification.
 - Production URL: https://www.internin.app
 - Deployed SHA: verified by functional check post-deploy (see R2 final report for the exact SHA and the check used). Vercel CLI is not installed in this environment, so the deployment ID itself is not queried directly.
 
@@ -231,14 +246,14 @@ Full design spec: `design-system/internin/MASTER.md` (forbids gradients/glow/gla
 
 # NEXT TASK
 
-**Current phase: R2 — Application Modes + Fairness — COMPLETE.**
+**Current phase: R3 — No-Free-Labor Safeguards — COMPLETE in implementation and deterministic verification; release steps pending at this pre-commit checkpoint.**
 
-- Schema: `application_mode` enum + `opportunities.application_mode` (migration `0027`) — applied to production, idempotent-verified, conservative backfill done.
-- Code: committed and pushed to `main` (R2 implementation commit). Production verified live by functional check.
-- Tests: 30 new tests (`application-mode-fairness.test.ts`, `application-status.test.ts`); full suite 457 passed / 1 skipped / 19 known-OpenRouter-failing.
-- Browser QA: complete (3 synthetic opportunities across all 3 modes, 2 synthetic students, all synthetic data + auth users cleaned up and verified gone).
-- Docs: `docs/13` §2.F1 added.
+- Scope: bounded safeguards on the current Challenge system only. This is not the full Challenge Architect / ten-characteristic redesign.
+- Schema: additive migration `0028`; no destructive or fabricated historical backfill.
+- Code: structured AI production-work concern/transformation output without exposing or requesting chain-of-thought; manual assessment-basis and attestation controls; explicit version-bound company confirmation; one canonical publish gate; and 90/120-minute active-work rules. Students receive only a concise “Assessment exercise” basis indicator.
+- Tests: final full suite 475 passed / 1 skipped / 19 known OpenRouter-credit failures. The 19 failures exactly match the R2 live-provider baseline and are blocked by the account's explicit `Insufficient credits` response; deterministic, database-backed, and R3 safeguard coverage passed.
+- Provider limitation: live OpenRouter transformation QA unavailable due exhausted credits; manual/deterministic path verified without AI.
 
-**DO NOT automatically begin R3.** Wait for explicit owner approval.
+**DO NOT automatically begin R4.**
 
-**Next planned phase: R3 — No-Free-Labor safeguards** (a Challenge Architect that detects/transforms requests to extract real production work into synthetic/sandboxed equivalents). Also still queued and explicitly not started: R4 (Challenge Architect redesign), objective-validation architecture, AI provenance, similarity/integrity, and any post-hire expansion.
+**Next planned phase: R4 — Challenge Architect + role reality + ten-characteristic + can/cannot-establish framework — AWAITING OWNER APPROVAL.** Objective validation, AI provenance, similarity/integrity, and post-hire expansion also remain out of scope/not started.
